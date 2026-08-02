@@ -19,7 +19,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.10.8
+  sdk: ^3.10.7
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -44,15 +44,21 @@ dependencies:
 
   # Networking / data
   dio: ^5.7.0
+  supabase_flutter: ^2.8.0
   drift: ^2.22.1              # local SQLite (checklists, journal, doc vault index)
   sqlite3_flutter_libs: ^0.5.27
   path_provider: ^2.1.5
   flutter_secure_storage: ^9.2.2 # encrypted storage for travel document vault
+  shared_preferences: ^2.3.3     # persisted theme mode preference
 
   # Maps & location (Module 2 interactive map, Module 6 check-in)
   flutter_map: ^7.0.2         # Leaflet/OpenStreetMap renderer for Flutter
   latlong2: ^0.9.1
   geolocator: ^13.0.2
+
+  # Export / share (Module 3 itinerary export & social share)
+  pdf: ^3.11.1
+  share_plus: ^10.1.4
 
   # Model/value utilities
   freezed_annotation: ^2.4.4
