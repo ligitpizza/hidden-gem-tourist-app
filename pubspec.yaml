@@ -50,6 +50,9 @@ dependencies:
   path_provider: ^2.1.5
   flutter_secure_storage: ^9.2.2 # encrypted storage for travel document vault
   shared_preferences: ^2.3.3     # persisted theme mode preference
+  file_picker: ^11.0.2           # import travel documents from device storage
+  pdfrx: ^2.4.7                  # in-app PDF document viewer
+  open_filex: ^4.7.0             # delegate other file types to device apps
 
   # Maps & location (Module 2 interactive map, Module 6 check-in)
   flutter_map: ^7.0.2         # Leaflet/OpenStreetMap renderer for Flutter

@@ -1,5 +1,4 @@
-/// Route paths for the 5 bottom-nav tabs (the shell's branches), matching
-/// the team's mockups: Map | Explore | Assistant | Saved | Profile.
+/// Route paths for the bottom-nav tabs (the shell's branches).
 class ShellRoutes {
   ShellRoutes._();
 
@@ -8,4 +7,8 @@ class ShellRoutes {
   static const assistant = '/assistant';
   static const saved = '/saved';
   static const profile = '/profile';
+  static const travelPrep = '/travel-prep';
+  static const checklist = '/travel-prep/checklist';
+  static const ecoPartners = '/travel-prep/eco-partners';
+  static const documentVault = '/travel-prep/document-vault';
 }

@@ -173,10 +173,10 @@ packages:
     dependency: transitive
     description:
       name: characters
-      sha256: f71061c654a3380576a52b451dd5532377954cf9dbd272a78fc8479606670803
+      sha256: faf38497bda5ead2a8c7615f4f7939df04333478bf32e4173fcb06d428b5716b
       url: "https://pub.dev"
     source: hosted
-    version: "1.4.0"
+    version: "1.4.1"
   charcode:
     dependency: transitive
     description:
@@ -329,6 +329,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.1"
+  dbus:
+    dependency: transitive
+    description:
+      name: dbus
+      sha256: "0ce9b0a839e6dee59a37a623d2fc26a35bbbe6404213e419b0d6411023d62645"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.14"
   dio:
     dependency: "direct main"
     description:
@@ -385,6 +393,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.1"
+  file_picker:
+    dependency: "direct main"
+    description:
+      name: file_picker
+      sha256: "29cc1fdb20613876cc7afc529738c1c0f11a9ca159b010edad0c566ac330847e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "11.0.3"
   fixnum:
     dependency: transitive
     description:
@@ -414,6 +430,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.2"
+  flutter_plugin_android_lifecycle:
+    dependency: transitive
+    description:
+      name: flutter_plugin_android_lifecycle
+      sha256: "3854fe5e3bff0b113c658f260b90c95dea17c92db0f2addeac2e343dd9969785"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.35"
   flutter_riverpod:
     dependency: "direct main"
     description:
@@ -780,26 +804,26 @@ packages:
     dependency: transitive
     description:
       name: matcher
-      sha256: dc58c723c3c24bf8d3e2d3ad3f2f9d7bd9cf43ec6feaa64181775e60190153f2
+      sha256: dc0b7dc7651697ea4ff3e69ef44b0407ea32c487a39fff6a4004fa585e901861
       url: "https://pub.dev"
     source: hosted
-    version: "0.12.17"
+    version: "0.12.19"
   material_color_utilities:
     dependency: transitive
     description:
       name: material_color_utilities
-      sha256: f7142bb1154231d7ea5f96bc7bde4bda2a0945d2806bb11670e30b850d56bdec
+      sha256: "9c337007e82b1889149c82ed242ed1cb24a66044e30979c44912381e9be4c48b"
       url: "https://pub.dev"
     source: hosted
-    version: "0.11.1"
+    version: "0.13.0"
   meta:
     dependency: transitive
     description:
       name: meta
-      sha256: "23f08335362185a5ea2ad3a4e597f1375e78bce8a040df5c600c8d3552ef2394"
+      sha256: "1741988757a65eb6b36abe716829688cf01910bbf91c34354ff7ec1c3de2b349"
       url: "https://pub.dev"
     source: hosted
-    version: "1.17.0"
+    version: "1.18.0"
   mgrs_dart:
     dependency: transitive
     description:
@@ -824,6 +848,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "9.4.1"
+  open_filex:
+    dependency: "direct main"
+    description:
+      name: open_filex
+      sha256: "9976da61b6a72302cf3b1efbce259200cd40232643a467aac7370addf94d6900"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.7.0"
   package_config:
     dependency: transitive
     description:
@@ -912,6 +944,38 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.12.0"
+  pdfium_dart:
+    dependency: transitive
+    description:
+      name: pdfium_dart
+      sha256: "86e95c66b09f3245b95c4924f2edce8d4f7c9786876e5c5ee8e36b104a94bbb0"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.5"
+  pdfium_flutter:
+    dependency: transitive
+    description:
+      name: pdfium_flutter
+      sha256: "0b115c0917aef9cf6bb9c4d47d0efc61d97f44844cd76287c921f997c26cf15d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.3"
+  pdfrx:
+    dependency: "direct main"
+    description:
+      name: pdfrx
+      sha256: acce61944c31bd36f0c3031b1bbf41f59d0b0d4e5e27614fbdc74ff093d55464
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.7"
+  pdfrx_engine:
+    dependency: transitive
+    description:
+      name: pdfrx_engine
+      sha256: ef8f8cfa64255bfc91a559dd2d32d7cfe7a0f8003bac297bbf9a0aed1182fae5
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.4.6"
   petitparser:
     dependency: transitive
     description:
@@ -1293,6 +1357,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.16.0"
+  synchronized:
+    dependency: transitive
+    description:
+      name: synchronized
+      sha256: "61894a1956de6b4fc1aefd0892e109514a1a706cbece3ac59decd90ff5a7a423"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.4.1+1"
   term_glyph:
     dependency: transitive
     description:
@@ -1305,10 +1377,10 @@ packages:
     dependency: transitive
     description:
       name: test_api
-      sha256: ab2726c1a94d3176a45960b6234466ec367179b87dd74f1611adb1f3b5fb9d55
+      sha256: "949a932224383300f01be9221c39180316445ecb8e7547f70a41a35bf421fb9e"
       url: "https://pub.dev"
     source: hosted
-    version: "0.7.7"
+    version: "0.7.11"
   timing:
     dependency: transitive
     description:
@@ -1502,5 +1574,5 @@ packages:
     source: hosted
     version: "2.1.1"
 sdks:
-  dart: ">=3.10.7 <4.0.0"
-  flutter: ">=3.38.4"
+  dart: ">=3.12.0 <4.0.0"
+  flutter: ">=3.41.0"

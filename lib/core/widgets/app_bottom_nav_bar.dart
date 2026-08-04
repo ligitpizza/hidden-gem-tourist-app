@@ -7,13 +7,13 @@ class _NavDestination {
   const _NavDestination({required this.icon, required this.selectedIcon, required this.label});
 }
 
-/// Order matches the team's mockups: Map | Explore | Assistant | Saved |
-/// Profile — 5 flat, always-visible tabs (no overflow/"more" menu).
+/// Bottom navigation destinations, including the separate Travel Prep module.
 const _destinations = [
   _NavDestination(icon: Icons.map_outlined, selectedIcon: Icons.map, label: 'Map'),
   _NavDestination(icon: Icons.explore_outlined, selectedIcon: Icons.explore, label: 'Explore'),
   _NavDestination(icon: Icons.smart_toy_outlined, selectedIcon: Icons.smart_toy, label: 'Assistant'),
   _NavDestination(icon: Icons.bookmark_outline, selectedIcon: Icons.bookmark, label: 'Saved'),
+  _NavDestination(icon: Icons.luggage_outlined, selectedIcon: Icons.luggage, label: 'Travel Prep'),
   _NavDestination(icon: Icons.person_outline, selectedIcon: Icons.person, label: 'Profile'),
 ];
 

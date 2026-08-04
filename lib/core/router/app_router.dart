@@ -23,11 +23,12 @@ import '../../features/recommendations/view/score_detail_screen.dart';
 import '../../features/recommendations/view/travel_pulse_screen.dart';
 import '../../features/recommendations/view/travel_style_screen.dart';
 import '../../features/saved/view/saved_screen.dart';
+import '../../features/travel_prep/view/travel_prep_screens.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 import 'shell_routes.dart';
 
-/// The 5 bottom-nav branches, in on-screen order: Map | Explore | Assistant
-/// | Saved | Profile (matches the team's mockups).
+/// The bottom-nav branches, in on-screen order: Map | Explore | Assistant |
+/// Saved | Travel Prep | Profile.
 const _assistantTabIndex = 2;
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -107,6 +108,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           StatefulShellBranch(
             routes: [
+              GoRoute(
+                path: ShellRoutes.travelPrep,
+                builder: (context, state) => const TravelPrepDashboardScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'checklist',
+                    builder: (context, state) => const ReadyToWanderScreen(),
+                  ),
+                  GoRoute(
+                    path: 'eco-partners',
+                    builder: (context, state) => const EcoPartnersScreen(),
+                  ),
+                  GoRoute(
+                    path: 'document-vault',
+                    builder: (context, state) => const DocumentVaultScreen(),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
               GoRoute(path: ShellRoutes.profile, builder: (context, state) => const ProfileScreen()),
             ],
           ),
@@ -133,8 +156,8 @@ class GoRouterRefreshStream extends ChangeNotifier {
   }
 }
 
-/// Scaffold shared by the 5 bottom-nav tabs: swaps [navigationShell]'s
-/// current branch and shows the flat 5-tab bottom nav bar — the
+/// Scaffold shared by the bottom-nav tabs: swaps [navigationShell]'s
+/// current branch and shows the flat bottom nav bar — the
 /// itinerary-planning flow and auth screens are pushed outside this shell
 /// so they hide the bottom nav.
 class _MainShell extends StatelessWidget {
