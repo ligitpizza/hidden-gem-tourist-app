@@ -2,11 +2,22 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'travel_document.dart';
 
 class TravelDocumentRepository {
-  static const _metadataKey = 'travel_vault_documents_v1';
+  static const maxFileSizeBytes = 10 * 1024 * 1024;
+
+  TravelDocumentRepository({String? userId})
+    : userId =
+          userId ??
+          Supabase.instance.client.auth.currentUser?.id ??
+          (throw StateError('A signed-in user is required.'));
+
+  final String userId;
+
+  String get _metadataKey => 'travel_vault_documents_v2_$userId';
 
   Future<List<TravelDocument>> load() async {
     final preferences = await SharedPreferences.getInstance();
@@ -32,6 +43,12 @@ class TravelDocumentRepository {
     if (!await source.exists()) {
       throw const FileSystemException('Selected file is unavailable.');
     }
+    final sourceSize = await source.length();
+    if (sourceSize > maxFileSizeBytes) {
+      throw const FileSystemException(
+        'The selected file exceeds the 10 MB upload limit.',
+      );
+    }
 
     final directory = await _vaultDirectory();
     final id = DateTime.now().microsecondsSinceEpoch.toString();
@@ -48,7 +65,7 @@ class TravelDocumentRepository {
       originalFileName: originalFileName,
       storedPath: destination.path,
       extension: extension,
-      fileSize: await destination.length(),
+      fileSize: sourceSize,
       createdAt: DateTime.now(),
     );
 
@@ -78,9 +95,28 @@ class TravelDocumentRepository {
     TravelDocument document,
     List<TravelDocument> remaining,
   ) async {
-    final file = File(document.storedPath);
-    if (await file.exists()) {
-      await file.delete();
+    await deleteMany([document], remaining);
+  }
+
+  Future<void> deleteMany(
+    List<TravelDocument> documents,
+    List<TravelDocument> remaining,
+  ) async {
+    final failures = <TravelDocument>[];
+    Object? firstError;
+    for (final document in documents) {
+      try {
+        final file = File(document.storedPath);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      } on Object catch (error) {
+        failures.add(document);
+        firstError ??= error;
+      }
+    }
+    if (failures.isNotEmpty) {
+      throw VaultFileDeleteException(failures, firstError);
     }
     await save(remaining);
   }
@@ -88,7 +124,7 @@ class TravelDocumentRepository {
   Future<Directory> _vaultDirectory() async {
     final root = await getApplicationDocumentsDirectory();
     final directory = Directory(
-      '${root.path}${Platform.pathSeparator}travel_vault',
+      '${root.path}${Platform.pathSeparator}travel_vault${Platform.pathSeparator}$userId',
     );
     if (!await directory.exists()) {
       await directory.create(recursive: true);
@@ -102,4 +138,15 @@ class TravelDocumentRepository {
         ? ''
         : name.substring(dot + 1).toLowerCase();
   }
+}
+
+class VaultFileDeleteException implements Exception {
+  const VaultFileDeleteException(this.documents, this.cause);
+
+  final List<TravelDocument> documents;
+  final Object? cause;
+
+  @override
+  String toString() =>
+      'Could not remove ${documents.length} stored file(s): $cause';
 }

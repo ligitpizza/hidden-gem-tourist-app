@@ -43,7 +43,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final loggedIn = authRepository.isLoggedIn;
       final onAuthScreen =
-          state.matchedLocation == AuthRoutes.login || state.matchedLocation == AuthRoutes.signup;
+          state.matchedLocation == AuthRoutes.login ||
+          state.matchedLocation == AuthRoutes.signup;
 
       if (!loggedIn && !onAuthScreen) return AuthRoutes.login;
       if (loggedIn && onAuthScreen) return ShellRoutes.assistant;
@@ -82,17 +83,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: RecommendationsRoutes.scoreDetail,
-        builder: (context, state) => ScoreDetailScreen(item: state.extra as AssistantFeedItem),
+        builder: (context, state) =>
+            ScoreDetailScreen(item: state.extra as AssistantFeedItem),
       ),
       StatefulShellRoute.indexedStack(
-        builder: (context, state, navigationShell) => _MainShell(navigationShell: navigationShell),
+        builder: (context, state, navigationShell) =>
+            _MainShell(navigationShell: navigationShell),
         branches: [
           StatefulShellBranch(
-            routes: [GoRoute(path: ShellRoutes.map, builder: (context, state) => const MapScreen())],
+            routes: [
+              GoRoute(
+                path: ShellRoutes.map,
+                builder: (context, state) => const MapScreen(),
+              ),
+            ],
           ),
           StatefulShellBranch(
             routes: [
-              GoRoute(path: ShellRoutes.explore, builder: (context, state) => const ExploreScreen()),
+              GoRoute(
+                path: ShellRoutes.explore,
+                builder: (context, state) => const ExploreScreen(),
+              ),
             ],
           ),
           StatefulShellBranch(
@@ -104,7 +115,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
           StatefulShellBranch(
-            routes: [GoRoute(path: ShellRoutes.saved, builder: (context, state) => const SavedScreen())],
+            routes: [
+              GoRoute(
+                path: ShellRoutes.saved,
+                builder: (context, state) => const SavedScreen(),
+              ),
+            ],
           ),
           StatefulShellBranch(
             routes: [
@@ -130,7 +146,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           StatefulShellBranch(
             routes: [
-              GoRoute(path: ShellRoutes.profile, builder: (context, state) => const ProfileScreen()),
+              GoRoute(
+                path: ShellRoutes.profile,
+                builder: (context, state) => const ProfileScreen(),
+              ),
             ],
           ),
         ],

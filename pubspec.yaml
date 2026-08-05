@@ -58,6 +58,7 @@ dependencies:
   flutter_map: ^7.0.2         # Leaflet/OpenStreetMap renderer for Flutter
   latlong2: ^0.9.1
   geolocator: ^13.0.2
+  url_launcher: ^6.3.1
 
   # Export / share (Module 3 itinerary export & social share)
   pdf: ^3.11.1

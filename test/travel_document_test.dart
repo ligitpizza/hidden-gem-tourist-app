@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:collab/features/travel_prep/model/travel_document.dart';
+import 'package:collab/features/travel_prep/model/travel_document_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   final document = TravelDocument(
@@ -56,5 +60,42 @@ void main() {
     expect(edited.id, document.id);
     expect(edited.storedPath, document.storedPath);
     expect(edited.originalFileName, document.originalFileName);
+  });
+
+  test('document metadata is isolated by authenticated user ID', () async {
+    SharedPreferences.setMockInitialValues({});
+    final firstUserRepository = TravelDocumentRepository(userId: 'user-a');
+    final secondUserRepository = TravelDocumentRepository(userId: 'user-b');
+
+    await firstUserRepository.save([document]);
+
+    expect(await firstUserRepository.load(), hasLength(1));
+    expect(await secondUserRepository.load(), isEmpty);
+  });
+
+  test('rejects a file larger than the 10 MB upload limit', () async {
+    final temporaryDirectory = await Directory.systemTemp.createTemp(
+      'vault-size-test-',
+    );
+    final oversizedFile = File(
+      '${temporaryDirectory.path}${Platform.pathSeparator}large.pdf',
+    );
+    await oversizedFile.writeAsBytes(
+      List<int>.filled(TravelDocumentRepository.maxFileSizeBytes + 1, 0),
+    );
+    final repository = TravelDocumentRepository(userId: 'user-a');
+
+    await expectLater(
+      repository.importFile(
+        sourcePath: oversizedFile.path,
+        originalFileName: 'large.pdf',
+        displayName: 'Large PDF',
+        category: 'Other',
+        currentDocuments: const [],
+      ),
+      throwsA(isA<FileSystemException>()),
+    );
+
+    await temporaryDirectory.delete(recursive: true);
   });
 }

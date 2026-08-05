@@ -2,14 +2,18 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/router/shell_routes.dart';
 import '../model/travel_document.dart';
 import '../model/travel_document_repository.dart';
+import '../model/vault_pin_service.dart';
 import 'travel_document_viewer_screen.dart';
+
+export 'eco_partner_screen.dart';
 
 class TravelPrepDashboardScreen extends StatelessWidget {
   const TravelPrepDashboardScreen({super.key});
@@ -469,13 +473,14 @@ class _ChecklistCard extends StatelessWidget {
   );
 }
 
-class EcoPartnersScreen extends StatefulWidget {
-  const EcoPartnersScreen({super.key});
+// ignore: unused_element
+class _LegacyEcoPartnersScreen extends StatefulWidget {
+  const _LegacyEcoPartnersScreen({super.key});
   @override
-  State<EcoPartnersScreen> createState() => _EcoPartnersScreenState();
+  State<_LegacyEcoPartnersScreen> createState() => _EcoPartnersScreenState();
 }
 
-class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
+class _EcoPartnersScreenState extends State<_LegacyEcoPartnersScreen> {
   String filter = 'All';
   final partners = const [
     _Partner(
@@ -716,14 +721,14 @@ class DocumentVaultScreen extends StatefulWidget {
 }
 
 class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
-  static const _pinKey = 'travel_vault_pin';
-  final _storage = const FlutterSecureStorage();
+  final _pinService = VaultPinService();
   final _pinController = TextEditingController();
   final _confirmPinController = TextEditingController();
   bool _loading = true;
   bool _hasPin = false;
   bool _unlocked = false;
   bool _hidePin = true;
+  bool _resettingPin = false;
   String? _error;
 
   @override
@@ -733,7 +738,7 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
   }
 
   Future<void> _loadPinState() async {
-    final savedPin = await _storage.read(key: _pinKey);
+    final savedPin = await _pinService.readPin();
     if (!mounted) return;
     setState(() {
       _hasPin = savedPin != null;
@@ -750,7 +755,7 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
     }
 
     if (_hasPin) {
-      final savedPin = await _storage.read(key: _pinKey);
+      final savedPin = await _pinService.readPin();
       if (!mounted) return;
       if (pin != savedPin) {
         setState(() {
@@ -764,7 +769,7 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
         setState(() => _error = 'The PINs do not match.');
         return;
       }
-      await _storage.write(key: _pinKey, value: pin);
+      await _pinService.writePin(pin);
       if (!mounted) return;
     }
 
@@ -783,6 +788,28 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
       _error = null;
       _pinController.clear();
     });
+  }
+
+  Future<void> _resetPinWithPassword() async {
+    setState(() {
+      _resettingPin = true;
+      _error = null;
+    });
+    final reset = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _PasswordPinResetDialog(pinService: _pinService),
+    );
+    if (!mounted) return;
+    setState(() {
+      _resettingPin = false;
+      _pinController.clear();
+    });
+    if (reset == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Your vault PIN has been reset.')),
+      );
+    }
   }
 
   @override
@@ -845,50 +872,39 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
                     ),
                   ),
                   const SizedBox(height: 28),
-                  TextField(
+                  _PinCodeField(
                     controller: _pinController,
+                    label: _hasPin ? 'Vault PIN' : 'Create PIN',
                     autofocus: true,
                     obscureText: _hidePin,
-                    keyboardType: TextInputType.number,
-                    maxLength: 6,
-                    textInputAction: _hasPin
-                        ? TextInputAction.done
-                        : TextInputAction.next,
-                    onSubmitted: _hasPin ? (_) => _submitPin() : null,
-                    decoration: InputDecoration(
-                      labelText: _hasPin ? 'Vault PIN' : 'Create PIN',
-                      prefixIcon: const Icon(Icons.pin_outlined),
-                      counterText: '',
-                      errorText: _error,
-                      suffixIcon: IconButton(
-                        onPressed: () => setState(() => _hidePin = !_hidePin),
-                        icon: Icon(
-                          _hidePin
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                        ),
+                    errorText: _error,
+                    onSubmitted: _hasPin ? _submitPin : null,
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () => setState(() => _hidePin = !_hidePin),
+                      icon: Icon(
+                        _hidePin
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        size: 18,
                       ),
+                      label: Text(_hidePin ? 'Show PIN' : 'Hide PIN'),
                     ),
                   ),
                   if (!_hasPin) ...[
-                    const SizedBox(height: 14),
-                    TextField(
+                    const SizedBox(height: 6),
+                    _PinCodeField(
                       controller: _confirmPinController,
+                      label: 'Confirm PIN',
                       obscureText: _hidePin,
-                      keyboardType: TextInputType.number,
-                      maxLength: 6,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _submitPin(),
-                      decoration: const InputDecoration(
-                        labelText: 'Confirm PIN',
-                        prefixIcon: Icon(Icons.verified_user_outlined),
-                        counterText: '',
-                      ),
+                      onSubmitted: _submitPin,
                     ),
                   ],
                   const SizedBox(height: 22),
                   ElevatedButton.icon(
-                    onPressed: _submitPin,
+                    onPressed: _resettingPin ? null : _submitPin,
                     icon: Icon(
                       _hasPin
                           ? Icons.lock_open_outlined
@@ -898,6 +914,20 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
                       _hasPin ? 'Unlock Vault' : 'Create PIN & Continue',
                     ),
                   ),
+                  if (_hasPin) ...[
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: _resettingPin ? null : _resetPinWithPassword,
+                      icon: _resettingPin
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.lock_reset),
+                      label: const Text('Forgot PIN? Verify account password'),
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -925,6 +955,246 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
   }
 }
 
+class _PasswordPinResetDialog extends StatefulWidget {
+  const _PasswordPinResetDialog({required this.pinService});
+
+  final VaultPinService pinService;
+
+  @override
+  State<_PasswordPinResetDialog> createState() =>
+      _PasswordPinResetDialogState();
+}
+
+class _PasswordPinResetDialogState extends State<_PasswordPinResetDialog> {
+  final _passwordController = TextEditingController();
+  final _pinController = TextEditingController();
+  final _confirmController = TextEditingController();
+  bool _passwordVerified = false;
+  bool _saving = false;
+  bool _hidePassword = true;
+  bool _hidePin = true;
+  String? _error;
+
+  Future<void> _verifyPassword() async {
+    if (_passwordController.text.isEmpty) {
+      setState(() => _error = 'Enter your account password.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.pinService.verifyCurrentPassword(_passwordController.text);
+      if (!mounted) return;
+      setState(() {
+        _passwordVerified = true;
+        _saving = false;
+        _passwordController.clear();
+      });
+    } on AuthException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = error.message;
+        _passwordController.clear();
+      });
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error =
+            'Could not verify your account. Check your connection and try again.';
+      });
+    }
+  }
+
+  Future<void> _saveNewPin() async {
+    final pin = _pinController.text;
+    if (!RegExp(r'^\d{4,6}$').hasMatch(pin)) {
+      setState(() => _error = 'Enter a PIN containing 4 to 6 digits.');
+      return;
+    }
+    if (pin != _confirmController.text) {
+      setState(() => _error = 'The PINs do not match.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.pinService.writePin(pin);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = 'Could not save the new PIN. Please try again.';
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _pinController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_saving,
+      child: AlertDialog(
+        title: Text(
+          _passwordVerified ? 'Create a new vault PIN' : 'Verify your account',
+        ),
+        content: SingleChildScrollView(
+          child: _passwordVerified
+              ? _buildResetForm(context)
+              : _buildPasswordForm(context),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResetForm(BuildContext context) {
+    return Column(
+      children: [
+        const CircleAvatar(
+          radius: 42,
+          backgroundColor: Color(0xFFE1EEE8),
+          child: Icon(Icons.lock_reset, size: 44, color: Color(0xFF07513C)),
+        ),
+        const SizedBox(height: 22),
+        const Text(
+          'Enter and confirm a new 4 to 6 digit PIN for your Document Vault.',
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 26),
+        _PinCodeField(
+          controller: _pinController,
+          label: 'New PIN',
+          autofocus: true,
+          obscureText: _hidePin,
+          errorText: _error,
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () => setState(() => _hidePin = !_hidePin),
+            icon: Icon(
+              _hidePin
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
+              size: 18,
+            ),
+            label: Text(_hidePin ? 'Show PIN' : 'Hide PIN'),
+          ),
+        ),
+        const SizedBox(height: 6),
+        _PinCodeField(
+          controller: _confirmController,
+          label: 'Confirm new PIN',
+          obscureText: _hidePin,
+          onSubmitted: _saving ? null : _saveNewPin,
+        ),
+        const SizedBox(height: 22),
+        ElevatedButton.icon(
+          onPressed: _saving ? null : _saveNewPin,
+          icon: _saving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.lock_reset),
+          label: const Text('Reset PIN'),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPasswordForm(BuildContext context) {
+    final email =
+        widget.pinService.currentUser.email ?? 'your signed-in account';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const CircleAvatar(
+          radius: 34,
+          backgroundColor: Color(0xFFE1EEE8),
+          child: Icon(
+            Icons.verified_user_outlined,
+            size: 34,
+            color: Color(0xFF07513C),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          email,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Enter this account’s password before resetting the local vault PIN.',
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 18),
+        TextField(
+          controller: _passwordController,
+          autofocus: true,
+          obscureText: _hidePassword,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _saving ? null : _verifyPassword(),
+          decoration: InputDecoration(
+            labelText: 'Account password',
+            prefixIcon: const Icon(Icons.password),
+            errorText: _error,
+            suffixIcon: IconButton(
+              onPressed: () => setState(() => _hidePassword = !_hidePassword),
+              icon: Icon(
+                _hidePassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            TextButton(
+              onPressed: _saving ? null : () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            const Spacer(),
+            FilledButton(
+              onPressed: _saving ? null : _verifyPassword,
+              child: _saving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Verify'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _UnlockedDocumentVault extends StatefulWidget {
   const _UnlockedDocumentVault({required this.onLock});
   final VoidCallback onLock;
@@ -941,15 +1211,20 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
   bool _loadingDocuments = true;
   bool _busy = false;
   String _query = '';
-  String? _selectedId;
+  final Set<String> _selectedIds = {};
   List<TravelDocument> documents = [];
 
   TravelDocument? get _selectedDocument {
+    if (_selectedIds.length != 1) return null;
     for (final document in documents) {
-      if (document.id == _selectedId) return document;
+      if (_selectedIds.contains(document.id)) return document;
     }
     return null;
   }
+
+  List<TravelDocument> get _selectedDocuments => documents
+      .where((document) => _selectedIds.contains(document.id))
+      .toList();
 
   @override
   void initState() {
@@ -995,7 +1270,7 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
     return Scaffold(
       appBar: _TravelAssistantAppBar(onLock: widget.onLock),
       bottomNavigationBar: _VaultActionBar(
-        hasSelection: _selectedDocument != null,
+        selectionCount: _selectedIds.length,
         busy: _busy,
         onEdit: _editSelected,
         onDelete: _deleteSelected,
@@ -1078,12 +1353,12 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
                   for (final document in shown)
                     _DocumentCard(
                       document: document,
-                      selected: document.id == _selectedId,
-                      onSelect: () => setState(
-                        () => _selectedId = document.id == _selectedId
-                            ? null
-                            : document.id,
-                      ),
+                      selected: _selectedIds.contains(document.id),
+                      onSelect: () => setState(() {
+                        if (!_selectedIds.add(document.id)) {
+                          _selectedIds.remove(document.id);
+                        }
+                      }),
                       onView: () => _viewDocument(document),
                     ),
               ],
@@ -1100,6 +1375,12 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
     final picked = result.files.single;
     if (picked.path == null) {
       _showMessage('This file could not be accessed on your device.');
+      return;
+    }
+    if (picked.size > TravelDocumentRepository.maxFileSizeBytes) {
+      _showMessage(
+        'Upload rejected: ${_DocumentCard._formatFileSize(picked.size)} exceeds the 10 MB limit.',
+      );
       return;
     }
     final initialName = _nameWithoutExtension(picked.name);
@@ -1122,7 +1403,9 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
       if (!mounted) return;
       setState(() {
         documents = [imported, ...documents];
-        _selectedId = imported.id;
+        _selectedIds
+          ..clear()
+          ..add(imported.id);
       });
       _showMessage('${imported.displayName} was added to the vault.');
     } on Object catch (error) {
@@ -1162,14 +1445,19 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
   }
 
   Future<void> _deleteSelected() async {
-    final selected = _selectedDocument;
-    if (selected == null) return;
+    final selected = _selectedDocuments;
+    if (selected.isEmpty) return;
+    final count = selected.length;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete document?'),
+        title: Text(
+          count == 1 ? 'Delete document?' : 'Delete $count documents?',
+        ),
         content: Text(
-          '“${selected.displayName}” and its stored file will be permanently removed.',
+          count == 1
+              ? '“${selected.single.displayName}” and its stored file will be permanently removed.'
+              : 'The $count selected documents and their stored files will be permanently removed.',
         ),
         actions: [
           TextButton(
@@ -1189,17 +1477,60 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
     if (confirmed != true || !mounted) return;
 
     final remaining = documents
-        .where((item) => item.id != selected.id)
+        .where((item) => !_selectedIds.contains(item.id))
         .toList();
     setState(() => _busy = true);
     try {
-      await _repository.delete(selected, remaining);
+      await _repository.deleteMany(selected, remaining);
       if (!mounted) return;
       setState(() {
         documents = remaining;
-        _selectedId = null;
+        _selectedIds.clear();
       });
-      _showMessage('Document deleted.');
+      _showMessage(
+        count == 1 ? 'Document deleted.' : '$count documents deleted.',
+      );
+    } on VaultFileDeleteException catch (error) {
+      if (!mounted) return;
+      final removeRecords = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Stored file could not be removed'),
+          content: Text(
+            '${error.documents.length == 1 ? 'One file is' : '${error.documents.length} files are'} locked or protected by Windows/OneDrive. '
+            'You can still remove ${error.documents.length == 1 ? 'this document' : 'these documents'} from the vault list, but the protected file may remain on the device.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Keep record'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Remove record anyway'),
+            ),
+          ],
+        ),
+      );
+      if (removeRecords == true && mounted) {
+        try {
+          await _repository.save(remaining);
+          if (!mounted) return;
+          setState(() {
+            documents = remaining;
+            _selectedIds.clear();
+          });
+          _showMessage(
+            count == 1
+                ? 'Document removed from the vault. The protected file may remain on this device.'
+                : '$count documents removed from the vault. Protected files may remain on this device.',
+          );
+        } on Object catch (saveError) {
+          if (mounted) {
+            _showMessage('Could not remove the vault record: $saveError');
+          }
+        }
+      }
     } on Object catch (error) {
       if (mounted) _showMessage('Could not delete document: $error');
     } finally {
@@ -1547,14 +1878,14 @@ class _VaultEmptyState extends StatelessWidget {
 
 class _VaultActionBar extends StatelessWidget {
   const _VaultActionBar({
-    required this.hasSelection,
+    required this.selectionCount,
     required this.busy,
     required this.onEdit,
     required this.onDelete,
     required this.onUpload,
   });
 
-  final bool hasSelection;
+  final int selectionCount;
   final bool busy;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -1573,15 +1904,21 @@ class _VaultActionBar extends StatelessWidget {
             children: [
               IconButton.filledTonal(
                 tooltip: 'Edit selected document',
-                onPressed: hasSelection && !busy ? onEdit : null,
+                onPressed: selectionCount == 1 && !busy ? onEdit : null,
                 icon: const Icon(Icons.edit_outlined),
               ),
               const SizedBox(width: 6),
-              IconButton.filledTonal(
-                tooltip: 'Delete selected document',
-                onPressed: hasSelection && !busy ? onDelete : null,
-                color: Theme.of(context).colorScheme.error,
-                icon: const Icon(Icons.delete_outline),
+              Badge(
+                isLabelVisible: selectionCount > 0,
+                label: Text('$selectionCount'),
+                child: IconButton.filledTonal(
+                  tooltip: selectionCount > 1
+                      ? 'Delete $selectionCount selected documents'
+                      : 'Delete selected document',
+                  onPressed: selectionCount > 0 && !busy ? onDelete : null,
+                  color: Theme.of(context).colorScheme.error,
+                  icon: const Icon(Icons.delete_outline),
+                ),
               ),
               const Spacer(),
               FilledButton.icon(
@@ -1599,6 +1936,146 @@ class _VaultActionBar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PinCodeField extends StatefulWidget {
+  const _PinCodeField({
+    required this.controller,
+    required this.label,
+    this.autofocus = false,
+    this.obscureText = true,
+    this.errorText,
+    this.onSubmitted,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final bool autofocus;
+  final bool obscureText;
+  final String? errorText;
+  final VoidCallback? onSubmitted;
+
+  @override
+  State<_PinCodeField> createState() => _PinCodeFieldState();
+}
+
+class _PinCodeFieldState extends State<_PinCodeField> {
+  final _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_refresh);
+    _focusNode.addListener(_refresh);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PinCodeField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_refresh);
+      widget.controller.addListener(_refresh);
+    }
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_refresh);
+    _focusNode
+      ..removeListener(_refresh)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final value = widget.controller.text;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(widget.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 9),
+        SizedBox(
+          height: 58,
+          child: Stack(
+            children: [
+              ExcludeSemantics(
+                child: Row(
+                  children: List.generate(6, (index) {
+                    final hasValue = index < value.length;
+                    final active =
+                        _focusNode.hasFocus &&
+                        (index == value.length ||
+                            (value.length == 6 && index == 5));
+                    return Expanded(
+                      child: Container(
+                        margin: EdgeInsets.only(right: index == 5 ? 0 : 7),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: colorScheme.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: widget.errorText != null
+                                ? colorScheme.error
+                                : active
+                                ? colorScheme.primary
+                                : colorScheme.outlineVariant,
+                            width: active ? 2 : 1,
+                          ),
+                        ),
+                        child: Text(
+                          hasValue
+                              ? (widget.obscureText ? '●' : value[index])
+                              : '',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+              Positioned.fill(
+                child: Opacity(
+                  opacity: 0,
+                  child: TextField(
+                    controller: widget.controller,
+                    focusNode: _focusNode,
+                    autofocus: widget.autofocus,
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.done,
+                    maxLength: 6,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(6),
+                    ],
+                    enableSuggestions: false,
+                    autocorrect: false,
+                    decoration: const InputDecoration(counterText: ''),
+                    onSubmitted: (_) => widget.onSubmitted?.call(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (widget.errorText != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            widget.errorText!,
+            style: TextStyle(color: colorScheme.error, fontSize: 12),
+          ),
+        ],
+      ],
     );
   }
 }
