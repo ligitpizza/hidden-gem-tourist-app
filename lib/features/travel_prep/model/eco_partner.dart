@@ -18,6 +18,9 @@ class EcoPartner {
     this.priceBand,
     this.website,
     this.imageUrl,
+    this.imageSourceName,
+    this.imageSourceUrl,
+    this.imageCapturedAt,
     this.routeNames = const [],
     this.veganClassification,
     this.chargerDetails,
@@ -40,33 +43,70 @@ class EcoPartner {
   final String? priceBand;
   final String? website;
   final String? imageUrl;
+  final String? imageSourceName;
+  final String? imageSourceUrl;
+  final DateTime? imageCapturedAt;
   final List<String> routeNames;
   final String? veganClassification;
   final String? chargerDetails;
   final bool gstcVerified;
 
   EcoPartner withDistance(double value) => EcoPartner(
-        id: id,
-        name: name,
-        category: category,
-        subtype: subtype,
-        latitude: latitude,
-        longitude: longitude,
-        address: address,
-        distanceKm: value,
-        sustainabilityLabel: sustainabilityLabel,
-        evidence: evidence,
-        sourceName: sourceName,
-        sourceUrl: sourceUrl,
-        lastUpdated: lastUpdated,
-        priceBand: priceBand,
-        website: website,
-        imageUrl: imageUrl,
-        routeNames: routeNames,
-        veganClassification: veganClassification,
-        chargerDetails: chargerDetails,
-        gstcVerified: gstcVerified,
-      );
+    id: id,
+    name: name,
+    category: category,
+    subtype: subtype,
+    latitude: latitude,
+    longitude: longitude,
+    address: address,
+    distanceKm: value,
+    sustainabilityLabel: sustainabilityLabel,
+    evidence: evidence,
+    sourceName: sourceName,
+    sourceUrl: sourceUrl,
+    lastUpdated: lastUpdated,
+    priceBand: priceBand,
+    website: website,
+    imageUrl: imageUrl,
+    imageSourceName: imageSourceName,
+    imageSourceUrl: imageSourceUrl,
+    imageCapturedAt: imageCapturedAt,
+    routeNames: routeNames,
+    veganClassification: veganClassification,
+    chargerDetails: chargerDetails,
+    gstcVerified: gstcVerified,
+  );
+
+  EcoPartner withImage({
+    required String url,
+    required String imageSourceName,
+    required String imageSourceUrl,
+    DateTime? capturedAt,
+  }) => EcoPartner(
+    id: id,
+    name: name,
+    category: category,
+    subtype: subtype,
+    latitude: latitude,
+    longitude: longitude,
+    address: address,
+    distanceKm: distanceKm,
+    sustainabilityLabel: sustainabilityLabel,
+    evidence: evidence,
+    sourceName: sourceName,
+    sourceUrl: sourceUrl,
+    lastUpdated: lastUpdated,
+    priceBand: priceBand,
+    website: website,
+    imageUrl: url,
+    imageSourceName: imageSourceName,
+    imageSourceUrl: imageSourceUrl,
+    imageCapturedAt: capturedAt,
+    routeNames: routeNames,
+    veganClassification: veganClassification,
+    chargerDetails: chargerDetails,
+    gstcVerified: gstcVerified,
+  );
 }
 
 class EcoDestination {

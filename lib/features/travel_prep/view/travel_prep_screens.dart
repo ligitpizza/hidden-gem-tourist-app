@@ -12,6 +12,7 @@ import '../model/travel_document.dart';
 import '../model/travel_document_repository.dart';
 import '../model/vault_pin_service.dart';
 import 'travel_document_viewer_screen.dart';
+import 'emergency_contacts_screen.dart';
 
 export 'eco_partner_screen.dart';
 
@@ -99,6 +100,10 @@ class TravelPrepDashboardScreen extends StatelessWidget {
             description: '6 documents stored securely for your next journey.',
             button: 'Manage Documents',
             onTap: () => context.push(ShellRoutes.documentVault),
+            secondaryButton: 'Emergency Contacts',
+            onSecondaryTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const EmergencyContactsScreen()),
+            ),
           ),
         ],
       ),
@@ -114,6 +119,8 @@ class _DashboardCard extends StatelessWidget {
     required this.button,
     required this.onTap,
     this.progress,
+    this.secondaryButton,
+    this.onSecondaryTap,
   });
   final IconData icon;
   final String title;
@@ -121,6 +128,8 @@ class _DashboardCard extends StatelessWidget {
   final String button;
   final VoidCallback onTap;
   final double? progress;
+  final String? secondaryButton;
+  final VoidCallback? onSecondaryTap;
 
   @override
   Widget build(BuildContext context) {
@@ -166,7 +175,16 @@ class _DashboardCard extends StatelessWidget {
               LinearProgressIndicator(value: progress),
             ],
             const SizedBox(height: 18),
-            ElevatedButton(onPressed: onTap, child: Text(button)),
+            if (secondaryButton == null)
+              ElevatedButton(onPressed: onTap, child: Text(button))
+            else
+              Row(
+                children: [
+                  Expanded(child: ElevatedButton(onPressed: onTap, child: Text(button))),
+                  const SizedBox(width: 8),
+                  Expanded(child: OutlinedButton(onPressed: onSecondaryTap, child: Text(secondaryButton!, textAlign: TextAlign.center))),
+                ],
+              ),
           ],
         ),
       ),
@@ -1291,6 +1309,21 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
                 const SizedBox(height: 6),
                 const Text(
                   'Securely manage and access your essential travel credentials.',
+                ),
+                const SizedBox(height: 10),
+                Card(
+                  color: const Color(0xFFE8F3EE),
+                  child: ListTile(
+                    leading: const Icon(Icons.contact_emergency_outlined, color: Color(0xFF07513C)),
+                    title: const Text('Emergency Contacts'),
+                    subtitle: const Text('Manage contacts and lock-screen calling access'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const EmergencyContactsScreen(initiallyUnlocked: true),
+                      ),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 TextField(
