@@ -82,14 +82,23 @@ RatingSummary summarizeRatings(List<({int difficultyScore, List<String> tags})> 
       ratings.map((r) => r.difficultyScore).reduce((a, b) => a + b) / ratings.length;
 
   final tagCounts = <String, int>{};
+  final tagFirstIndex = <String, int>{};
+  var index = 0;
   for (final rating in ratings) {
     for (final tag in rating.tags) {
+      if (!tagCounts.containsKey(tag)) {
+        tagFirstIndex[tag] = index++;
+      }
       tagCounts[tag] = (tagCounts[tag] ?? 0) + 1;
     }
   }
 
   final sortedTags = tagCounts.entries.toList()
-    ..sort((a, b) => b.value.compareTo(a.value));
+    ..sort((a, b) {
+      final countCompare = b.value.compareTo(a.value);
+      if (countCompare != 0) return countCompare;
+      return tagFirstIndex[a.key]!.compareTo(tagFirstIndex[b.key]!);
+    });
   final topTags = sortedTags
       .take(5)
       .map((entry) => TagFrequency(

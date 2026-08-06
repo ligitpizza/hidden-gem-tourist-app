@@ -46,5 +46,18 @@ void main() {
 
       expect(summary.topTags.map((t) => t.tag), ['alpha', 'beta']);
     });
+
+    test('multiple tied tags preserve insertion order regardless of vocabulary size', () {
+      final summary = summarizeRatings(const [
+        (difficultyScore: 2, tags: ['delta']),
+        (difficultyScore: 2, tags: ['alpha']),
+        (difficultyScore: 2, tags: ['charlie']),
+        (difficultyScore: 2, tags: ['bravo']),
+      ]);
+
+      // All tags have frequency 1, should be ordered by first occurrence
+      expect(summary.topTags.map((t) => t.tag), ['delta', 'alpha', 'charlie', 'bravo']);
+      expect(summary.topTags.map((t) => t.percentage), [25.0, 25.0, 25.0, 25.0]);
+    });
   });
 }
