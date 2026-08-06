@@ -94,6 +94,13 @@ class RatingController extends ChangeNotifier {
     }
 
     try {
+      await _ratingRepository.updateDestinationAggregates(destinationId, summary!);
+    } catch (_) {
+      // Degrades gracefully — the rating itself already succeeded; a failure
+      // here just means the comparison table stays stale until next time.
+    }
+
+    try {
       pointsAwarded = await _progressRepository.awardPoints(pointsPerContribution);
       pathfinderBadgeUnlocked = await _progressRepository.awardPathfinderBadgeIfNew(region);
     } catch (_) {

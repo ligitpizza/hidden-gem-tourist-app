@@ -45,6 +45,17 @@ class DestinationRatingRepository {
     return summarizeRatings(ratings);
   }
 
+  /// Writes the aggregated rating results back onto the `destinations` row's
+  /// `difficulty_level`/`accessibility_tags` columns (reserved for this by
+  /// Feature 3's migration) so Feature 3's comparison table stops showing
+  /// permanently-null difficulty/accessibility for rated destinations.
+  Future<void> updateDestinationAggregates(String destinationId, RatingSummary summary) async {
+    await Supabase.instance.client.from('destinations').update({
+      'difficulty_level': summary.difficultyBucket.name,
+      'accessibility_tags': summary.topTags.map((t) => t.tag).toList(),
+    }).eq('id', destinationId);
+  }
+
   Future<List<DestinationReview>> fetchReviews(
     String destinationId, {
     int limit = 20,
