@@ -77,26 +77,36 @@ class _MapBody extends StatelessWidget {
             markers: [
               for (final destination in controller.filteredDestinations)
                 Marker(
+                  key: ValueKey(destination.id),
                   point: destination.location,
                   width: 40,
                   height: 40,
-                  child: GestureDetector(
-                    onTap: () {
-                      controller.selectDestination(destination.id);
-                      showModalBottomSheet(
-                        context: context,
-                        showDragHandle: true,
-                        builder: (_) => DestinationPopupSheet(destination: destination),
-                      ).whenComplete(controller.clearSelection);
-                    },
-                    child: Icon(
-                      categoryIcon(destination.category),
-                      color: categoryColor(destination.category),
-                      size: 32,
-                    ),
+                  child: Icon(
+                    categoryIcon(destination.category),
+                    color: categoryColor(destination.category),
+                    size: 32,
                   ),
                 ),
             ],
+            // A per-marker GestureDetector would be nested inside the one
+            // MarkerClusterLayerWidget already wraps around each marker
+            // child (markerChildBehavior defaults to false), leaving gesture
+            // resolution ambiguous. onMarkerTap is the package's purpose-built
+            // hook for this instead.
+            onMarkerTap: (marker) {
+              final id = (marker.key as ValueKey<String>).value;
+              final matches =
+                  controller.filteredDestinations.where((d) => d.id == id);
+              if (matches.isEmpty) return;
+              final destination = matches.first;
+
+              controller.selectDestination(destination.id);
+              showModalBottomSheet(
+                context: context,
+                showDragHandle: true,
+                builder: (_) => DestinationPopupSheet(destination: destination),
+              ).whenComplete(controller.clearSelection);
+            },
             builder: (context, markers) => CircleAvatar(
               backgroundColor: Theme.of(context).colorScheme.primary,
               child: Text(
