@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:collab/features/destination_exploration/model/destination_exploration_repository.dart';
 import 'package:collab/shared/models/hidden_gem.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:collab/features/destination_exploration/model/map_destination.dart';
 
 void main() {
   group('DestinationExplorationRepository.mapRow', () {
@@ -81,6 +83,66 @@ void main() {
       });
 
       expect(destination.category, HiddenGemCategory.culture);
+    });
+  });
+
+  group('legDistanceKm', () {
+    test('computes a known distance', () {
+      // Kuala Lumpur city centre to Batu Caves, ~11.5km apart.
+      final km = legDistanceKm(
+        const LatLng(3.1390, 101.6869),
+        const LatLng(3.2379, 101.6840),
+      );
+      expect(km, closeTo(11.5, 1.0));
+    });
+
+    test('is zero for the same point', () {
+      const point = LatLng(5.4164, 100.3327);
+      expect(legDistanceKm(point, point), closeTo(0, 0.001));
+    });
+  });
+
+  group('orderByNearestNeighbor', () {
+    const origin = MapDestination(
+      id: 'origin',
+      name: 'Origin',
+      description: '',
+      category: HiddenGemCategory.culture,
+      location: LatLng(0, 0),
+    );
+    const near = MapDestination(
+      id: 'near',
+      name: 'Near',
+      description: '',
+      category: HiddenGemCategory.culture,
+      location: LatLng(0, 1),
+    );
+    const far = MapDestination(
+      id: 'far',
+      name: 'Far',
+      description: '',
+      category: HiddenGemCategory.culture,
+      location: LatLng(0, 5),
+    );
+    const mid = MapDestination(
+      id: 'mid',
+      name: 'Mid',
+      description: '',
+      category: HiddenGemCategory.culture,
+      location: LatLng(0, 3),
+    );
+
+    test('returns an empty list for no candidates', () {
+      expect(orderByNearestNeighbor(origin, const []), isEmpty);
+    });
+
+    test('returns the single candidate unchanged', () {
+      expect(orderByNearestNeighbor(origin, [near]), [near]);
+    });
+
+    test('greedily visits closest-first from a scrambled input', () {
+      final ordered = orderByNearestNeighbor(origin, [far, near, mid]);
+      expect(ordered, [near, mid, far]);
     });
   });
 }
