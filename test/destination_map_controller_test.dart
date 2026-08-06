@@ -136,5 +136,19 @@ void main() {
       controller.clearSelection();
       expect(controller.selectedDestination, isNull);
     });
+
+    test('selectDestination with unknown id does not throw', () async {
+      final controller = DestinationMapController(
+        repository: _FakeRepository([_nature, _food]),
+      );
+      await controller.loadDestinations();
+
+      controller.selectDestination('f1');
+      expect(controller.selectedDestination, _food);
+
+      // Attempting to select an unknown id should not throw and should not change selection
+      controller.selectDestination('unknown-id');
+      expect(controller.selectedDestination, _food);
+    });
   });
 }

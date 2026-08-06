@@ -59,8 +59,12 @@ class DestinationMapController extends ChangeNotifier {
   }
 
   void selectDestination(String id) {
-    selectedDestination = destinations.firstWhere((d) => d.id == id);
-    notifyListeners();
+    try {
+      selectedDestination = destinations.firstWhere((d) => d.id == id);
+      notifyListeners();
+    } catch (_) {
+      // Unknown id, no-op
+    }
   }
 
   void clearSelection() {
