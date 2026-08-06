@@ -122,6 +122,8 @@ class DestinationMapController extends ChangeNotifier {
   }
 
   Future<void> viewThemedCluster({MapDestination? origin}) async {
+    if (isLoadingCluster) return;
+
     isLoadingCluster = true;
     clusterMessage = null;
     notifyListeners();
