@@ -51,3 +51,83 @@ update public.destinations set
   entrance_cost = 25,
   visit_duration_minutes = 60
 where name = 'Penang Peranakan Mansion';
+
+update public.destinations set
+  city = 'Teluk Bahang',
+  uniqueness_score = 3.6,
+  accessibility_score = 2.5,
+  popularity = 'medium',
+  crowd_level = 'medium',
+  entrance_cost = 68,
+  visit_duration_minutes = 180
+where name = 'Escape Penang';
+
+update public.destinations set
+  city = 'Batu Ferringhi',
+  uniqueness_score = 3.0,
+  accessibility_score = 4.5,
+  popularity = 'high',
+  crowd_level = 'high',
+  entrance_cost = 0,
+  visit_duration_minutes = 150
+where name = 'Batu Ferringhi Beach';
+
+update public.destinations set
+  city = 'Balik Pulau',
+  uniqueness_score = 4.1,
+  accessibility_score = 2.0,
+  popularity = 'low',
+  crowd_level = 'low',
+  entrance_cost = 38,
+  visit_duration_minutes = 90
+where name = 'Tropical Fruit Farm';
+
+update public.destinations set
+  city = 'Batu Ferringhi',
+  uniqueness_score = 3.2,
+  accessibility_score = 3.5,
+  popularity = 'medium',
+  crowd_level = 'high',
+  entrance_cost = 0,
+  visit_duration_minutes = 45
+where name = 'Ban Zaan Wet Market';
+
+update public.destinations set
+  city = 'Teluk Bahang',
+  uniqueness_score = 3.9,
+  accessibility_score = 1.5,
+  popularity = 'low',
+  crowd_level = 'low',
+  entrance_cost = 5,
+  visit_duration_minutes = 75
+where name = 'Air Terjun Titi Kerawang';
+
+update public.destinations set
+  city = 'George Town',
+  uniqueness_score = 3.3,
+  accessibility_score = 4.0,
+  popularity = 'medium',
+  crowd_level = 'medium',
+  entrance_cost = 0,
+  visit_duration_minutes = 60
+where name = 'Seng Thor Restaurant';
+
+update public.destinations set
+  city = 'George Town',
+  uniqueness_score = 3.5,
+  accessibility_score = 4.2,
+  popularity = 'medium',
+  crowd_level = 'low',
+  entrance_cost = 0,
+  visit_duration_minutes = 50
+where name = 'Nyonya Baba Cuisine Cafe';
+
+update public.destinations set
+  city = 'Teluk Bahang',
+  uniqueness_score = 4.3,
+  accessibility_score = 3.0,
+  popularity = 'low',
+  crowd_level = 'low',
+  entrance_cost = 15,
+  visit_duration_minutes = 90
+where name = 'Penang Batik Craft Village';

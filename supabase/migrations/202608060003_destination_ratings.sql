@@ -17,7 +17,8 @@ create table public.destination_ratings (
   difficulty_score int not null check (difficulty_score between 1 and 5),
   review_text text not null default '',
   generated_tags text[] not null default '{}',
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  unique (user_id, destination_id)
 );
 
 alter table public.destination_ratings enable row level security;
