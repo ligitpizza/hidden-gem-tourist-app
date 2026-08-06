@@ -5,6 +5,10 @@ import 'package:collab/features/destination_exploration/controller/comparison_co
 import 'package:collab/features/destination_exploration/model/comparison_destination.dart';
 import 'package:collab/features/destination_exploration/model/crowd_level.dart';
 import 'package:collab/features/destination_exploration/model/destination_exploration_repository.dart';
+import 'package:collab/features/destination_exploration/model/favourite_destinations_store.dart';
+import 'package:collab/features/itinerary_planning/controller/itinerary_planner_controller.dart';
+import 'package:collab/features/itinerary_planning/model/itinerary_repository.dart';
+import 'package:collab/shared/models/destination.dart' as shared;
 import 'package:collab/shared/models/hidden_gem.dart';
 
 class _FakeComparisonRepository extends DestinationExplorationRepository {
@@ -13,6 +17,20 @@ class _FakeComparisonRepository extends DestinationExplorationRepository {
 
   @override
   Future<List<ComparisonDestination>> fetchForComparison(List<String> ids) async => result;
+}
+
+// addDestination() fires an un-awaited background gem-preview lookup through
+// the real ItineraryRepository, which would hit Supabase (uninitialized in a
+// plain unit test) — inject a fake so that background call resolves cleanly
+// instead of risking an unhandled-exception warning from the test runner.
+class _FakeItineraryRepository extends ItineraryRepository {
+  @override
+  Future<List<HiddenGem>> gemsNearDestinations(
+    List<shared.Destination> destinations, {
+    double radiusKm = 3,
+    Set<HiddenGemCategory> categories = const {},
+  }) async =>
+      const [];
 }
 
 ComparisonDestination _dest(
@@ -150,6 +168,46 @@ void main() {
       final distance = await controller.distanceFromUser(_dest('a'));
 
       expect(distance, isNull);
+    });
+  });
+
+  group('ComparisonController follow-up actions', () {
+    setUp(() {
+      FavouriteDestinationsStore.instance.clearForTesting();
+    });
+
+    test('addBestPickToItinerary adds the Best Pick to the itinerary controller', () async {
+      final controller =
+          ComparisonController(repository: _FakeComparisonRepository([_dest('a'), _dest('b', avgRating: 4.9)]));
+      await controller.loadComparison(['a', 'b']);
+      final itineraryController =
+          ItineraryPlannerController(repository: _FakeItineraryRepository());
+
+      await controller.addBestPickToItinerary(itineraryController);
+
+      expect(itineraryController.selectedDestinations.map((d) => d.id), contains('b'));
+    });
+
+    test('saveToFavourites works on any compared destination, not just Best Pick', () async {
+      final controller =
+          ComparisonController(repository: _FakeComparisonRepository([_dest('a'), _dest('b', avgRating: 4.9)]));
+      await controller.loadComparison(['a', 'b']);
+
+      controller.saveToFavourites(controller.destinations.first); // 'a', not the Best Pick
+
+      expect(FavouriteDestinationsStore.instance.favourites.map((d) => d.id), contains('a'));
+    });
+
+    test('buildShareSummary names every destination and calls out the Best Pick', () async {
+      final controller =
+          ComparisonController(repository: _FakeComparisonRepository([_dest('a'), _dest('b', avgRating: 4.9)]));
+      await controller.loadComparison(['a', 'b']);
+
+      final summary = controller.buildShareSummary();
+
+      expect(summary, contains('a'));
+      expect(summary, contains('b'));
+      expect(summary, contains('Best Pick: b'));
     });
   });
 }

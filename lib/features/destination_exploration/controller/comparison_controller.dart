@@ -1,9 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../../../shared/models/destination.dart' as shared;
+import '../../../shared/models/hidden_gem.dart' show HiddenGemCategory;
+import '../../itinerary_planning/controller/itinerary_planner_controller.dart';
 import '../model/comparison_destination.dart';
 import '../model/crowd_level.dart';
 import '../model/destination_exploration_repository.dart';
+import '../model/favourite_destinations_store.dart';
 
 /// User-adjustable weighting for Best Pick scoring — matches the prepared
 /// UI's four slider dimensions. Hidden Gem Score is deliberately not one of
@@ -125,5 +130,63 @@ class ComparisonController extends ChangeNotifier {
     final point = await _currentLocation();
     if (point == null) return null;
     return legDistanceKm(point, destination.location);
+  }
+
+  Future<void> addBestPickToItinerary(ItineraryPlannerController itineraryController) async {
+    final pick = bestPick;
+    if (pick == null) return;
+    itineraryController.addDestination(shared.Destination(
+      id: pick.id,
+      name: pick.name,
+      city: pick.city,
+      category: _representativeCategory(pick.category),
+      location: pick.location,
+    ));
+  }
+
+  void saveToFavourites(ComparisonDestination destination) {
+    FavouriteDestinationsStore.instance.add(destination);
+  }
+
+  String buildShareSummary() {
+    final buffer = StringBuffer()..writeln('Comparing ${destinations.length} destinations:');
+    for (final destination in destinations) {
+      buffer.writeln(
+        '- ${destination.name} (${destination.avgRating.toStringAsFixed(1)}★, '
+        'Hidden Gem ${destination.hiddenGemScore.toStringAsFixed(2)})',
+      );
+    }
+    final pick = bestPick;
+    if (pick != null) buffer.writeln('Best Pick: ${pick.name}');
+    return buffer.toString();
+  }
+
+  Future<void> shareComparison() async {
+    try {
+      shareError = null;
+      await Share.share(buildShareSummary());
+    } catch (_) {
+      shareError = "Couldn't share the comparison right now.";
+    }
+    notifyListeners();
+  }
+}
+
+/// A representative [shared.DestinationCategory] for a [HiddenGemCategory] —
+/// lossy (several raw categories bucket into one HiddenGemCategory) but
+/// good enough for the itinerary integration, which only needs *a*
+/// reasonable category for display, not the original raw value.
+shared.DestinationCategory _representativeCategory(HiddenGemCategory category) {
+  switch (category) {
+    case HiddenGemCategory.food:
+      return shared.DestinationCategory.restaurant;
+    case HiddenGemCategory.culture:
+      return shared.DestinationCategory.heritageSite;
+    case HiddenGemCategory.nature:
+      return shared.DestinationCategory.park;
+    case HiddenGemCategory.viewpoint:
+      return shared.DestinationCategory.viewpoint;
+    case HiddenGemCategory.craft:
+      return shared.DestinationCategory.craft;
   }
 }
