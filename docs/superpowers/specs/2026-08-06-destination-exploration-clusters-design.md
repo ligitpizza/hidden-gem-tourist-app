@@ -2,6 +2,9 @@
 
 Status: Approved
 Date: 2026-08-06
+Revised: 2026-08-06 — after reviewing the prepared UI: trigger changed from a popup button to
+a persistent map control that can auto-resolve the anchor from the user's current location
+(see Decisions and Controller additions); per-stop and total trail distances added.
 
 ## Context
 
@@ -20,9 +23,20 @@ Cluster" use case (basic flow, A1, E1/E2), as supplied by the user on 2026-08-06
   standalone, with its own dedicated `destinations` table), Feature 2 explicitly reuses
   Feature 1's map, data, and controller rather than building a parallel screen. It reads from
   the same `destinations` table Feature 1 introduces.
-- **Trigger point**: a "View Themed Cluster" button inside Feature 1's `DestinationPopupSheet`
-  (the marker-tap popup) — no new navigation or screen. Tapping it draws the cluster directly
-  on the same map, underneath the still-open (or just-closed) popup.
+- **Trigger point (revised)**: the prepared UI shows "View Themed Trail" as a persistent
+  control on the map itself (reached via a "+" drawer/speed-dial button in the map's bottom
+  corner that also hosts other map-associated actions, e.g. comparison) — not a button inside
+  the popup sheet as originally designed. Per the user: the feature "cluster[s] same
+  destination category and based on user current location to gather nearby destinations that
+  share the same category within a radius." So `viewThemedCluster` now supports **both**: an
+  explicit origin (if the user had already tapped/selected a marker) or, when none is
+  selected, auto-resolving the anchor as the destination nearest the user's current GPS
+  location — see Controller additions below. The prepared UI's cluster card labels the anchor
+  "Selected Anchor" regardless of which path picked it (user tap or GPS-nearest), so no
+  user-facing distinction is needed. The drawer/speed-dial UI pattern itself is a View-layer
+  detail, not built in this spec (no View is being built for the trigger button beyond what's
+  already planned for Feature 1's screen) — noted here so the eventual View task knows the
+  target interaction.
 - **State ownership**: cluster state (origin, ordered nearby stops, polyline, status message)
   is added directly to Feature 1's `DestinationMapController` rather than a separate
   controller — one map, one controller, one source of truth.
