@@ -171,4 +171,23 @@ class DestinationExplorationRepository {
         await Supabase.instance.client.from('destinations').select().inFilter('id', ids);
     return rows.map(mapComparisonRow).toList();
   }
+
+  Future<List<MapDestination>> searchDestinations({
+    String query = '',
+    HiddenGemCategory? category,
+    int limit = 20,
+  }) async {
+    final trimmed = query.trim();
+    final filterBuilder = Supabase.instance.client.from('destinations').select();
+    final rows = trimmed.isEmpty
+        ? await filterBuilder.order('avg_rating', ascending: false).limit(limit)
+        : await filterBuilder
+            .ilike('name', '%${trimmed.replaceAll(RegExp(r'[,()%]'), ' ').trim()}%')
+            .order('avg_rating', ascending: false)
+            .limit(limit);
+
+    final results = rows.map(mapRow).toList();
+    if (category == null) return results;
+    return results.where((d) => d.category == category).toList();
+  }
 }
