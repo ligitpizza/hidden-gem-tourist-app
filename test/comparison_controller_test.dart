@@ -209,5 +209,15 @@ void main() {
       expect(summary, contains('b'));
       expect(summary, contains('Best Pick: b'));
     });
+
+    test('shareComparison catches a share failure and sets shareError', () async {
+      final controller = ComparisonController(
+          repository: _FakeComparisonRepository([_dest('a'), _dest('b', avgRating: 4.9)]));
+      await controller.loadComparison(['a', 'b']);
+
+      await controller.shareComparison(); // no platform channel registered in tests — expected to fail internally
+
+      expect(controller.shareError, isNotNull);
+    });
   });
 }
