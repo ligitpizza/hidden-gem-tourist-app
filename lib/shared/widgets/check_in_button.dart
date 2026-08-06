@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../config/theme.dart';
+import '../../config/theme.dart';
 import '../../features/gamification_journal/controller/checkin_controller.dart';
 
 /// A single button whose appearance reflects CheckInStatus, so every

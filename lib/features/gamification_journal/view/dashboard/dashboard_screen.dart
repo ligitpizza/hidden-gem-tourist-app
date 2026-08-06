@@ -7,11 +7,11 @@ import '../../controller/badge_controller.dart';
 import '../../controller/checkin_controller.dart';
 import '../../controller/dashboard_controller.dart';
 import '../../controller/journal_controller.dart';
-import '../../../../../shared/widgets/app_header.dart';
-import '../../../../../shared/widgets/category_breakdown_list.dart';
-import '../../../../../shared/widgets/check_in_history_tile.dart';
-import '../../../../../shared/widgets/economic_impact_chart.dart';
-import '../../../../../shared/widgets/stat_ring.dart';
+import '../../../../shared/widgets/app_header.dart';
+import '../../../../shared/widgets/category_breakdown_list.dart';
+import '../../../../shared/widgets/check_in_history_tile.dart';
+import '../../../../shared/widgets/economic_impact_chart.dart';
+import '../../../../shared/widgets/stat_ring.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});

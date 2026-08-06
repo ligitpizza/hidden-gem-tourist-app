@@ -1,6 +1,6 @@
 import '../../model/check_in_model.dart';
 import '../../model/destination_model.dart';
-import '../../../../utility/haversine_helper.dart';
+import '../../../../core/utils/haversine_helper.dart';
 
 enum CheckInFailureReason { tooFarAway, cooldownActive, unknown }
 

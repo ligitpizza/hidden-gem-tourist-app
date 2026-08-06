@@ -38,6 +38,7 @@ dependencies:
   # State management
   flutter_riverpod: ^2.6.1
   riverpod_annotation: ^2.6.1
+  provider: ^6.1.2            # Module 6 (gamification/journal) ChangeNotifier controllers
 
   # Routing
   go_router: ^15.1.2
@@ -68,6 +69,10 @@ dependencies:
   # Model/value utilities
   freezed_annotation: ^2.4.4
   json_annotation: ^4.9.0
+
+  # Design (Module 6 gamification/journal theme + charts)
+  google_fonts: ^6.2.1
+  fl_chart: ^0.69.0
 
 dev_dependencies:
   flutter_test:

@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 import '../../../../config/theme.dart';
 import '../../controller/checkin_controller.dart';
 import '../../controller/journal_controller.dart';
-import '../../../../../shared/widgets/app_header.dart';
-import '../../../../../shared/widgets/journal_card.dart';
+import '../../../../shared/widgets/app_header.dart';
+import '../../../../shared/widgets/journal_card.dart';
 import 'journal_detail_screen.dart';
 
 class JournalTimelineScreen extends StatelessWidget {
