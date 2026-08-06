@@ -1,19 +1,25 @@
-# Mapillary transport previews
+# Mapillary recommendation previews
 
-1. Create a Mapillary developer application and copy its client access token.
-2. Run Flutter without committing that token:
+Mapillary access is proxied through the authenticated Supabase Edge Function
+`mapillary-images`. The token must not be included in the Flutter application.
+
+## Supabase setup
+
+1. In the Supabase dashboard, add an Edge Function secret named
+   `MAPILLARY_ACCESS_TOKEN` containing the Mapillary client token.
+2. Deploy the function:
 
 ```powershell
-flutter run -d windows --dart-define=MAPILLARY_ACCESS_TOKEN=YOUR_CLIENT_TOKEN
+npx supabase functions deploy mapillary-images --project-ref oeelhfvbxtrmvejllwjy --use-api
 ```
 
-For a release build:
+Flutter can then be run normally:
 
 ```powershell
-flutter build windows --dart-define=MAPILLARY_ACCESS_TOKEN=YOUR_CLIENT_TOKEN
+flutter run
 ```
 
-The app requests up to 12 transport previews per recommendation search. It
-looks within 100 metres, chooses the nearest image, displays its capture year,
-and links to Mapillary. When no token or nearby coverage is available, the OSM
-map preview remains visible.
+The app sends at most 12 Dining and 12 Transport locations to the function per
+recommendation search. The function looks within 100 metres, returns the nearest
+available street-level image, and never returns the access token. If no nearby
+Mapillary coverage is available, the OSM map preview remains visible.

@@ -3,9 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../controller/emergency_contact_controller.dart';
 import '../model/emergency_contact.dart';
-import '../model/emergency_contact_repository.dart';
-import '../model/vault_pin_service.dart';
 
 class EmergencyContactsScreen extends StatefulWidget {
   const EmergencyContactsScreen({super.key, this.initiallyUnlocked = false});
@@ -16,101 +15,73 @@ class EmergencyContactsScreen extends StatefulWidget {
 }
 
 class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
-  final _repository = EmergencyContactRepository();
-  final _pinService = VaultPinService();
+  late final EmergencyContactController _controller;
   final _pin = TextEditingController();
   final _search = TextEditingController();
-  List<EmergencyContact> _contacts = const [];
-  bool _loading = true;
-  bool _unlocked = false;
-  bool _hasPin = false;
-  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _unlocked = widget.initiallyUnlocked;
-    _load();
+    _controller = EmergencyContactController(
+      initiallyUnlocked: widget.initiallyUnlocked,
+    )..addListener(_refresh);
+    _controller.load();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_refresh);
+    _controller.dispose();
     _pin.dispose();
     _search.dispose();
     super.dispose();
   }
 
-  Future<void> _load() async {
-    final values = await Future.wait([
-      _repository.load(),
-      _pinService.readPin(),
-    ]);
-    if (!mounted) return;
-    setState(() {
-      _contacts = values[0] as List<EmergencyContact>;
-      _hasPin = values[1] != null;
-      _loading = false;
-    });
-  }
-
   Future<void> _unlock() async {
-    if (_pin.text != await _pinService.readPin()) {
-      setState(() {
-        _error = 'Incorrect vault PIN.';
-        _pin.clear();
-      });
-      return;
-    }
-    setState(() {
-      _unlocked = true;
-      _error = null;
-      _pin.clear();
-    });
+    if (await _controller.unlock(_pin.text)) _pin.clear();
   }
-
-  Future<void> _save() => _repository.save(_contacts);
 
   @override
   Widget build(BuildContext context) {
-    final query = _search.text.trim().toLowerCase();
-    final visible = _contacts.where((contact) {
-      if (!_unlocked && !contact.availableWhenLocked) return false;
-      return query.isEmpty ||
-          contact.name.toLowerCase().contains(query) ||
-          contact.relationship.toLowerCase().contains(query) ||
-          contact.phone.contains(query);
-    }).toList();
+    final visible = _controller.visibleContacts;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Emergency Contacts'),
         actions: [
-          if (_unlocked)
+          if (_controller.isUnlocked)
             IconButton(
               tooltip: 'Lock',
-              onPressed: () => setState(() => _unlocked = false),
+              onPressed: () {
+                _search.clear();
+                _controller.lock();
+              },
               icon: const Icon(Icons.lock_outline),
             ),
         ],
       ),
-      floatingActionButton: _unlocked
+      floatingActionButton: _controller.isUnlocked
           ? FloatingActionButton.extended(
               onPressed: () => _edit(),
               icon: const Icon(Icons.person_add_alt_1),
               label: const Text('Add contact'),
             )
           : null,
-      body: _loading
+      body: _controller.isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
               children: [
                 Card(
-                  color: _unlocked
+                  color: _controller.isUnlocked
                       ? const Color(0xFFE5F4EC)
                       : const Color(0xFFFFF5D6),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: _unlocked
+                    child: _controller.isUnlocked
                         ? const Row(
                             children: [
                               Icon(Icons.lock_open, color: Color(0xFF07513C)),
@@ -126,16 +97,16 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                if (_unlocked)
+                if (_controller.isUnlocked)
                   TextField(
                     controller: _search,
-                    onChanged: (_) => setState(() {}),
+                    onChanged: _controller.updateSearch,
                     decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.search),
                       hintText: 'Search contacts...',
                     ),
                   ),
-                if (_unlocked) const SizedBox(height: 12),
+                if (_controller.isUnlocked) const SizedBox(height: 12),
                 if (visible.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 42),
@@ -148,7 +119,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          _unlocked
+                          _controller.isUnlocked
                               ? 'No emergency contacts saved yet.'
                               : 'No contacts are available while the vault is locked.',
                           textAlign: TextAlign.center,
@@ -163,7 +134,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
   }
 
   Widget _lockedHeader() {
-    if (!_hasPin)
+    if (!_controller.hasPin)
       return const Row(
         children: [
           Icon(Icons.info_outline),
@@ -199,7 +170,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
           onSubmitted: (_) => _unlock(),
           decoration: InputDecoration(
             labelText: 'Vault PIN',
-            errorText: _error,
+            errorText: _controller.pinError,
             counterText: '',
             suffixIcon: IconButton(
               onPressed: _unlock,
@@ -227,10 +198,11 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
             ].where((value) => value.isNotEmpty).join(' · '),
           ),
           Text(contact.phone),
-          if (_unlocked && contact.email.isNotEmpty) Text(contact.email),
-          if (_unlocked && contact.notes.isNotEmpty)
+          if (_controller.isUnlocked && contact.email.isNotEmpty)
+            Text(contact.email),
+          if (_controller.isUnlocked && contact.notes.isNotEmpty)
             Text(contact.notes, maxLines: 2, overflow: TextOverflow.ellipsis),
-          if (!_unlocked)
+          if (!_controller.isUnlocked)
             const Text(
               'Available while locked',
               style: TextStyle(fontSize: 11, color: Color(0xFF07513C)),
@@ -251,7 +223,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
             onPressed: () => _openWhatsApp(contact),
             icon: const Icon(Icons.chat_outlined, color: Color(0xFF168A4A)),
           ),
-          if (_unlocked)
+          if (_controller.isUnlocked)
             PopupMenuButton<String>(
               onSelected: (value) =>
                   value == 'edit' ? _edit(contact) : _delete(contact),
@@ -314,12 +286,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
       builder: (_) => _ContactDialog(existing: existing),
     );
     if (!mounted || result == null) return;
-    final normalizedPhone = _digits(result.phone);
-    final duplicate = _contacts.any(
-      (contact) =>
-          contact.id != result.id && _digits(contact.phone) == normalizedPhone,
-    );
-    if (duplicate) {
+    if (!await _controller.saveContact(result)) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('A contact with this phone number already exists.'),
@@ -327,16 +295,6 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
       );
       return;
     }
-    setState(() {
-      final index = _contacts.indexWhere((contact) => contact.id == result.id);
-      _contacts = [..._contacts];
-      if (index < 0) {
-        _contacts.add(result);
-      } else {
-        _contacts[index] = result;
-      }
-    });
-    await _save();
   }
 
   Future<void> _delete(EmergencyContact contact) async {
@@ -360,14 +318,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
         ) ??
         false;
     if (!mounted || !confirmed) return;
-    setState(
-      () =>
-          _contacts = _contacts.where((item) => item.id != contact.id).toList(),
-    );
-    await _save();
+    await _controller.deleteContact(contact);
   }
-
-  String _digits(String value) => value.replaceAll(RegExp(r'\D'), '');
 }
 
 class _ContactDialog extends StatefulWidget {

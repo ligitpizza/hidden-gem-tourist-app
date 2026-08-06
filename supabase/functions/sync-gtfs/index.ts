@@ -12,8 +12,21 @@ Deno.serve(async req => {
   const secret = Deno.env.get("SYNC_GTFS_SECRET");
   if (!secret || req.headers.get("x-sync-secret") !== secret) return new Response("Unauthorized", { status: 401 });
   const client = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  let requestedFeed: string | null = null;
+  try {
+    const body = await req.json();
+    requestedFeed = typeof body?.feed_id === "string" ? body.feed_id : null;
+  } catch {
+    // An empty body retains the administrative all-feeds mode.
+  }
+  const selectedFeeds = requestedFeed
+    ? feeds.filter(([feedId]) => feedId === requestedFeed)
+    : feeds;
+  if (selectedFeeds.length === 0) {
+    return Response.json({ error: "Unknown GTFS feed." }, { status: 400 });
+  }
   const results = [];
-  for (const [feedId, url] of feeds) {
+  for (const [feedId, url] of selectedFeeds) {
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);

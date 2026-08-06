@@ -14,21 +14,25 @@ import '../../../shared/models/destination.dart';
 /// the database search finds nothing, so it stays naturally low-volume.
 class NominatimGeocodingService {
   NominatimGeocodingService({Dio? dio})
-      : _dio = dio ??
-            Dio(BaseOptions(
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               connectTimeout: const Duration(seconds: 10),
               receiveTimeout: const Duration(seconds: 10),
               headers: {
-                'User-Agent': 'HiddenGemTouristAppFYP/1.0 (student project, itinerary search)',
+                'User-Agent':
+                    'HiddenGemTouristAppFYP/1.0 (student project, itinerary search)',
               },
-            ));
+            ),
+          );
 
   final Dio _dio;
   static const _baseUrl = 'https://nominatim.openstreetmap.org/search';
 
   Future<List<Destination>> search(String query) async {
     try {
-      final response = await _dio.get<dynamic>(
+      var response = await _dio.get<dynamic>(
         _baseUrl,
         queryParameters: {
           'q': query,
@@ -39,7 +43,40 @@ class NominatimGeocodingService {
         },
       );
 
-      final data = response.data;
+      var data = response.data;
+      if (data is List &&
+          data.isEmpty &&
+          !query.toLowerCase().contains('malaysia')) {
+        // Nominatim sometimes requires the country in the free-text query for
+        // named businesses even when countrycodes is supplied separately.
+        await Future<void>.delayed(const Duration(seconds: 1));
+        response = await _dio.get<dynamic>(
+          _baseUrl,
+          queryParameters: {
+            'q': '$query, Malaysia',
+            'format': 'jsonv2',
+            'addressdetails': 1,
+            'limit': 8,
+            'countrycodes': 'my',
+          },
+        );
+        data = response.data;
+      }
+      final words = query.trim().split(RegExp(r'\s+'));
+      if (data is List && data.isEmpty && words.length >= 3) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+        response = await _dio.get<dynamic>(
+          _baseUrl,
+          queryParameters: {
+            'q': '${words.take(words.length - 1).join(' ')}, Malaysia',
+            'format': 'jsonv2',
+            'addressdetails': 1,
+            'limit': 8,
+            'countrycodes': 'my',
+          },
+        );
+        data = response.data;
+      }
       if (data is! List) return const [];
 
       return data
@@ -52,7 +89,12 @@ class NominatimGeocodingService {
 
   Destination _destinationFromResult(Map<String, dynamic> row) {
     final address = row['address'] as Map<String, dynamic>? ?? const {};
-    final city = (address['city'] ?? address['town'] ?? address['village'] ?? address['county']) as String? ??
+    final city =
+        (address['city'] ??
+                address['town'] ??
+                address['village'] ??
+                address['county'])
+            as String? ??
         (address['state'] as String?) ??
         '';
     final name = (row['name'] as String?)?.trim();
@@ -60,7 +102,9 @@ class NominatimGeocodingService {
 
     return Destination(
       id: 'osm_place_${row['place_id']}',
-      name: (name != null && name.isNotEmpty) ? name : displayName.split(',').first,
+      name: (name != null && name.isNotEmpty)
+          ? name
+          : displayName.split(',').first,
       city: city,
       category: _categoryFromOsmTags(
         category: row['category'] as String?,

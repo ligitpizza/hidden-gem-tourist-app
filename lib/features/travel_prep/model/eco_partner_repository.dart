@@ -57,6 +57,7 @@ class EcoPartnerRepository {
     String query, {
     bool refresh = false,
     double? radiusKm = 10,
+    bool includeImages = true,
   }) async {
     final clean = query.trim();
     if (clean.isEmpty) throw const EcoSearchException('Enter a destination.');
@@ -65,7 +66,7 @@ class EcoPartnerRepository {
       throw const EcoSearchException('Destination not found in Malaysia.');
     }
     final first = matches.first;
-    return searchCoordinates(
+    final result = await searchCoordinates(
       EcoDestination(
         [first.name, first.city].where((e) => e.trim().isNotEmpty).join(', '),
         first.location.latitude,
@@ -73,6 +74,36 @@ class EcoPartnerRepository {
       ),
       refresh: refresh,
       radiusKm: radiusKm,
+      includeImages: includeImages,
+    );
+    final partners = [...result.partners]
+      ..sort((a, b) {
+        final queryA = _nameMatchScore(a.name, clean);
+        final queryB = _nameMatchScore(b.name, clean);
+        final matchOrder = queryB.compareTo(queryA);
+        return matchOrder != 0 ? matchOrder : _rank(a, b);
+      });
+    final best = partners.isEmpty ? null : partners.first;
+    final bestScore = best == null ? 0 : _nameMatchScore(best.name, clean);
+    final isDiningSearch = const {
+      'cafe',
+      'restaurant',
+    }.contains(first.category.name);
+    final focusCategory =
+        best != null &&
+            ((bestScore >= 80 && best.distanceKm <= .75) ||
+                (isDiningSearch && bestScore >= 10))
+        ? best.category
+        : null;
+    final focusedPartners = focusCategory == null
+        ? partners
+        : partners
+              .where((partner) => partner.category == focusCategory)
+              .toList();
+    return EcoPartnerSearchResult(
+      destination: result.destination,
+      partners: focusedPartners,
+      warnings: result.warnings,
     );
   }
 
@@ -80,6 +111,7 @@ class EcoPartnerRepository {
     EcoDestination destination, {
     bool refresh = false,
     double? radiusKm = 10,
+    bool includeImages = true,
   }) async {
     final key =
         '${destination.latitude.toStringAsFixed(3)}:${destination.longitude.toStringAsFixed(3)}:${radiusKm ?? 'my'}';
@@ -87,7 +119,11 @@ class EcoPartnerRepository {
     if (!refresh &&
         cached != null &&
         DateTime.now().difference(cached.at) < const Duration(minutes: 10)) {
-      return cached.value;
+      if (!includeImages ||
+          cached.value.partners.every((partner) => partner.imageUrl != null)) {
+        return cached.value;
+      }
+      return enrichResult(cached.value, radiusKm: radiusKm);
     }
 
     final warnings = <String>[];
@@ -116,7 +152,7 @@ class EcoPartnerRepository {
       protect(
         'OpenStreetMap dining and EV data',
         _map.nearby(destination, radiusKm: radiusKm),
-        timeout: const Duration(seconds: 9),
+        timeout: const Duration(seconds: 7),
       ),
       protect(
         'Public transport data',
@@ -140,21 +176,36 @@ class EcoPartnerRepository {
             .where((e) => radiusKm == null || e.distanceKm <= radiusKm)
             .toList()
           ..sort(_rank);
-    List<EcoPartner> enriched = partners;
-    try {
-      enriched = await _images
-          .enrich(partners)
-          .timeout(const Duration(seconds: 5));
-    } catch (_) {
-      // Imagery is optional; recommendation data must still be displayed.
-    }
-    final result = EcoPartnerSearchResult(
+    final baseResult = EcoPartnerSearchResult(
       destination: destination,
-      partners: enriched,
+      partners: partners,
       warnings: warnings,
     );
-    _cache[key] = (at: DateTime.now(), value: result);
-    return result;
+    _cache[key] = (at: DateTime.now(), value: baseResult);
+    if (!includeImages) return baseResult;
+    return enrichResult(baseResult, radiusKm: radiusKm);
+  }
+
+  Future<EcoPartnerSearchResult> enrichResult(
+    EcoPartnerSearchResult value, {
+    double? radiusKm = 10,
+  }) async {
+    try {
+      final partners = await _images
+          .enrich(value.partners)
+          .timeout(const Duration(seconds: 5));
+      final enriched = EcoPartnerSearchResult(
+        destination: value.destination,
+        partners: partners,
+        warnings: value.warnings,
+      );
+      final key =
+          '${value.destination.latitude.toStringAsFixed(3)}:${value.destination.longitude.toStringAsFixed(3)}:${radiusKm ?? 'my'}';
+      _cache[key] = (at: DateTime.now(), value: enriched);
+      return enriched;
+    } catch (_) {
+      return value;
+    }
   }
 
   static int _rank(EcoPartner a, EcoPartner b) {
@@ -171,6 +222,23 @@ class EcoPartnerRepository {
 
     final relevance = score(b).compareTo(score(a));
     return relevance != 0 ? relevance : a.distanceKm.compareTo(b.distanceKm);
+  }
+
+  static int _nameMatchScore(String name, String query) {
+    String normalize(String value) =>
+        value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+    final normalizedName = normalize(name);
+    final normalizedQuery = normalize(query);
+    if (normalizedName == normalizedQuery) return 100;
+    if (normalizedName.contains(normalizedQuery) ||
+        normalizedQuery.contains(normalizedName)) {
+      return 80;
+    }
+    final tokens = normalizedQuery
+        .split(' ')
+        .where((token) => token.length > 2)
+        .toSet();
+    return tokens.where(normalizedName.contains).length * 10;
   }
 
   static double distanceKm(double lat1, double lon1, double lat2, double lon2) {
@@ -201,24 +269,13 @@ class EcoProviderException implements Exception {
 }
 
 class MapillaryPartnerImageSource implements EcoPartnerImageSource {
-  MapillaryPartnerImageSource({Dio? dio, String? accessToken})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
-              connectTimeout: const Duration(seconds: 3),
-              receiveTimeout: const Duration(seconds: 4),
-            ),
-          ),
-      _accessToken =
-          accessToken ?? const String.fromEnvironment('MAPILLARY_ACCESS_TOKEN');
+  MapillaryPartnerImageSource({SupabaseClient? client})
+    : _client = client ?? Supabase.instance.client;
 
-  final Dio _dio;
-  final String _accessToken;
+  final SupabaseClient _client;
 
   @override
   Future<List<EcoPartner>> enrich(List<EcoPartner> partners) async {
-    if (_accessToken.trim().isEmpty) return partners;
     final candidates = <EcoPartner>[
       ...partners
           .where(
@@ -236,71 +293,44 @@ class MapillaryPartnerImageSource implements EcoPartnerImageSource {
           .take(12),
     ];
     if (candidates.isEmpty) return partners;
-    final images = await Future.wait(candidates.map(_nearestImage));
+
+    final response = await _client.functions.invoke(
+      'mapillary-images',
+      body: {
+        'partners': candidates
+            .map(
+              (partner) => {
+                'id': partner.id,
+                'latitude': partner.latitude,
+                'longitude': partner.longitude,
+              },
+            )
+            .toList(),
+      },
+    );
+    final payload = response.data;
+    if (payload is! Map) return partners;
+    final rows = payload['images'];
+    if (rows is! List) return partners;
+
     final replacements = <String, EcoPartner>{};
-    for (var index = 0; index < candidates.length; index++) {
-      final image = images[index];
-      if (image != null) replacements[candidates[index].id] = image;
+    final byId = {for (final partner in candidates) partner.id: partner};
+    for (final raw in rows.whereType<Map>()) {
+      final id = '${raw['id'] ?? ''}';
+      final imageUrl = '${raw['imageUrl'] ?? ''}';
+      final sourceUrl = '${raw['sourceUrl'] ?? ''}';
+      final partner = byId[id];
+      if (partner == null || imageUrl.isEmpty || sourceUrl.isEmpty) continue;
+      replacements[id] = partner.withImage(
+        url: imageUrl,
+        imageSourceName: 'Nearby street-level image · Mapillary',
+        imageSourceUrl: sourceUrl,
+        capturedAt: DateTime.tryParse('${raw['capturedAt'] ?? ''}'),
+      );
     }
     return partners
         .map((partner) => replacements[partner.id] ?? partner)
         .toList();
-  }
-
-  Future<EcoPartner?> _nearestImage(EcoPartner partner) async {
-    const radiusKm = .1;
-    final box = _box(partner.latitude, partner.longitude, radiusKm);
-    try {
-      final response = await _dio.get<dynamic>(
-        'https://graph.mapillary.com/images',
-        queryParameters: {
-          'bbox': '${box.$3},${box.$1},${box.$4},${box.$2}',
-          'fields': 'id,geometry,captured_at,thumb_1024_url',
-          'limit': 10,
-        },
-        options: Options(headers: {'Authorization': 'OAuth $_accessToken'}),
-      );
-      final data = response.data;
-      if (data is! Map<String, dynamic>) return null;
-      final rows = (data['data'] as List? ?? const [])
-          .whereType<Map<String, dynamic>>();
-      Map<String, dynamic>? best;
-      var bestDistance = double.infinity;
-      for (final row in rows) {
-        final coordinates =
-            ((row['geometry'] as Map?)?['coordinates'] as List?);
-        if (coordinates == null || coordinates.length < 2) continue;
-        final longitude = _nullableNumber(coordinates[0]);
-        final latitude = _nullableNumber(coordinates[1]);
-        if (latitude == null || longitude == null) continue;
-        final distance = EcoPartnerRepository.distanceKm(
-          partner.latitude,
-          partner.longitude,
-          latitude,
-          longitude,
-        );
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          best = row;
-        }
-      }
-      if (best == null || bestDistance > radiusKm) return null;
-      final thumbnail = '${best['thumb_1024_url'] ?? ''}';
-      final imageId = '${best['id'] ?? ''}';
-      if (thumbnail.isEmpty || imageId.isEmpty) return null;
-      final captured = best['captured_at'];
-      return partner.withImage(
-        url: thumbnail,
-        imageSourceName: 'Nearby street-level image · Mapillary',
-        imageSourceUrl:
-            'https://www.mapillary.com/app/?pKey=$imageId&focus=photo',
-        capturedAt: captured is num
-            ? DateTime.fromMillisecondsSinceEpoch(captured.toInt())
-            : null,
-      );
-    } catch (_) {
-      return null;
-    }
   }
 }
 
@@ -349,6 +379,7 @@ class SupabaseEcoHotelSource implements EcoHotelSource {
       final evidenceUrl = '${row['certification_evidence_url'] ?? ''}'.trim();
       final verified =
           row['gstc_certified'] == true &&
+          '${row['certification_status'] ?? ''}'.toLowerCase() == 'active' &&
           verifiedAt != null &&
           evidenceUrl.isNotEmpty &&
           (expiresAt == null || expiresAt.isAfter(DateTime.now()));
@@ -364,9 +395,15 @@ class SupabaseEcoHotelSource implements EcoHotelSource {
             ? 'GSTC verified'
             : 'Certification not verified',
         evidence: verified
-            ? '${row['certification_body'] ?? 'GSTC-recognised certification'}'
+            ? [
+                row['certification_program'],
+                row['certification_body'],
+                row['gstc_code'],
+                if (expiresAt != null)
+                  'Current cycle expires ${expiresAt.day}/${expiresAt.month}/${expiresAt.year}',
+              ].where((value) => '${value ?? ''}'.trim().isNotEmpty).join(' · ')
             : 'No current complete GSTC evidence',
-        sourceName: 'Curated GSTC records',
+        sourceName: 'GSTC Certified Hotels Directory',
         sourceUrl: evidenceUrl,
         lastUpdated:
             DateTime.tryParse('${row['updated_at'] ?? ''}') ?? DateTime.now(),
@@ -466,10 +503,11 @@ class OverpassEcoSource implements EcoMapSource {
   @override
   Future<List<EcoPartner>> nearby(EcoDestination d, {double? radiusKm}) async {
     try {
-      final fallback = await _nominatimFallback(d, radiusKm);
-      if (fallback.isNotEmpty) return fallback;
+      // This bounded search is consistently faster than public Overpass
+      // mirrors. Official public transport is loaded by SupabaseGtfsSource.
+      return await _nominatimFallback(d, radiusKm);
     } catch (_) {
-      // Continue to the exhaustive Overpass queries below.
+      // Fall through to Overpass only when Nominatim itself is unavailable.
     }
     final around = ((radiusKm ?? 150) * 1000).round();
     final area = radiusKm == null
@@ -478,44 +516,21 @@ class OverpassEcoSource implements EcoMapSource {
     final scope = radiusKm == null
         ? '(area.searchArea)'
         : '(around:$around,${d.latitude},${d.longitude})';
-    final queries = [
-      '''[out:json][timeout:10];$area(
-nwr$scope[amenity~"restaurant|cafe"][diet:vegan];
-nwr$scope[amenity~"restaurant|cafe"][diet:vegetarian];
-);out center tags 75;''',
-      '''[out:json][timeout:10];$area(
-nwr$scope[amenity=charging_station];
-);out center tags 75;''',
-      '''[out:json][timeout:10];$area(
-nwr$scope[amenity=bus_station];
-nwr$scope[public_transport=station];
-nwr$scope[railway~"station|halt|tram_stop"];
-);out center tags 100;''',
-    ];
-    var failures = 0;
-    final groups = await Future.wait(
-      List.generate(queries.length, (index) async {
-        try {
-          return await _request(queries[index], index);
-        } catch (_) {
-          failures++;
-          return const <Map<String, dynamic>>[];
-        }
-      }),
-    );
-    final overpass = groups
-        .expand((group) => group)
-        .map(mapElement)
-        .whereType<EcoPartner>();
-    final combined = <String, EcoPartner>{
-      for (final partner in overpass) partner.id: partner,
-    };
-    if (combined.isEmpty && failures == queries.length) {
+    final query =
+        '''[out:json][timeout:8];$area(
+nwr$scope["amenity"~"restaurant|cafe"]["diet:vegan"];
+nwr$scope["amenity"~"restaurant|cafe"]["diet:vegetarian"];
+nwr$scope["amenity"="charging_station"];
+);out center tags 150;''';
+    try {
+      final rows = await _request(query, 0);
+      final overpass = rows.map(mapElement).whereType<EcoPartner>().toList();
+      return overpass;
+    } catch (_) {
       throw const EcoProviderException(
         'OpenStreetMap dining and EV data is temporarily unavailable.',
       );
     }
-    return combined.values.toList();
   }
 
   Future<List<EcoPartner>> _nominatimFallback(
@@ -648,7 +663,11 @@ nwr$scope[railway~"station|halt|tram_stop"];
     for (var attempt = 0; attempt < endpoints.length; attempt++) {
       final endpoint = endpoints[(offset + attempt) % endpoints.length];
       _dio
-          .get<dynamic>(endpoint, queryParameters: {'data': query})
+          .post<dynamic>(
+            endpoint,
+            data: {'data': query},
+            options: Options(contentType: Headers.formUrlEncodedContentType),
+          )
           .then((response) {
             if (completer.isCompleted) return;
             final data = response.data;
