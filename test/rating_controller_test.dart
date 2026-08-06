@@ -15,6 +15,7 @@ class _FakeRatingRepository extends DestinationRatingRepository {
   _FakeRatingRepository({this.throwOnSubmit = false, this.summaryResult});
   final bool throwOnSubmit;
   final RatingSummary? summaryResult;
+  int submitCallCount = 0;
 
   @override
   Future<void> submitRating({
@@ -22,6 +23,7 @@ class _FakeRatingRepository extends DestinationRatingRepository {
     required int difficultyScore,
     required String reviewText,
   }) async {
+    submitCallCount++;
     if (throwOnSubmit) throw Exception('network error');
   }
 
@@ -164,6 +166,37 @@ void main() {
 
       expect(controller.error, isNotNull);
       expect(controller.pointsAwarded, isNull);
+    });
+
+    test('overlapping submitRating calls are a no-op after the first', () async {
+      final ratingRepo = _FakeRatingRepository();
+      final controller = RatingController(
+        checkInRepository: _FakeCheckInRepository(),
+        ratingRepository: ratingRepo,
+        progressRepository: _FakeProgressRepository(),
+      );
+      await controller.checkIn('d1');
+
+      // Call submitRating twice without awaiting the first
+      final call1 = controller.submitRating(
+        destinationId: 'd1',
+        region: 'George Town',
+        difficultyScore: 3,
+        reviewText: 'Nice place',
+      );
+      final call2 = controller.submitRating(
+        destinationId: 'd1',
+        region: 'George Town',
+        difficultyScore: 3,
+        reviewText: 'Nice place',
+      );
+
+      // Wait for both to complete
+      await call1;
+      await call2;
+
+      // submitRating should have been called exactly once (the second was a no-op)
+      expect(ratingRepo.submitCallCount, 1);
     });
   });
 }

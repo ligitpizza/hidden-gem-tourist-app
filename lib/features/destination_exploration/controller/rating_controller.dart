@@ -40,12 +40,17 @@ class RatingController extends ChangeNotifier {
   /// awards points/a badge — a failure in that last step does not roll back
   /// the already-successful rating submission (it degrades gracefully:
   /// [pointsAwarded] stays null, [error] stays null).
+  ///
+  /// Reentrancy guard: overlapping calls return immediately as no-op to prevent
+  /// duplicate submissions (e.g. user double-tapping submit button).
   Future<void> submitRating({
     required String destinationId,
     required String region,
     required int difficultyScore,
     required String reviewText,
   }) async {
+    if (isSubmitting) return;
+
     if (!isCheckedIn) {
       error = 'A verified check-in is required to submit a rating.';
       notifyListeners();
