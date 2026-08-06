@@ -21,7 +21,7 @@ import '../../features/itinerary_planning/view/itinerary_routes.dart';
 import '../../features/itinerary_planning/view/plan_route_screen.dart';
 import '../../features/itinerary_planning/view/route_optimized_screen.dart';
 import '../../features/assistant/model/assistant_feed_item.dart';
-import '../../features/map/view/map_screen.dart';
+import '../../features/destination_exploration/view/destination_map_screen.dart';
 import '../../features/profile/view/profile_screen.dart';
 import '../../features/recommendations/view/recommendations_routes.dart';
 import '../../features/recommendations/view/score_detail_screen.dart';
@@ -99,7 +99,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: ShellRoutes.map,
-                builder: (context, state) => const MapScreen(),
+                builder: (context, state) => const DestinationMapScreen(),
               ),
             ],
           ),

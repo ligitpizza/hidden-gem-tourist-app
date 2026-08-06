@@ -57,6 +57,7 @@ dependencies:
 
   # Maps & location (Module 2 interactive map, Module 6 check-in)
   flutter_map: ^7.0.2         # Leaflet/OpenStreetMap renderer for Flutter
+  flutter_map_marker_cluster: ^1.4.0  # proximity-based marker clustering (FR1.4)
   latlong2: ^0.9.1
   geolocator: ^13.0.2
   url_launcher: ^6.3.1
