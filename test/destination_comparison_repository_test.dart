@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:collab/features/destination_exploration/model/comparison_destination.dart';
 import 'package:collab/features/destination_exploration/model/crowd_level.dart';
 import 'package:collab/features/destination_exploration/model/destination_exploration_repository.dart';
 import 'package:collab/shared/models/hidden_gem.dart';
