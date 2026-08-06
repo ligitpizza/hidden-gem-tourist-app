@@ -3,8 +3,6 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:collab/features/destination_exploration/controller/destination_map_controller.dart';
-import 'package:collab/features/destination_exploration/model/destination_exploration_repository.dart'
-    show legDistanceKm;
 import 'package:collab/features/destination_exploration/model/destination_exploration_repository.dart';
 import 'package:collab/features/destination_exploration/model/map_destination.dart';
 import 'package:collab/shared/models/hidden_gem.dart';
@@ -231,6 +229,18 @@ void main() {
       await controller.viewThemedCluster();
 
       expect(controller.clusterMessage, "Couldn't determine your location to find a themed trail.");
+      expect(controller.clusterAnchor, isNull);
+    });
+
+    test('sets "no cluster available" when location resolves but no destination found', () async {
+      final controller = DestinationMapController(
+        repository: _ClusterFakeRepository(nearestResult: null),
+        currentLocation: () async => const LatLng(5.4, 100.3),
+      );
+
+      await controller.viewThemedCluster();
+
+      expect(controller.clusterMessage, 'No themed cluster available nearby.');
       expect(controller.clusterAnchor, isNull);
     });
 

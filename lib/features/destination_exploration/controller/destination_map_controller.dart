@@ -125,14 +125,28 @@ class DestinationMapController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final anchor = origin ?? await _resolveAnchorFromLocation();
+      MapDestination? anchor = origin;
+
       if (anchor == null) {
-        clusterAnchor = null;
-        clusterStops = const [];
-        clusterMessage = "Couldn't determine your location to find a themed trail.";
-        isLoadingCluster = false;
-        notifyListeners();
-        return;
+        // Try to resolve anchor from current location
+        final point = await _currentLocation();
+        if (point == null) {
+          clusterAnchor = null;
+          clusterStops = const [];
+          clusterMessage = "Couldn't determine your location to find a themed trail.";
+          isLoadingCluster = false;
+          notifyListeners();
+          return;
+        }
+        anchor = await _repository.nearestDestination(point);
+        if (anchor == null) {
+          clusterAnchor = null;
+          clusterStops = const [];
+          clusterMessage = 'No themed cluster available nearby.';
+          isLoadingCluster = false;
+          notifyListeners();
+          return;
+        }
       }
 
       final candidates = await _repository.nearbyByCategory(origin: anchor);
@@ -147,12 +161,6 @@ class DestinationMapController extends ChangeNotifier {
 
     isLoadingCluster = false;
     notifyListeners();
-  }
-
-  Future<MapDestination?> _resolveAnchorFromLocation() async {
-    final point = await _currentLocation();
-    if (point == null) return null;
-    return _repository.nearestDestination(point);
   }
 
   void clearCluster() {
