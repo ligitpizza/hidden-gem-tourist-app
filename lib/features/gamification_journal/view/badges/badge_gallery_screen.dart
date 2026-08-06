@@ -197,7 +197,7 @@ class _BadgeGalleryScreenState extends State<BadgeGalleryScreen> {
     final lockedBadges = visibleBadges.where((b) => !badgeController.isUnlocked(b.id)).toList();
 
     return Scaffold(
-      appBar: const AppHeader.tabRoot(title: 'Badges'),
+      appBar: const AppHeader.pushed(title: 'Badges'),
       body: badgeController.allBadges.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : ListView(

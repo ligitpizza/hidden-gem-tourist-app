@@ -44,7 +44,7 @@ class QuizListScreen extends StatelessWidget {
         .toList();
 
     return Scaffold(
-      appBar: const AppHeader.tabRoot(title: 'Quizzes'),
+      appBar: const AppHeader.pushed(title: 'Quizzes'),
       body: checkInController.destinations.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : visited.isEmpty

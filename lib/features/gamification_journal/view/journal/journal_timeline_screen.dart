@@ -46,7 +46,7 @@ class JournalTimelineScreen extends StatelessWidget {
     final entries = journalController.entries;
 
     return Scaffold(
-      appBar: const AppHeader.tabRoot(title: 'Journal'),
+      appBar: const AppHeader.pushed(title: 'Journal'),
       floatingActionButton: FloatingActionButton(
         tooltip: 'Check in somewhere to start a new entry',
         onPressed: () => GoRouter.of(context).go('/explore'),

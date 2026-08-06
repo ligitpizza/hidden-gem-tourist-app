@@ -3,10 +3,12 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../config/theme.dart';
+import '../../../../core/router/shell_routes.dart';
 import '../../controller/badge_controller.dart';
 import '../../controller/checkin_controller.dart';
 import '../../controller/dashboard_controller.dart';
 import '../../controller/journal_controller.dart';
+import '../../controller/quiz_controller.dart';
 import '../../../../shared/widgets/app_header.dart';
 import '../../../../shared/widgets/category_breakdown_list.dart';
 import '../../../../shared/widgets/check_in_history_tile.dart';
@@ -42,10 +44,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _badgeController.addListener(_refresh);
     _journalController.addListener(_refresh);
 
-    // Aggregation happens on the next frame so context.read is safe to
-    // call — DashboardController doesn't own its data, it just snapshots
-    // the other three controllers each time this screen is opened.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
+    // This screen is the Journal tab's root, so it also owns the module's
+    // one-time initial data load (destinations, check-in history, badge
+    // catalogue, journal entries, daily fact) — nothing else in the app
+    // triggers these.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadInitialData());
+  }
+
+  Future<void> _loadInitialData() async {
+    if (!mounted) return;
+    final quizController = context.read<QuizController>();
+
+    await _checkInController.loadDestinations();
+    await _checkInController.loadHistory();
+    await _badgeController.loadBadges();
+    await _journalController.loadEntries();
+    await quizController.loadDailyFact();
+    await quizController.loadHistory();
+
+    await _refresh();
   }
 
   @override
@@ -99,6 +116,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  // --- Journal quick links -----------------------------
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _QuickLinkCard(
+                          key: const ValueKey('dashboardQuickLinkBadges'),
+                          icon: Icons.emoji_events_outlined,
+                          label: 'Badges',
+                          onTap: () => context.push(ShellRoutes.journalBadges),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _QuickLinkCard(
+                          key: const ValueKey('dashboardQuickLinkJournal'),
+                          icon: Icons.menu_book_outlined,
+                          label: 'Journal',
+                          onTap: () => context.push(ShellRoutes.journalEntries),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _QuickLinkCard(
+                          key: const ValueKey('dashboardQuickLinkQuizzes'),
+                          icon: Icons.quiz_outlined,
+                          label: 'Quizzes',
+                          onTap: () => context.push(ShellRoutes.journalQuizzes),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
                   // --- Overview stats -----------------------------------
                   StatRing(
                     label: 'States Explored',
@@ -170,7 +220,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Text('Recently visited', style: AppTypography.headlineSm.copyWith(fontSize: 15)),
                       if (checkInController.history.isNotEmpty)
                         TextButton(
-                          onPressed: () => context.push('/dashboard/history'),
+                          onPressed: () => context.push(ShellRoutes.journalHistory),
                           child: const Text('View all'),
                         ),
                     ],
@@ -195,6 +245,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+class _QuickLinkCard extends StatelessWidget {
+  const _QuickLinkCard({super.key, required this.icon, required this.label, required this.onTap});
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        decoration: BoxDecoration(
+          color: AppColors.primaryContainerTint,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: AppColors.primaryContainer),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: AppTypography.labelMd.copyWith(color: AppColors.primaryContainer, letterSpacing: 0),
+            ),
+          ],
+        ),
       ),
     );
   }
