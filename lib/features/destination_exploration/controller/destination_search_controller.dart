@@ -33,8 +33,13 @@ class DestinationSearchController extends ChangeNotifier {
   Completer<void>? _pendingCompleter;
 
   Future<void> _loadTrending() async {
-    trending = await _repository.searchDestinations();
-    notifyListeners();
+    try {
+      trending = await _repository.searchDestinations();
+      notifyListeners();
+    } catch (_) {
+      // Background load at construction time; leave trending as its default
+      // empty list rather than letting the failure propagate.
+    }
   }
 
   /// Completes the pending completer if it exists and hasn't been completed yet.

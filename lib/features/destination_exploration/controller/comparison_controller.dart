@@ -57,6 +57,7 @@ class ComparisonController extends ChangeNotifier {
   bool isLoading = false;
   String? selectionError;
   String? shareError;
+  String? loadError;
   PriorityWeights weights = const PriorityWeights();
 
   void setWeights(PriorityWeights newWeights) {
@@ -72,12 +73,18 @@ class ComparisonController extends ChangeNotifier {
     }
 
     selectionError = null;
+    loadError = null;
     isLoading = true;
     notifyListeners();
 
-    destinations = await _repository.fetchForComparison(ids);
-    isLoading = false;
-    notifyListeners();
+    try {
+      destinations = await _repository.fetchForComparison(ids);
+    } catch (_) {
+      loadError = "Couldn't load the comparison right now.";
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
   }
 
   double _compositeScore(ComparisonDestination destination) {

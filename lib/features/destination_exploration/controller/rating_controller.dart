@@ -30,9 +30,25 @@ class RatingController extends ChangeNotifier {
   RatingSummary? summary;
 
   Future<void> checkIn(String destinationId) async {
-    await _checkInRepository.checkIn(destinationId);
-    isCheckedIn = true;
+    try {
+      await _checkInRepository.checkIn(destinationId);
+      isCheckedIn = true;
+    } catch (_) {
+      error = "Couldn't check you in right now.";
+    }
     notifyListeners();
+  }
+
+  /// Hydrates [isCheckedIn] from a previous session's check-in, if any.
+  /// Meant to be called by the View on page load. Failures are silent —
+  /// [isCheckedIn] simply stays false, same as an unchecked-in user.
+  Future<void> loadCheckInStatus(String destinationId) async {
+    try {
+      isCheckedIn = await _checkInRepository.isCheckedIn(destinationId);
+      notifyListeners();
+    } catch (_) {
+      // Leave isCheckedIn as false; don't crash a background hydration call.
+    }
   }
 
   /// Blocks with [error] set if [isCheckedIn] is false (E2), without calling
