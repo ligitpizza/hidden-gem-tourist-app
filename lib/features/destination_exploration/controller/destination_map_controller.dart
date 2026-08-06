@@ -53,6 +53,8 @@ class DestinationMapController extends ChangeNotifier {
   bool isLoadingCluster = false;
   String? clusterMessage;
 
+  final Set<String> selectedForComparison = {};
+
   List<MapDestination> get filteredDestinations {
     if (selectedCategories.isEmpty) return destinations;
     return destinations.where((d) => selectedCategories.contains(d.category)).toList();
@@ -168,6 +170,19 @@ class DestinationMapController extends ChangeNotifier {
     clusterStops = const [];
     clusterMessage = null;
     isLoadingCluster = false;
+    notifyListeners();
+  }
+
+  bool get canCompare =>
+      selectedForComparison.length == 2 || selectedForComparison.length == 3;
+
+  void toggleComparisonSelection(String id) {
+    if (selectedForComparison.contains(id)) {
+      selectedForComparison.remove(id);
+    } else {
+      if (selectedForComparison.length >= 3) return;
+      selectedForComparison.add(id);
+    }
     notifyListeners();
   }
 }

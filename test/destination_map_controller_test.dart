@@ -291,4 +291,39 @@ void main() {
       expect(controller.isLoadingCluster, isFalse);
     });
   });
+
+  group('DestinationMapController comparison selection', () {
+    test('toggling adds and removes an id', () {
+      final controller = DestinationMapController(repository: _FakeRepository(const []));
+
+      controller.toggleComparisonSelection('a');
+      expect(controller.selectedForComparison, {'a'});
+
+      controller.toggleComparisonSelection('a');
+      expect(controller.selectedForComparison, isEmpty);
+    });
+
+    test('canCompare is true only at 2 or 3 selections', () {
+      final controller = DestinationMapController(repository: _FakeRepository(const []));
+
+      expect(controller.canCompare, isFalse);
+      controller.toggleComparisonSelection('a');
+      expect(controller.canCompare, isFalse);
+      controller.toggleComparisonSelection('b');
+      expect(controller.canCompare, isTrue);
+      controller.toggleComparisonSelection('c');
+      expect(controller.canCompare, isTrue);
+    });
+
+    test('a 4th toggle is a no-op', () {
+      final controller = DestinationMapController(repository: _FakeRepository(const []));
+
+      controller.toggleComparisonSelection('a');
+      controller.toggleComparisonSelection('b');
+      controller.toggleComparisonSelection('c');
+      controller.toggleComparisonSelection('d');
+
+      expect(controller.selectedForComparison, {'a', 'b', 'c'});
+    });
+  });
 }
