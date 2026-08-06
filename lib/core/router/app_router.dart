@@ -11,6 +11,11 @@ import '../../features/auth/view/auth_routes.dart';
 import '../../features/auth/view/login_screen.dart';
 import '../../features/auth/view/signup_screen.dart';
 import '../../features/explore/view/explore_screen.dart';
+import '../../features/gamification_journal/view/badges/badge_gallery_screen.dart';
+import '../../features/gamification_journal/view/checkin/checkin_history_screen.dart';
+import '../../features/gamification_journal/view/dashboard/dashboard_screen.dart';
+import '../../features/gamification_journal/view/journal/journal_timeline_screen.dart';
+import '../../features/gamification_journal/view/quiz/quiz_list_screen.dart';
 import '../../features/itinerary_planning/view/day_trip_screen.dart';
 import '../../features/itinerary_planning/view/itinerary_routes.dart';
 import '../../features/itinerary_planning/view/plan_route_screen.dart';
@@ -28,7 +33,7 @@ import '../widgets/app_bottom_nav_bar.dart';
 import 'shell_routes.dart';
 
 /// The bottom-nav branches, in on-screen order: Map | Explore | Assistant |
-/// Saved | Travel Prep | Profile.
+/// Saved | Travel Prep | Journal | Profile.
 const _assistantTabIndex = 2;
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -139,6 +144,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'document-vault',
                     builder: (context, state) => const DocumentVaultScreen(),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: ShellRoutes.journal,
+                builder: (context, state) => const DashboardScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'badges',
+                    builder: (context, state) => const BadgeGalleryScreen(),
+                  ),
+                  GoRoute(
+                    path: 'entries',
+                    builder: (context, state) => const JournalTimelineScreen(),
+                  ),
+                  GoRoute(
+                    path: 'quizzes',
+                    builder: (context, state) => const QuizListScreen(),
+                  ),
+                  GoRoute(
+                    path: 'history',
+                    builder: (context, state) => const CheckInHistoryScreen(),
                   ),
                 ],
               ),
