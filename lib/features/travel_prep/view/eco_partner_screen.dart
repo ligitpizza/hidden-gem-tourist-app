@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../controller/eco_partner_controller.dart';
 import '../model/eco_partner.dart';
-import '../model/eco_partner_repository.dart';
 
 class EcoPartnersScreen extends StatefulWidget {
   const EcoPartnersScreen({super.key});
@@ -14,120 +13,51 @@ class EcoPartnersScreen extends StatefulWidget {
 }
 
 class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
-  final _repository = EcoPartnerRepository();
+  final _controller = EcoPartnerController();
   final _search = TextEditingController();
-  EcoPartnerSearchResult? _result;
-  String _filter = 'All';
-  double _radiusSelection = 10;
-  String? _error;
-  bool _loading = false;
 
-  double? get _radiusKm => _radiusSelection == 0 ? null : _radiusSelection;
-  String get _scopeLabel => _radiusKm == null
-      ? 'across Malaysia'
-      : 'within ${_radiusSelection.round()} km';
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_refresh);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadNearby());
+  }
+
+  Future<void> _loadNearby() async {
+    if (await _controller.useCurrentLocation(silentPermissionDenial: true) &&
+        mounted) {
+      _search.text = 'Current location';
+    }
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void dispose() {
+    _controller.removeListener(_refresh);
+    _controller.dispose();
     _search.dispose();
     super.dispose();
   }
 
-  Future<void> _find({bool refresh = false}) async {
+  Future<void> _find({bool refresh = false}) {
     FocusScope.of(context).unfocus();
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final value = await _repository.searchDestination(
-        _search.text,
-        refresh: refresh,
-        radiusKm: _radiusKm,
-      );
-      if (mounted) setState(() => _result = value);
-    } on EcoSearchException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } catch (_) {
-      if (mounted)
-        setState(
-          () => _error = 'Search failed. Check your connection and retry.',
-        );
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+    return _controller.search(_search.text, refresh: refresh);
   }
 
   Future<void> _locate() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied)
-        permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        throw const EcoSearchException('Location permission is required.');
-      }
-      final position = await Geolocator.getCurrentPosition(
-        timeLimit: const Duration(seconds: 3),
-      );
-      final value = await _repository.searchCoordinates(
-        EcoDestination(
-          'Current location',
-          position.latitude,
-          position.longitude,
-        ),
-        radiusKm: _radiusKm,
-      );
-      if (mounted) {
-        _search.text = 'Current location';
-        setState(() => _result = value);
-      }
-    } on EcoSearchException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } catch (_) {
-      if (mounted)
-        setState(() => _error = 'Could not retrieve your current location.');
-    } finally {
-      if (mounted) setState(() => _loading = false);
+    if (await _controller.useCurrentLocation() && mounted) {
+      _search.text = 'Current location';
     }
   }
 
-  Future<void> _retry() async {
-    final destination = _result?.destination;
-    if (destination == null) {
-      await _find(refresh: true);
-      return;
-    }
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final value = await _repository.searchCoordinates(
-        destination,
-        refresh: true,
-        radiusKm: _radiusKm,
-      );
-      if (mounted) setState(() => _result = value);
-    } catch (_) {
-      if (mounted)
-        setState(() => _error = 'Retry failed. Check your connection.');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
+  Future<void> _retry() => _controller.retry(fallbackQuery: _search.text);
 
   @override
   Widget build(BuildContext context) {
-    final shown = (_result?.partners ?? const <EcoPartner>[])
-        .where(
-          (p) => _filter == 'All' || p.category.name == _filter.toLowerCase(),
-        )
-        .toList();
+    final shown = _controller.visiblePartners;
     return Scaffold(
       appBar: AppBar(title: const Text('Travel Assistant')),
       body: ListView(
@@ -143,7 +73,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
           ),
           const SizedBox(height: 10),
           Text(
-            'Find evidence-based stays, plant-friendly dining and low-carbon infrastructure $_scopeLabel.',
+            'Search for a hotel, restaurant, attraction or other destination, then discover eco partners ${_controller.scopeLabel}.',
           ),
           const SizedBox(height: 18),
           TextField(
@@ -152,9 +82,9 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
             onSubmitted: (_) => _find(),
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.search),
-              hintText: 'Search a destination in Malaysia...',
+              hintText: 'Search a place, e.g. PARKROYAL...',
               suffixIcon: IconButton(
-                onPressed: _loading ? null : () => _find(),
+                onPressed: _controller.isLoading ? null : () => _find(),
                 icon: const Icon(Icons.arrow_forward),
               ),
             ),
@@ -162,59 +92,69 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
-              onPressed: _loading ? null : _locate,
+              onPressed: _controller.isLoading ? null : _locate,
               icon: const Icon(Icons.my_location, size: 18),
               label: const Text('Use current location'),
             ),
           ),
           Row(
             children: [
-              const Icon(Icons.radar, size: 20),
-              const SizedBox(width: 8),
-              const Text('Search distance'),
-              const Spacer(),
-              DropdownButton<double>(
-                value: _radiusSelection,
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _controller.isLoading ? null : _showFilters,
+                  icon: const Icon(Icons.tune, size: 19),
+                  label: Text(
+                    _controller.filter == 'All'
+                        ? 'Filters · ${_controller.scopeLabel}'
+                        : '${_controller.filter} · ${_controller.scopeLabel}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              DropdownButton<EcoPartnerLayout>(
+                value: _controller.layout,
                 items: const [
-                  DropdownMenuItem(value: 5.0, child: Text('5 km')),
-                  DropdownMenuItem(value: 10.0, child: Text('10 km')),
-                  DropdownMenuItem(value: 25.0, child: Text('25 km')),
-                  DropdownMenuItem(value: 50.0, child: Text('50 km')),
-                  DropdownMenuItem(value: 0.0, child: Text('All Malaysia')),
+                  DropdownMenuItem(
+                    value: EcoPartnerLayout.list,
+                    child: Text('List'),
+                  ),
+                  DropdownMenuItem(
+                    value: EcoPartnerLayout.grid2,
+                    child: Text('2 × 2 grid'),
+                  ),
+                  DropdownMenuItem(
+                    value: EcoPartnerLayout.grid4,
+                    child: Text('4 × 4 grid'),
+                  ),
                 ],
-                onChanged: _loading
-                    ? null
-                    : (value) {
-                        if (value == null) return;
-                        setState(() => _radiusSelection = value);
-                        if (_result != null) _retry();
-                      },
+                onChanged: (value) {
+                  if (value != null) _controller.selectLayout(value);
+                },
               ),
             ],
           ),
-          Wrap(
-            spacing: 8,
-            children: ['All', 'Stay', 'Dining', 'Transport']
-                .map(
-                  (label) => ChoiceChip(
-                    label: Text(label),
-                    selected: _filter == label,
-                    onSelected: (_) => setState(() => _filter = label),
-                  ),
-                )
-                .toList(),
-          ),
           const SizedBox(height: 16),
-          if (_loading) ...List.generate(3, (_) => const _LoadingCard()),
-          if (!_loading && _error != null)
+          if (_controller.isLoading)
+            ...List.generate(3, (_) => const _LoadingCard()),
+          if (!_controller.isLoading && _controller.error != null)
             _Message(
               Icons.cloud_off,
-              _error!,
+              _controller.error!,
               action: 'Retry',
               onPressed: () => _find(),
             ),
-          if (!_loading && _result != null) ...[
-            for (final warning in _result!.warnings)
+          if (!_controller.isLoading && _controller.result != null) ...[
+            if (_controller.isLoadingImages) ...[
+              const LinearProgressIndicator(minHeight: 2),
+              const SizedBox(height: 8),
+              Text(
+                'Recommendations ready · loading nearby photos…',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+            ],
+            for (final warning in _controller.result!.warnings)
               Card(
                 color: const Color(0xFFFFF5D6),
                 child: ListTile(
@@ -229,19 +169,175 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
             if (shown.isEmpty)
               _Message(
                 Icons.eco_outlined,
-                'No ${_filter == 'All' ? 'eco partners' : _filter.toLowerCase()} found $_scopeLabel.',
+                'No ${_controller.filter == 'All' ? 'eco partners' : _controller.filter.toLowerCase()} found ${_controller.scopeLabel}.',
               ),
-            for (final partner in shown)
-              _PartnerCard(partner, onTap: () => _details(partner)),
+            if (shown.isNotEmpty) _resultsView(shown),
+            if (_controller.totalPages > 1) ...[
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    tooltip: 'Previous page',
+                    onPressed: _controller.currentPage == 0
+                        ? null
+                        : () =>
+                              _controller.goToPage(_controller.currentPage - 1),
+                    icon: const Icon(Icons.chevron_left),
+                  ),
+                  Text(
+                    'Page ${_controller.currentPage + 1} of ${_controller.totalPages}',
+                  ),
+                  IconButton(
+                    tooltip: 'Next page',
+                    onPressed:
+                        _controller.currentPage + 1 >= _controller.totalPages
+                        ? null
+                        : () =>
+                              _controller.goToPage(_controller.currentPage + 1),
+                    icon: const Icon(Icons.chevron_right),
+                  ),
+                ],
+              ),
+            ],
           ],
-          if (!_loading && _result == null && _error == null)
+          if (!_controller.isLoading &&
+              _controller.result == null &&
+              _controller.error == null)
             const _Message(
               Icons.travel_explore,
-              'Search a destination to see live recommendations and their data sources.',
+              'Allow location access for nearby recommendations, or search for a specific place in Malaysia.',
             ),
         ],
       ),
     );
+  }
+
+  Widget _resultsView(List<EcoPartner> partners) {
+    if (_controller.layout == EcoPartnerLayout.list) {
+      return Column(
+        children: [
+          for (final partner in partners)
+            _PartnerCard(partner, onTap: () => _details(partner)),
+        ],
+      );
+    }
+    final columns = _controller.layout == EcoPartnerLayout.grid2 ? 2 : 4;
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: partners.length,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columns,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: columns == 2 ? 0.72 : 0.58,
+      ),
+      itemBuilder: (context, index) {
+        final partner = partners[index];
+        return _PartnerGridCard(
+          partner,
+          dense: columns == 4,
+          onTap: () => _details(partner),
+        );
+      },
+    );
+  }
+
+  Future<void> _showFilters() async {
+    var selectedFilter = _controller.filter;
+    var selectedRadius = _controller.radiusSelection;
+    final value = await showModalBottomSheet<_EcoFilterValue>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Filter recommendations',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'Category',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children:
+                      [
+                            'All',
+                            'Stay',
+                            'Dining',
+                            'Public Transport',
+                            'EV Charging',
+                          ]
+                          .map(
+                            (label) => ChoiceChip(
+                              label: Text(label),
+                              selected: selectedFilter == label,
+                              onSelected: (_) =>
+                                  setSheetState(() => selectedFilter = label),
+                            ),
+                          )
+                          .toList(),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Distance',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children:
+                      const [
+                            (5.0, '5 km'),
+                            (10.0, '10 km'),
+                            (25.0, '25 km'),
+                            (50.0, '50 km'),
+                            (0.0, 'All Malaysia'),
+                          ]
+                          .map(
+                            (entry) => ChoiceChip(
+                              label: Text(entry.$2),
+                              selected: selectedRadius == entry.$1,
+                              onSelected: (_) => setSheetState(
+                                () => selectedRadius = entry.$1,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(
+                      sheetContext,
+                      _EcoFilterValue(selectedFilter, selectedRadius),
+                    ),
+                    child: const Text('Apply filters'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (value == null || !mounted) return;
+    _controller.selectFilter(value.filter);
+    await _controller.selectRadius(value.radius, fallbackQuery: _search.text);
   }
 
   void _details(EcoPartner p) => showModalBottomSheet(
@@ -330,7 +426,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
 
   void _happyCow(EcoPartner p) => _open(
     Uri.https('www.happycow.net', '/searchmap', {
-      'location': '${p.name}, ${_result?.destination.label ?? ''}',
+      'location': '${p.name}, ${_controller.result?.destination.label ?? ''}',
     }).toString(),
   );
 }
@@ -423,6 +519,92 @@ class _PartnerCard extends StatelessWidget {
           ? Icons.ev_station_outlined
           : Icons.directions_transit_outlined,
   };
+}
+
+class _PartnerGridCard extends StatelessWidget {
+  const _PartnerGridCard(
+    this.partner, {
+    required this.dense,
+    required this.onTap,
+  });
+
+  final EcoPartner partner;
+  final bool dense;
+  final VoidCallback onTap;
+
+  IconData get _icon => switch (partner.category) {
+    EcoPartnerCategory.stay => Icons.hotel_outlined,
+    EcoPartnerCategory.dining => Icons.restaurant_outlined,
+    EcoPartnerCategory.transport =>
+      partner.subtype == 'EV charging'
+          ? Icons.ev_station_outlined
+          : Icons.directions_transit_outlined,
+  };
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: EdgeInsets.zero,
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: EdgeInsets.all(dense ? 6 : 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDDEBE4),
+                  borderRadius: BorderRadius.circular(dense ? 7 : 10),
+                ),
+                child: partner.imageUrl?.isNotEmpty == true
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(dense ? 7 : 10),
+                        child: Image.network(
+                          partner.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Icon(
+                            _icon,
+                            color: const Color(0xFF07513C),
+                            size: dense ? 20 : 34,
+                          ),
+                        ),
+                      )
+                    : Icon(
+                        _icon,
+                        color: const Color(0xFF07513C),
+                        size: dense ? 20 : 34,
+                      ),
+              ),
+            ),
+            SizedBox(height: dense ? 4 : 8),
+            Text(
+              partner.name,
+              maxLines: dense ? 2 : 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: dense ? 10 : 14,
+                height: 1.1,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF164C3B),
+              ),
+            ),
+            SizedBox(height: dense ? 2 : 4),
+            Text(
+              dense
+                  ? '${partner.distanceKm.toStringAsFixed(1)} km'
+                  : '${partner.subtype} · ${partner.distanceKm.toStringAsFixed(1)} km',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: dense ? 9 : 11),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _PartnerMapPreview extends StatelessWidget {
@@ -518,6 +700,13 @@ class _Message extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _EcoFilterValue {
+  const _EcoFilterValue(this.filter, this.radius);
+
+  final String filter;
+  final double radius;
 }
 
 String _label(EcoPartnerCategory category) => switch (category) {
