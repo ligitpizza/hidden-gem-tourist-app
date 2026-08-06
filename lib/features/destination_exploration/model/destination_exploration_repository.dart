@@ -3,7 +3,10 @@ import 'dart:math';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../shared/models/hidden_gem.dart';
 import '../../../shared/services/hidden_gem_scoring.dart';
+import 'comparison_destination.dart';
+import 'crowd_level.dart';
 import 'map_destination.dart';
 
 /// Great-circle distance between two points, in kilometres.
@@ -60,6 +63,35 @@ class DestinationExplorationRepository {
       ),
       avgRating: (row['avg_rating'] as num?)?.toDouble() ?? 0.0,
       imageUrls: imageUrls,
+    );
+  }
+
+  /// Pure row -> [ComparisonDestination] mapping, kept separate from the
+  /// network call so it's unit-testable without a live Supabase connection.
+  static ComparisonDestination mapComparisonRow(Map<String, dynamic> row) {
+    final rawTags = row['accessibility_tags'];
+    final accessibilityTags =
+        rawTags is List ? rawTags.whereType<String>().toList() : const <String>[];
+
+    return ComparisonDestination(
+      id: row['id'] as String,
+      name: row['name'] as String,
+      city: (row['city'] as String?) ?? '',
+      category: HiddenGemScoring.categoryFromDb(row['category'] as String),
+      location: LatLng(
+        (row['latitude'] as num).toDouble(),
+        (row['longitude'] as num).toDouble(),
+      ),
+      avgRating: (row['avg_rating'] as num?)?.toDouble() ?? 0.0,
+      uniquenessScore: (row['uniqueness_score'] as num?)?.toDouble() ?? 0.0,
+      accessibilityScore: (row['accessibility_score'] as num?)?.toDouble() ?? 0.0,
+      popularity: gemPopularityFromDb(row['popularity'] as String?),
+      crowdLevel: crowdLevelFromDb(row['crowd_level'] as String?),
+      entranceCost: (row['entrance_cost'] as num?)?.toDouble(),
+      difficultyLevel: row['difficulty_level'] as String?,
+      accessibilityTags: accessibilityTags,
+      visitDurationMinutes: (row['visit_duration_minutes'] as num?)?.toInt(),
+      operatingHours: row['operating_hours'] as String?,
     );
   }
 
@@ -132,5 +164,11 @@ class DestinationExplorationRepository {
       return candidates.first;
     }
     return null;
+  }
+
+  Future<List<ComparisonDestination>> fetchForComparison(List<String> ids) async {
+    final rows =
+        await Supabase.instance.client.from('destinations').select().inFilter('id', ids);
+    return rows.map(mapComparisonRow).toList();
   }
 }
