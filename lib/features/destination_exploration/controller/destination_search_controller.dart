@@ -37,6 +37,15 @@ class DestinationSearchController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Completes the pending completer if it exists and hasn't been completed yet.
+  /// Used to ensure in-flight search calls resolve instead of hanging when
+  /// superseded, cleared, or disposed.
+  void _completePending() {
+    if (_pendingCompleter != null && !_pendingCompleter!.isCompleted) {
+      _pendingCompleter!.complete();
+    }
+  }
+
   /// Debounced search. Returns a [Future] that completes once the debounced
   /// lookup settles, so tests can `await` it directly — but real callers
   /// (search-as-you-type) are not required to await each keystroke's call.
@@ -47,7 +56,7 @@ class DestinationSearchController extends ChangeNotifier {
   Future<void> search(String newQuery) async {
     query = newQuery;
     _debounce?.cancel();
-    if (_pendingCompleter?.isCompleted == false) _pendingCompleter!.complete();
+    _completePending();
 
     final trimmed = newQuery.trim();
     if (trimmed.isEmpty) {
@@ -64,15 +73,24 @@ class DestinationSearchController extends ChangeNotifier {
     final completer = Completer<void>();
     _pendingCompleter = completer;
     _debounce = Timer(const Duration(milliseconds: 350), () async {
-      final found =
-          await _repository.searchDestinations(query: trimmed, category: categoryFilter);
-      if (requestId == _requestId) {
-        results = found;
-        isSearching = false;
-        _recordRecentSearch(trimmed);
-        notifyListeners();
+      try {
+        final found =
+            await _repository.searchDestinations(query: trimmed, category: categoryFilter);
+        if (requestId == _requestId) {
+          results = found;
+          isSearching = false;
+          _recordRecentSearch(trimmed);
+          notifyListeners();
+        }
+      } catch (e) {
+        // Repository call failed; reset isSearching but keep results as-is
+        if (requestId == _requestId) {
+          isSearching = false;
+          notifyListeners();
+        }
+      } finally {
+        if (!completer.isCompleted) completer.complete();
       }
-      if (!completer.isCompleted) completer.complete();
     });
     await completer.future;
   }
@@ -90,6 +108,7 @@ class DestinationSearchController extends ChangeNotifier {
 
   void clearQuery() {
     _debounce?.cancel();
+    _completePending();
     query = '';
     results = const [];
     isSearching = false;
@@ -99,6 +118,7 @@ class DestinationSearchController extends ChangeNotifier {
   @override
   void dispose() {
     _debounce?.cancel();
+    _completePending();
     super.dispose();
   }
 }

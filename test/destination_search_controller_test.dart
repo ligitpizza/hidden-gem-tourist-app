@@ -6,9 +6,14 @@ import 'package:collab/features/destination_exploration/model/map_destination.da
 import 'package:collab/shared/models/hidden_gem.dart';
 
 class _FakeSearchRepository extends DestinationExplorationRepository {
-  _FakeSearchRepository({this.searchResult = const [], this.trendingResult = const []});
+  _FakeSearchRepository({
+    this.searchResult = const [],
+    this.trendingResult = const [],
+    this.shouldThrowOnSearch = false,
+  });
   final List<MapDestination> searchResult;
   final List<MapDestination> trendingResult;
+  final bool shouldThrowOnSearch;
 
   @override
   Future<List<MapDestination>> searchDestinations({
@@ -16,6 +21,10 @@ class _FakeSearchRepository extends DestinationExplorationRepository {
     HiddenGemCategory? category,
     int limit = 20,
   }) async {
+    // Only throw if this is a non-empty search (not a trending load)
+    if (shouldThrowOnSearch && query.trim().isNotEmpty) {
+      throw Exception('Repository error');
+    }
     return query.trim().isEmpty ? trendingResult : searchResult;
   }
 }
@@ -80,6 +89,55 @@ void main() {
       controller.clearQuery();
 
       expect(controller.query, '');
+      expect(controller.results, isEmpty);
+    });
+
+    test('superseding a search call resolves the first call\'s Future', () async {
+      final controller =
+          DestinationSearchController(repository: _FakeSearchRepository(searchResult: [_place]));
+
+      // Start first search but don't await it yet (simulates un-awaited keystroke)
+      final firstFuture = controller.search('E');
+      // Immediately start a second search (new keystroke) before first debounce completes
+      final secondFuture = controller.search('Em');
+
+      // Both futures should resolve (not hang) despite first being cancelled
+      await firstFuture;
+      await secondFuture;
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      // Final results from second search
+      expect(controller.results, [_place]);
+      expect(controller.isSearching, isFalse);
+    });
+
+    test('clearQuery resolves any in-flight search\'s Future', () async {
+      final controller =
+          DestinationSearchController(repository: _FakeSearchRepository(searchResult: [_place]));
+
+      // Start a search but don't await yet
+      final searchFuture = controller.search('Emerald');
+      // Immediately clear the query before 350ms debounce elapses
+      controller.clearQuery();
+
+      // The in-flight search's Future should resolve despite being cleared
+      await searchFuture;
+
+      expect(controller.query, '');
+      expect(controller.results, isEmpty);
+    });
+
+    test('repository error leaves isSearching false and Future resolves', () async {
+      final controller = DestinationSearchController(
+        repository: _FakeSearchRepository(searchResult: [_place], shouldThrowOnSearch: true),
+      );
+
+      // This search will throw in the repository, but should handle it gracefully
+      await controller.search('Emerald');
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      // isSearching should be false (not stuck true), results unchanged
+      expect(controller.isSearching, isFalse);
       expect(controller.results, isEmpty);
     });
   });
