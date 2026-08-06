@@ -1,0 +1,117 @@
+// Verifies the Journal module's integration into the real app without
+// needing to sign in through Supabase auth (the full app_router.dart is
+// auth-gated). Covers two things the user can't click-test yet because the
+// check-in entry point still depends on a teammate's in-progress map:
+//   1. The routes wired into ShellRoutes actually render the right screens.
+//   2. The mock data chain a check-in triggers — journal draft creation and
+//      badge evaluation — still works end to end.
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import 'package:collab/core/router/shell_routes.dart';
+import 'package:collab/features/gamification_journal/controller/badge_controller.dart';
+import 'package:collab/features/gamification_journal/controller/checkin_controller.dart';
+import 'package:collab/features/gamification_journal/controller/dashboard_controller.dart';
+import 'package:collab/features/gamification_journal/controller/journal_controller.dart';
+import 'package:collab/features/gamification_journal/controller/quiz_controller.dart';
+import 'package:collab/features/gamification_journal/view/badges/badge_gallery_screen.dart';
+import 'package:collab/features/gamification_journal/view/dashboard/dashboard_screen.dart';
+import 'package:collab/features/gamification_journal/view/journal/journal_timeline_screen.dart';
+import 'package:collab/features/gamification_journal/view/quiz/quiz_list_screen.dart';
+
+/// Mirrors just the Journal branch's routes from app_router.dart, flat
+/// instead of nested in the auth-gated StatefulShellRoute — same paths,
+/// same screens, no sign-in required.
+Widget _testApp() {
+  final router = GoRouter(
+    initialLocation: ShellRoutes.journal,
+    routes: [
+      GoRoute(path: ShellRoutes.journal, builder: (c, s) => const DashboardScreen()),
+      GoRoute(path: ShellRoutes.journalBadges, builder: (c, s) => const BadgeGalleryScreen()),
+      GoRoute(path: ShellRoutes.journalEntries, builder: (c, s) => const JournalTimelineScreen()),
+      GoRoute(path: ShellRoutes.journalQuizzes, builder: (c, s) => const QuizListScreen()),
+    ],
+  );
+
+  return MultiProvider(
+    providers: [
+      ChangeNotifierProvider(create: (_) => CheckInController(userId: 'test-user')),
+      ChangeNotifierProvider(create: (_) => BadgeController(userId: 'test-user')),
+      ChangeNotifierProvider(create: (_) => JournalController(userId: 'test-user')),
+      ChangeNotifierProvider(create: (_) => QuizController(userId: 'test-user')),
+      ChangeNotifierProvider(create: (_) => DashboardController()),
+    ],
+    child: MaterialApp.router(routerConfig: router),
+  );
+}
+
+void main() {
+  testWidgets('Dashboard loads and its quick links reach Badges, Journal and Quizzes', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_testApp());
+    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byType(DashboardScreen), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('dashboardQuickLinkBadges')));
+    await tester.pumpAndSettle();
+    expect(find.byType(BadgeGalleryScreen), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('dashboardQuickLinkJournal')));
+    await tester.pumpAndSettle();
+    expect(find.byType(JournalTimelineScreen), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('dashboardQuickLinkQuizzes')));
+    await tester.pumpAndSettle();
+    expect(find.byType(QuizListScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  test('A check-in still creates a journal draft and unlocks the right badge', () async {
+    final checkInController = CheckInController(userId: 'test-user');
+    final journalController = JournalController(userId: 'test-user');
+    final badgeController = BadgeController(userId: 'test-user');
+
+    await checkInController.loadDestinations();
+    expect(checkInController.destinations, isNotEmpty);
+    final destination = checkInController.destinations.first;
+
+    await checkInController.checkIn(
+      destinationId: destination.id,
+      userLat: destination.latitude,
+      userLng: destination.longitude,
+    );
+    expect(checkInController.status, CheckInStatus.success);
+    expect(checkInController.history, hasLength(1));
+
+    final entry = await journalController.createFromCheckIn(checkInController.history.first);
+    expect(journalController.entries, contains(entry));
+    expect(entry.destinationId, destination.id);
+
+    final destinationsById = {for (final d in checkInController.destinations) d.id: d};
+    await badgeController.evaluateAfterCheckIn(
+      checkIns: checkInController.history,
+      destinationsById: destinationsById,
+    );
+    expect(badgeController.newlyEarned.map((b) => b.name), contains('First Steps'));
+
+    final dashboardController = DashboardController();
+    await dashboardController.refresh(
+      checkIns: checkInController.history,
+      destinationsById: destinationsById,
+      userBadges: badgeController.userBadges,
+      allBadges: badgeController.allBadges,
+      journalEntries: journalController.entries,
+    );
+    expect(dashboardController.stats.totalCheckIns, 1);
+    expect(dashboardController.stats.badgesEarned, 1);
+  });
+}

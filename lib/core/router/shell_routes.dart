@@ -11,4 +11,13 @@ class ShellRoutes {
   static const checklist = '/travel-prep/checklist';
   static const ecoPartners = '/travel-prep/eco-partners';
   static const documentVault = '/travel-prep/document-vault';
+
+  // Module 6 — Gamification & Travel Journal. Check-in isn't linked from
+  // here yet (see DestinationDetailScreen) — it still needs to be wired
+  // into the existing map screen.
+  static const journal = '/journal';
+  static const journalBadges = '/journal/badges';
+  static const journalEntries = '/journal/entries';
+  static const journalQuizzes = '/journal/quizzes';
+  static const journalHistory = '/journal/history';
 }
