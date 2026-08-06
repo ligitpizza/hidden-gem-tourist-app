@@ -2,6 +2,8 @@
 
 Status: Approved
 Date: 2026-08-06
+Revised: 2026-08-06 — switched from reusing `place_hidden_gem_candidates` to a dedicated
+`destinations` table (see Decisions and Data).
 
 ## Context
 
@@ -23,10 +25,10 @@ Map" use case (basic flow, A1/A2, E1/E2), as supplied by the user on 2026-08-06.
 - **Pattern**: MVC, matching the existing convention (e.g. `itinerary_planning`): Controllers
   are plain `ChangeNotifier`s exposed via a Riverpod `ChangeNotifierProvider`; Models are data
   classes plus a Repository that talks to Supabase.
-- **Data source**: reuse the existing `place_hidden_gem_candidates` Supabase table (already
-  has name, category, lat/lng, avg_rating, uniqueness/accessibility scores, popularity,
-  description) rather than creating a new `destinations` table. Avoids duplicate data and
-  keeps Hidden Gem scoring consistent across the app.
+- **Data source**: a new, dedicated `destinations` Supabase table (standalone — not reusing
+  `place_hidden_gem_candidates` or any other existing table). See the Data section below for
+  the schema and seed data. (Revised 2026-08-06 — the original design reused
+  `place_hidden_gem_candidates`; the user asked for Feature 1 to be fully standalone instead.)
 - **Category scheme**: reuse the existing 5-bucket `HiddenGemCategory` enum (food, culture,
   nature, viewpoint, craft) and `HiddenGemScoring.categoryFromDb` mapping — already used by
   scoring, the Assistant feed, and itinerary planning — instead of introducing a second,
@@ -63,6 +65,48 @@ New dependency: `flutter_map_marker_cluster: ^1.4.0` (compatible with the pinned
 `flutter_map: ^7.0.2`; later majors of the cluster package require `flutter_map ^8.x`, which
 this project isn't on).
 
+## Data
+
+A new Supabase migration creates a standalone `destinations` table:
+
+```sql
+create table public.destinations (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text not null default '',
+  category text not null,
+  latitude double precision not null,
+  longitude double precision not null,
+  avg_rating numeric not null default 0,
+  images text[] not null default '{}',
+  created_at timestamptz not null default now()
+);
+
+alter table public.destinations enable row level security;
+
+create policy "Public read access" on public.destinations
+  for select using (true);
+```
+
+`category` uses the same raw vocabulary as the existing `DestinationCategory.dbValue`/
+`destinationCategoryFromDb` (`attraction`, `heritage_site`, `museum`, `viewpoint`, `park`,
+`beach`, `waterfall`, `cafe`, `restaurant`, `craft`, `art`) so `HiddenGemScoring.categoryFromDb`
+— which already switches on exactly these strings — keeps working unmodified for the
+map-coloring/filtering scheme (the "reuse `HiddenGemCategory`" decision above is unaffected by
+this table change; only the *source* of the raw category string changes, not how it's
+interpreted).
+
+The migration seeds a small set of demo destinations across categories and Penang-area
+coordinates (matching the rest of the app's dataset), so the map isn't empty on first run
+(NFR14 — cold-start credibility).
+
+`avg_rating` is carried on the table even though Feature 1's UI doesn't display it (no
+rating shown in the current popup design) — Feature 3 (Attraction Comparison) will need a
+rating per destination, and this avoids a schema change later. If Feature 3 ends up needing
+this table's destinations to also carry a Hidden Gem Score (currently only computed for
+`place_hidden_gem_candidates` rows), that cross-feature bridge will be resolved in Feature 3's
+own spec, not here.
+
 ## Model
 
 `MapDestination` — a new, standalone class, **not** a reuse of the shared lean `Destination`
@@ -74,8 +118,8 @@ Fields: `id, name, description, category (HiddenGemCategory), location (LatLng),
 imageUrls (List<String>)`.
 
 `DestinationExplorationRepository.loadDestinations()`:
-- Queries `place_hidden_gem_candidates`, all rows (this screen shows the whole map, not a
-  radius-bounded subset).
+- Queries `destinations`, all rows (this screen shows the whole map, not a radius-bounded
+  subset).
 - Maps each row's raw `category` string through `HiddenGemScoring.categoryFromDb` for
   consistent coloring/filtering with the rest of the app.
 - `images` column missing/null/empty → `imageUrls = []` (popup shows a placeholder — see
@@ -148,6 +192,5 @@ wired into the router, per the project's usual UI verification process — not v
 - Features 2–4 (themed clusters, comparison, crowd-sourced ratings) — separate specs.
 - The check-in system Feature 4 depends on — doesn't exist in the codebase yet; not needed
   for Feature 1.
-- A dedicated `destinations` table — deliberately not created; see Decisions.
 - The user's separately-prepared UI for this feature — will replace the `view/` files built
   here once pasted in; the Controller's public API above is the contract it binds to.

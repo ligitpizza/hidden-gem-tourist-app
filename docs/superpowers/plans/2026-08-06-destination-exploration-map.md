@@ -7,16 +7,22 @@ feature under `lib/features/destination_exploration/`, wired into the app's exis
 
 **Architecture:** MVC matching the project's `itinerary_planning` convention — a
 `ChangeNotifier` Controller (Riverpod `ChangeNotifierProvider`) backed by a Repository that
-queries the existing `place_hidden_gem_candidates` Supabase table, feeding a `flutter_map`
-View with proximity-based marker clustering, category filter chips, and a tap-to-view popup.
+queries a new, dedicated `destinations` Supabase table (standalone — not shared with any
+other feature), feeding a `flutter_map` View with proximity-based marker clustering, category
+filter chips, and a tap-to-view popup.
 
 **Tech Stack:** Flutter, `flutter_map` (already a dependency), new dependency
-`flutter_map_marker_cluster: ^1.4.0`, `flutter_riverpod`, `supabase_flutter`.
+`flutter_map_marker_cluster: ^1.4.0`, `flutter_riverpod`, `supabase_flutter`, a new Supabase
+migration for the `destinations` table.
 
 ## Global Constraints
 
-- Reuse the existing `place_hidden_gem_candidates` Supabase table — do not create a new
-  `destinations` table (spec decision, replacing the literal wording of FR1.5).
+- Use a new, standalone `destinations` Supabase table — do not reuse
+  `place_hidden_gem_candidates` or any other existing table (spec decision, revised
+  2026-08-06: Feature 1 must be fully standalone, not sharing data with other features).
+- `destinations.category` uses the same raw vocabulary as `DestinationCategory.dbValue`
+  (`attraction`, `heritage_site`, `museum`, `viewpoint`, `park`, `beach`, `waterfall`, `cafe`,
+  `restaurant`, `craft`, `art`), so `HiddenGemScoring.categoryFromDb` keeps working unmodified.
 - Reuse the existing `HiddenGemCategory` enum (food, culture, nature, viewpoint, craft) and
   `HiddenGemScoring.categoryFromDb` mapping for marker color-coding/filtering — do not
   introduce a second, spec-literal 4-category (nature/food/culture/heritage) scheme
@@ -41,6 +47,8 @@ View with proximity-based marker clustering, category filter chips, and a tap-to
 ## File Structure
 
 ```
+supabase/migrations/
+  202608060001_destinations.sql                 # Task 1
 lib/features/destination_exploration/
   model/
     map_destination.dart                      # Task 1
@@ -65,9 +73,10 @@ test/
 
 ---
 
-### Task 1: Model + Repository (row mapping)
+### Task 1: Migration + Model + Repository (row mapping)
 
 **Files:**
+- Create: `supabase/migrations/202608060001_destinations.sql`
 - Create: `lib/features/destination_exploration/model/map_destination.dart`
 - Create: `lib/features/destination_exploration/model/destination_exploration_repository.dart`
 - Test: `test/destination_map_repository_test.dart`
@@ -85,7 +94,50 @@ test/
     (Task 2's Controller is responsible for catching them, so it can distinguish "load
     failed" from "load succeeded with zero rows").
 
-- [ ] **Step 1: Write `MapDestination`**
+- [ ] **Step 1: Write the `destinations` table migration**
+
+```sql
+-- supabase/migrations/202608060001_destinations.sql
+create table public.destinations (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text not null default '',
+  category text not null,
+  latitude double precision not null,
+  longitude double precision not null,
+  avg_rating numeric not null default 0,
+  images text[] not null default '{}',
+  created_at timestamptz not null default now()
+);
+
+alter table public.destinations enable row level security;
+
+create policy "Public read access" on public.destinations
+  for select using (true);
+
+-- Seed data so the map isn't empty on first run (NFR14). Categories use the
+-- same raw vocabulary as DestinationCategory.dbValue / destinationCategoryFromDb
+-- so HiddenGemScoring.categoryFromDb keeps mapping them correctly.
+insert into public.destinations (name, description, category, latitude, longitude, avg_rating, images) values
+  ('Penang Hill', 'A funicular railway up to cool hilltop views over George Town.', 'viewpoint', 5.4225, 100.2769, 4.6, '{}'),
+  ('Kek Lok Si Temple', 'One of the largest Buddhist temples in Southeast Asia.', 'heritage_site', 5.3994, 100.2735, 4.5, '{}'),
+  ('George Town Street Art', 'Murals and wrought-iron caricatures scattered through the old town.', 'art', 5.4164, 100.3327, 4.4, '{}'),
+  ('Penang Peranakan Mansion', 'A restored 19th-century Peranakan mansion turned museum.', 'museum', 5.4145, 100.3384, 4.5, '{}'),
+  ('Escape Penang', 'An outdoor adventure and jungle obstacle park.', 'park', 5.4489, 100.2492, 4.3, '{}'),
+  ('Batu Ferringhi Beach', 'A popular sandy beach lined with resorts and night markets.', 'beach', 5.4747, 100.2440, 4.1, '{}'),
+  ('Tropical Fruit Farm', 'A guided tour through a working tropical fruit orchard.', 'attraction', 5.2503, 100.5928, 4.4, '{}'),
+  ('Ban Zaan Wet Market', 'A bustling local seafood and produce market.', 'attraction', 5.4720, 100.2419, 4.0, '{}'),
+  ('Air Terjun Titi Kerawang', 'A roadside waterfall on the way around the island.', 'waterfall', 5.4046, 100.2100, 4.2, '{}'),
+  ('Seng Thor Restaurant', 'A local favourite for Penang-style seafood.', 'restaurant', 5.4030, 100.3070, 4.3, '{}'),
+  ('Nyonya Baba Cuisine Cafe', 'A cosy cafe serving traditional Peranakan dishes.', 'cafe', 5.4180, 100.3300, 4.2, '{}'),
+  ('Penang Batik Craft Village', 'Hands-on batik painting workshops in a small craft village.', 'craft', 5.4600, 100.2050, 4.1, '{}');
+```
+
+Run this migration against the Supabase project (e.g. `supabase db push` or via the Supabase
+dashboard's SQL editor, per however this project's existing migrations are normally applied —
+see `supabase/migrations/202608050001_eco_partners.sql` for the prior precedent).
+
+- [ ] **Step 2: Write `MapDestination`**
 
 ```dart
 // lib/features/destination_exploration/model/map_destination.dart
@@ -94,9 +146,9 @@ import 'package:latlong2/latlong.dart';
 import '../../../shared/models/hidden_gem.dart';
 
 /// A destination pin on the Interactive Destination Map, sourced from the
-/// `place_hidden_gem_candidates` table. Deliberately separate from the
-/// shared lean `Destination` model (used by itinerary planning) since this
-/// screen needs description/rating/image fields that model doesn't carry.
+/// dedicated `destinations` table. Deliberately separate from the shared
+/// lean `Destination` model (used by itinerary planning) since this screen
+/// needs description/rating/image fields that model doesn't carry.
 class MapDestination {
   final String id;
   final String name;
@@ -118,7 +170,7 @@ class MapDestination {
 }
 ```
 
-- [ ] **Step 2: Write the failing repository row-mapping tests**
+- [ ] **Step 3: Write the failing repository row-mapping tests**
 
 ```dart
 // test/destination_map_repository_test.dart
@@ -210,12 +262,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 3: Run the test to verify it fails**
+- [ ] **Step 4: Run the test to verify it fails**
 
 Run: `flutter test test/destination_map_repository_test.dart`
 Expected: FAIL — `DestinationExplorationRepository` doesn't exist yet (compile error).
 
-- [ ] **Step 4: Write `DestinationExplorationRepository`**
+- [ ] **Step 5: Write `DestinationExplorationRepository`**
 
 ```dart
 // lib/features/destination_exploration/model/destination_exploration_repository.dart
@@ -226,8 +278,8 @@ import '../../../shared/services/hidden_gem_scoring.dart';
 import 'map_destination.dart';
 
 /// Loads destinations for the Interactive Destination Map from the
-/// existing `place_hidden_gem_candidates` table (see the module's design
-/// spec for why a second, dedicated `destinations` table wasn't created).
+/// dedicated `destinations` table (standalone — this feature does not
+/// share data with any other module; see the design spec).
 class DestinationExplorationRepository {
   /// Pure row -> [MapDestination] mapping, kept separate from the network
   /// call so it's unit-testable without a live Supabase connection.
@@ -259,22 +311,22 @@ class DestinationExplorationRepository {
   /// distinct "load failed" state (E1) instead of an indistinguishable
   /// empty result.
   Future<List<MapDestination>> loadDestinations() async {
-    final rows = await Supabase.instance.client.from('place_hidden_gem_candidates').select();
+    final rows = await Supabase.instance.client.from('destinations').select();
     return rows.map(mapRow).toList();
   }
 }
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [ ] **Step 6: Run the test to verify it passes**
 
 Run: `flutter test test/destination_map_repository_test.dart`
 Expected: PASS (5 tests).
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add lib/features/destination_exploration/model/map_destination.dart lib/features/destination_exploration/model/destination_exploration_repository.dart test/destination_map_repository_test.dart
-git commit -m "feat(destination-map): add MapDestination model and repository row mapping"
+git add supabase/migrations/202608060001_destinations.sql lib/features/destination_exploration/model/map_destination.dart lib/features/destination_exploration/model/destination_exploration_repository.dart test/destination_map_repository_test.dart
+git commit -m "feat(destination-map): add destinations table migration, MapDestination model, and repository row mapping"
 ```
 
 ---
@@ -985,8 +1037,8 @@ import 'widgets/category_filter_bar.dart';
 import 'widgets/category_style.dart';
 import 'widgets/destination_popup_sheet.dart';
 
-/// Module 2.1's Interactive Destination Map: every destination from
-/// `place_hidden_gem_candidates` as a clustered, color-coded marker, with
+/// Module 2.1's Interactive Destination Map: every destination from the
+/// dedicated `destinations` table as a clustered, color-coded marker, with
 /// category filters (FR1.3) and a tap-to-view detail popup (FR1.2).
 class DestinationMapScreen extends ConsumerWidget {
   const DestinationMapScreen({super.key});
@@ -1158,8 +1210,9 @@ git commit -m "feat(destination-map): add map screen and wire it into the Map ta
 - FR1.2 (popup with name/description/images) — Task 5, wired in Task 6.
 - FR1.3 (client-side category filter buttons) — Task 4.
 - FR1.4 (clustering past ~20–30 pins) — Task 6 (`MarkerClusterLayerWidget`).
-- FR1.5 (destination data with lat/long/category/name/description/images) — Task 1
-  (`MapDestination` + repository), reusing `place_hidden_gem_candidates` per spec decision.
+- FR1.5 (destination data with lat/long/category/name/description/images stored in a
+  destinations table) — Task 1 (migration creating `destinations`, `MapDestination` +
+  repository).
 - NFR1 (performant/uncluttered at scale) — Task 6, proximity clustering.
 - NFR3 (compact/scannable popup) — Task 5.
 - NFR11 (OSM tiles, no billing risk) — Task 6, `TileLayer` + `flutter_map`.
