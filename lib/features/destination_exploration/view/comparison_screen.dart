@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' hide ChangeNotifierProvider, Consumer;
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +11,7 @@ import '../controller/comparison_controller.dart';
 import '../controller/destination_map_controller.dart';
 import '../model/comparison_destination.dart';
 import '../model/crowd_level.dart';
+import '../model/favourite_destinations_store.dart';
 import 'widgets/category_style.dart';
 
 /// Attraction Comparison (Feature 3): a side-by-side view of the
@@ -385,31 +387,48 @@ class _BestPickView extends StatelessWidget {
         Consumer<ComparisonController>(
           builder: (context, controller, _) => Column(
             children: [
-              FilledButton.icon(
-                onPressed: () async {
-                  await controller.addBestPickToItinerary(
-                    ProviderScope.containerOf(context, listen: false)
-                        .read(itineraryPlannerControllerProvider),
+              // Reflects whether the pick is already saved/added, so the
+              // button itself is the "is this saved?" check — not just a
+              // one-off SnackBar the user has to trust and forget.
+              riverpod.Consumer(
+                builder: (context, ref, _) {
+                  final itineraryController = ref.watch(itineraryPlannerControllerProvider);
+                  final alreadyAdded =
+                      itineraryController.selectedDestinations.any((d) => d.id == pick.id);
+                  return FilledButton.icon(
+                    onPressed: alreadyAdded
+                        ? null
+                        : () async {
+                            await controller.addBestPickToItinerary(itineraryController);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('${pick.name} added to your itinerary')),
+                              );
+                            }
+                          },
+                    icon: Icon(alreadyAdded ? Icons.check_circle : Icons.card_travel),
+                    label: Text(alreadyAdded ? 'Added to Itinerary' : 'Add to Itinerary'),
                   );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('${pick.name} added to your itinerary')),
-                    );
-                  }
                 },
-                icon: const Icon(Icons.card_travel),
-                label: const Text('Add to Itinerary'),
               ),
               const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: () {
-                  controller.saveToFavourites(pick);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('${pick.name} saved to favourites')),
+              ListenableBuilder(
+                listenable: FavouriteDestinationsStore.instance,
+                builder: (context, _) {
+                  final alreadySaved = FavouriteDestinationsStore.instance.contains(pick.id);
+                  return OutlinedButton.icon(
+                    onPressed: alreadySaved
+                        ? null
+                        : () {
+                            controller.saveToFavourites(pick);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('${pick.name} saved to favourites')),
+                            );
+                          },
+                    icon: Icon(alreadySaved ? Icons.favorite : Icons.favorite_border),
+                    label: Text(alreadySaved ? 'Saved to Favourites' : 'Save to Favourites'),
                   );
                 },
-                icon: const Icon(Icons.favorite_border),
-                label: const Text('Save to Favourites'),
               ),
               const SizedBox(height: 8),
               TextButton.icon(
