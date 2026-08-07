@@ -16,6 +16,8 @@ import 'package:collab/features/gamification_journal/controller/checkin_controll
 import 'package:collab/features/gamification_journal/controller/dashboard_controller.dart';
 import 'package:collab/features/gamification_journal/controller/journal_controller.dart';
 import 'package:collab/features/gamification_journal/controller/quiz_controller.dart';
+import 'package:collab/features/gamification_journal/model/destination_model.dart';
+import 'package:collab/features/gamification_journal/services/mock/mock_checkin_service.dart';
 import 'package:collab/features/gamification_journal/view/badges/badge_gallery_screen.dart';
 import 'package:collab/features/gamification_journal/view/dashboard/dashboard_screen.dart';
 import 'package:collab/features/gamification_journal/view/journal/journal_timeline_screen.dart';
@@ -24,6 +26,22 @@ import 'package:collab/features/gamification_journal/view/quiz/quiz_list_screen.
 /// Mirrors just the Journal branch's routes from app_router.dart, flat
 /// instead of nested in the auth-gated StatefulShellRoute — same paths,
 /// same screens, no sign-in required.
+final _testDestination = DestinationModel(
+  id: 'test-d001',
+  name: 'Test Destination',
+  state: 'Penang',
+  category: 'Nature',
+  latitude: 5.4,
+  longitude: 100.3,
+  description: 'A test destination.',
+  imageUrl: 'https://example.com/image.jpg',
+);
+
+CheckInController _seededCheckInController() => CheckInController(
+      userId: 'test-user',
+      service: MockCheckInService(seedDestinations: [_testDestination]),
+    );
+
 Widget _testApp() {
   final router = GoRouter(
     initialLocation: ShellRoutes.journal,
@@ -37,7 +55,7 @@ Widget _testApp() {
 
   return MultiProvider(
     providers: [
-      ChangeNotifierProvider(create: (_) => CheckInController(userId: 'test-user')),
+      ChangeNotifierProvider(create: (_) => _seededCheckInController()),
       ChangeNotifierProvider(create: (_) => BadgeController(userId: 'test-user')),
       ChangeNotifierProvider(create: (_) => JournalController(userId: 'test-user')),
       ChangeNotifierProvider(create: (_) => QuizController(userId: 'test-user')),
@@ -76,7 +94,7 @@ void main() {
   });
 
   test('A check-in still creates a journal draft and unlocks the right badge', () async {
-    final checkInController = CheckInController(userId: 'test-user');
+    final checkInController = _seededCheckInController();
     final journalController = JournalController(userId: 'test-user');
     final badgeController = BadgeController(userId: 'test-user');
 

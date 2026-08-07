@@ -1,5 +1,8 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../model/check_in_model.dart';
 import '../../model/destination_model.dart';
+import '../../../destination_exploration/model/destination_exploration_repository.dart';
 import '../../../../core/utils/haversine_helper.dart';
 
 enum CheckInFailureReason { tooFarAway, cooldownActive, unknown }
@@ -35,68 +38,37 @@ class CheckInResult {
 /// view built against this mock will keep working unchanged once the
 /// backend is swapped in.
 class MockCheckInService {
+  MockCheckInService({List<DestinationModel>? seedDestinations})
+      : destinations = seedDestinations ?? [],
+        _destinationsLoaded = seedDestinations != null;
+
   static const Duration cooldownWindow = Duration(hours: 24);
 
   // In-memory store standing in for the Supabase 'check_ins' table.
   final List<CheckInModel> _checkIns = [];
   int _idCounter = 0;
 
-  final List<DestinationModel> destinations = [
-    DestinationModel(
-      id: 'd001',
-      name: "Kellie's Castle",
-      state: 'Perak',
-      category: 'Culture',
-      latitude: 4.5729,
-      longitude: 101.1417,
-      description: 'An unfinished mansion with a mysterious colonial history.',
-      imageUrl: 'https://picsum.photos/seed/d001-kellies-castle/900/600',
-    ),
-    DestinationModel(
-      id: 'd002',
-      name: 'Semenggoh Nature Reserve',
-      state: 'Sarawak',
-      category: 'Nature',
-      latitude: 1.3644,
-      longitude: 110.3103,
-      description: 'A rehabilitation centre for semi-wild orangutans.',
-      imageUrl: 'https://picsum.photos/seed/d002-semenggoh/900/600',
-    ),
-    DestinationModel(
-      id: 'd003',
-      name: 'Gua Tempurung',
-      state: 'Perak',
-      category: 'Adventure',
-      latitude: 4.3653,
-      longitude: 101.1908,
-      description: 'One of the largest limestone cave systems in Malaysia.',
-      imageUrl: 'https://picsum.photos/seed/d003-gua-tempurung/900/600',
-    ),
-    DestinationModel(
-      id: 'd004',
-      name: 'Kampung Kuantan Firefly Park',
-      state: 'Selangor',
-      category: 'Nature',
-      latitude: 3.3502,
-      longitude: 101.2311,
-      description:
-          'A riverside sanctuary known for its synchronised fireflies.',
-      imageUrl: 'https://picsum.photos/seed/d004-firefly-park/900/600',
-    ),
-    DestinationModel(
-      id: 'd005',
-      name: 'Jonker Walk Night Market',
-      state: 'Melaka',
-      category: 'Food',
-      latitude: 2.1959,
-      longitude: 102.2467,
-      description: 'A heritage street famous for Peranakan street food.',
-      imageUrl: 'https://picsum.photos/seed/d005-jonker-walk/900/600',
-    ),
-  ];
+  // Loaded from the real `destinations` table (destination_exploration's
+  // own row-mapping is reused here) instead of hardcoded mock data, unless
+  // pre-seeded via the constructor (used by tests to avoid a real Supabase
+  // call). Everything below — distance/cooldown checks, in-memory check-in
+  // history — stays mock/in-memory for now; only which destinations exist
+  // is now real (or seeded).
+  List<DestinationModel> destinations;
+  bool _destinationsLoaded;
+
+  Future<void> _ensureDestinationsLoaded() async {
+    if (_destinationsLoaded) return;
+    final rows = await Supabase.instance.client.from('destinations').select();
+    destinations = rows
+        .map(DestinationExplorationRepository.mapRow)
+        .map(DestinationModel.fromMapDestination)
+        .toList();
+    _destinationsLoaded = true;
+  }
 
   Future<List<DestinationModel>> fetchDestinations() async {
-    await Future.delayed(const Duration(milliseconds: 400));
+    await _ensureDestinationsLoaded();
     return destinations;
   }
 
@@ -116,6 +88,7 @@ class MockCheckInService {
     required double userLng,
   }) async {
     await Future.delayed(const Duration(milliseconds: 600));
+    await _ensureDestinationsLoaded();
 
     final destination = destinations.firstWhere(
       (d) => d.id == destinationId,
