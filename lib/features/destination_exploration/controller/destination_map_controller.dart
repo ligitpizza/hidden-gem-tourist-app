@@ -187,6 +187,12 @@ class DestinationMapController extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  void clearComparisonSelection() {
+    if (selectedForComparison.isEmpty) return;
+    selectedForComparison.clear();
+    notifyListeners();
+  }
 }
 
 final destinationMapControllerProvider =

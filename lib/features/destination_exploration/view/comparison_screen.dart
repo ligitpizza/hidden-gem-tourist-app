@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../../shared/models/hidden_gem.dart';
 import '../../itinerary_planning/controller/itinerary_planner_controller.dart';
 import '../controller/comparison_controller.dart';
+import '../controller/destination_map_controller.dart';
 import '../model/comparison_destination.dart';
 import '../model/crowd_level.dart';
 import 'widgets/category_style.dart';
@@ -79,6 +80,20 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
                   onPressed: () => setState(() => _showBestPick = false),
                 )
               : null,
+          actions: _showBestPick
+              ? null
+              : [
+                  IconButton(
+                    icon: const Icon(Icons.clear),
+                    tooltip: 'Clear selected destinations',
+                    onPressed: () {
+                      ProviderScope.containerOf(context, listen: false)
+                          .read(destinationMapControllerProvider)
+                          .clearComparisonSelection();
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ],
         ),
         body: Consumer<ComparisonController>(
           builder: (context, controller, _) {
@@ -371,15 +386,28 @@ class _BestPickView extends StatelessWidget {
           builder: (context, controller, _) => Column(
             children: [
               FilledButton.icon(
-                onPressed: () => controller
-                    .addBestPickToItinerary(ProviderScope.containerOf(context, listen: false)
-                        .read(itineraryPlannerControllerProvider)),
+                onPressed: () async {
+                  await controller.addBestPickToItinerary(
+                    ProviderScope.containerOf(context, listen: false)
+                        .read(itineraryPlannerControllerProvider),
+                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('${pick.name} added to your itinerary')),
+                    );
+                  }
+                },
                 icon: const Icon(Icons.card_travel),
                 label: const Text('Add to Itinerary'),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
-                onPressed: () => controller.saveToFavourites(pick),
+                onPressed: () {
+                  controller.saveToFavourites(pick);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('${pick.name} saved to favourites')),
+                  );
+                },
                 icon: const Icon(Icons.favorite_border),
                 label: const Text('Save to Favourites'),
               ),
