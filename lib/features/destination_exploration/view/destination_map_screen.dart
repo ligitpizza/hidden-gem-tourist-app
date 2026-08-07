@@ -134,12 +134,7 @@ class _MapBody extends StatelessWidget {
         Positioned(
           right: 16,
           bottom: 16,
-          child: FloatingActionButton.extended(
-            onPressed: () =>
-                controller.viewThemedCluster(origin: controller.selectedDestination),
-            icon: const Icon(Icons.route_outlined),
-            label: const Text('View Themed Trail'),
-          ),
+          child: _MapActionsFab(controller: controller),
         ),
         if (controller.clusterAnchor != null || controller.clusterMessage != null)
           Positioned(
@@ -148,6 +143,69 @@ class _MapBody extends StatelessWidget {
             bottom: 84,
             child: _ClusterCard(controller: controller),
           ),
+      ],
+    );
+  }
+}
+
+/// A "+" speed-dial FAB hosting the map's associated actions (View Themed
+/// Trail, Destination Comparison) — replaces the single always-visible
+/// "View Themed Trail" button so the map corner can host more than one
+/// action without cluttering the screen by default.
+class _MapActionsFab extends StatefulWidget {
+  const _MapActionsFab({required this.controller});
+
+  final DestinationMapController controller;
+
+  @override
+  State<_MapActionsFab> createState() => _MapActionsFabState();
+}
+
+class _MapActionsFabState extends State<_MapActionsFab> {
+  bool _expanded = false;
+
+  void _toggle() => setState(() => _expanded = !_expanded);
+
+  void _viewThemedTrail() {
+    setState(() => _expanded = false);
+    widget.controller.viewThemedCluster(origin: widget.controller.selectedDestination);
+  }
+
+  void _compareDestinations() {
+    setState(() => _expanded = false);
+    final message = widget.controller.canCompare
+        ? '${widget.controller.selectedForComparison.length} selected — comparison screen coming soon'
+        : 'Select 2-3 destinations to compare';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (_expanded) ...[
+          FloatingActionButton.extended(
+            heroTag: 'mapAction_viewThemedTrail',
+            onPressed: _viewThemedTrail,
+            icon: const Icon(Icons.route_outlined),
+            label: const Text('View Themed Trail'),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            heroTag: 'mapAction_destinationComparison',
+            onPressed: _compareDestinations,
+            icon: const Icon(Icons.compare_arrows),
+            label: const Text('Destination Comparison'),
+          ),
+          const SizedBox(height: 12),
+        ],
+        FloatingActionButton(
+          heroTag: 'mapAction_toggle',
+          onPressed: _toggle,
+          child: Icon(_expanded ? Icons.close : Icons.add),
+        ),
       ],
     );
   }
