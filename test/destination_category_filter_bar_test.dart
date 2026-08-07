@@ -41,4 +41,28 @@ void main() {
 
     expect(controller.selectedCategories, isEmpty);
   });
+
+  testWidgets('all category chips render at once without needing a scroll', (tester) async {
+    // Regression test: the bar used to be a horizontally-scrolling ListView,
+    // so chips past the visible width were only reachable by scrolling —
+    // reported as "not responsive" on a real device. A Wrap reflows them
+    // onto additional lines instead, so every chip is always laid out.
+    final controller = DestinationMapController(repository: _EmptyRepository());
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          destinationMapControllerProvider.overrideWith((ref) => controller),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: CategoryFilterBar()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    for (final category in HiddenGemCategory.values) {
+      expect(find.text(category.label), findsOneWidget);
+    }
+  });
 }

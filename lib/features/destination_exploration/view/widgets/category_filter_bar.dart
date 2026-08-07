@@ -16,29 +16,30 @@ class CategoryFilterBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.watch(destinationMapControllerProvider);
 
-    return SizedBox(
-      height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: HiddenGemCategory.values.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final category = HiddenGemCategory.values[index];
-          final selected = controller.selectedCategories.contains(category);
-          return FilterChip(
-            avatar: Icon(
-              categoryIcon(category),
-              size: 18,
-              color: selected ? Colors.white : categoryColor(category),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final category in HiddenGemCategory.values)
+            FilterChip(
+              avatar: Icon(
+                categoryIcon(category),
+                size: 18,
+                color: controller.selectedCategories.contains(category)
+                    ? Colors.white
+                    : categoryColor(category),
+              ),
+              label: Text(category.label),
+              selected: controller.selectedCategories.contains(category),
+              selectedColor: categoryColor(category),
+              labelStyle: TextStyle(
+                color: controller.selectedCategories.contains(category) ? Colors.white : null,
+              ),
+              onSelected: (_) => controller.toggleCategory(category),
             ),
-            label: Text(category.label),
-            selected: selected,
-            selectedColor: categoryColor(category),
-            labelStyle: TextStyle(color: selected ? Colors.white : null),
-            onSelected: (_) => controller.toggleCategory(category),
-          );
-        },
+        ],
       ),
     );
   }
