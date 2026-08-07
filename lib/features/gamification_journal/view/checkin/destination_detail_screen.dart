@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../config/theme.dart';
 import '../../../../shared/widgets/app_header.dart';
 import '../../../../shared/widgets/check_in_button.dart';
+import '../../../destination_exploration/view/widgets/ratings_section.dart';
 import '../../controller/badge_controller.dart';
 import '../../controller/checkin_controller.dart';
 import '../../controller/journal_controller.dart';
@@ -389,6 +390,14 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
               status: _checkInStatus,
               errorMessage: _checkInErrorMessage,
               onPressed: _handleCheckIn,
+            ),
+            const Divider(height: 40),
+            RatingsSection(
+              destinationId: destination.id,
+              destinationName: destination.name,
+              destinationImageUrl: destination.imageUrl,
+              region: destination.state,
+              isCheckedIn: isCheckedIn,
             ),
           ],
         ),
