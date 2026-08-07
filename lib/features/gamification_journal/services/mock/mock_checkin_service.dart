@@ -59,12 +59,23 @@ class MockCheckInService {
 
   Future<void> _ensureDestinationsLoaded() async {
     if (_destinationsLoaded) return;
-    final rows = await Supabase.instance.client.from('destinations').select();
-    destinations = rows
-        .map(DestinationExplorationRepository.mapRow)
-        .map(DestinationModel.fromMapDestination)
-        .toList();
-    _destinationsLoaded = true;
+    try {
+      final rows = await Supabase.instance.client.from('destinations').select();
+      destinations = rows.map(_mapRow).toList();
+      _destinationsLoaded = true;
+    } catch (_) {
+      // Leave destinations empty and _destinationsLoaded false so a later
+      // call can retry instead of permanently caching a failure.
+    }
+  }
+
+  DestinationModel _mapRow(Map<String, dynamic> row) {
+    final mapDestination = DestinationExplorationRepository.mapRow(row);
+    final city = (row['city'] as String?)?.trim();
+    return DestinationModel.fromMapDestination(
+      mapDestination,
+      state: (city != null && city.isNotEmpty) ? city : 'Penang',
+    );
   }
 
   Future<List<DestinationModel>> fetchDestinations() async {

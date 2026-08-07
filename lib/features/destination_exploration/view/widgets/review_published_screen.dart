@@ -136,7 +136,7 @@ class ReviewPublishedScreen extends StatelessWidget {
                           runSpacing: 8,
                           children: [
                             for (final tag in summary.topTags)
-                              RatingTagChip(tag: '${tag.tag} ${tag.percentage.round()}%'),
+                              RatingTagChip(tag: tag.tag, suffix: '${tag.percentage.round()}%'),
                           ],
                         ),
                       ],

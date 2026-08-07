@@ -161,7 +161,7 @@ class _MapBodyState extends State<_MapBody> {
     // works when the detail screen is reached from this map instead.
     final checkInController = context.read<CheckInController>();
     if (checkInController.destinations.isEmpty) {
-      unawaited(checkInController.loadDestinations());
+      unawaited(checkInController.loadDestinations().catchError((_) {}));
     }
 
     Navigator.of(context).push(

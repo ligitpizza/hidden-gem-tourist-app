@@ -54,11 +54,14 @@ class DestinationModel {
   /// (destination_exploration's own model) — used when the interactive map
   /// opens the existing Destination Detail screen on double-tap, so no
   /// extra network round-trip is needed for data already on screen.
-  factory DestinationModel.fromMapDestination(MapDestination destination) {
+  factory DestinationModel.fromMapDestination(
+    MapDestination destination, {
+    String state = 'Penang',
+  }) {
     return DestinationModel(
       id: destination.id,
       name: destination.name,
-      state: 'Penang',
+      state: state,
       category: _journalCategoryLabel(destination.category),
       latitude: destination.location.latitude,
       longitude: destination.location.longitude,

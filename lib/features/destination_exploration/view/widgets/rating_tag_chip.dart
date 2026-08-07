@@ -8,9 +8,10 @@ import '../../model/rating_tag_style.dart';
 /// ratings section, the submit-rating form, and the review-published
 /// confirmation so all three render tags identically.
 class RatingTagChip extends StatelessWidget {
-  const RatingTagChip({super.key, required this.tag});
+  const RatingTagChip({super.key, required this.tag, this.suffix});
 
   final String tag;
+  final String? suffix;
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +21,7 @@ class RatingTagChip extends StatelessWidget {
     final foreground = tone == RatingTagTone.caution
         ? AppColors.onErrorContainer
         : AppColors.onSecondaryContainer;
+    final label = suffix == null ? tag : '$tag $suffix';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -27,7 +29,7 @@ class RatingTagChip extends StatelessWidget {
         color: background,
         borderRadius: BorderRadius.circular(AppRadius.full),
       ),
-      child: Text(tag, style: AppTypography.labelSm.copyWith(color: foreground)),
+      child: Text(label, style: AppTypography.labelSm.copyWith(color: foreground)),
     );
   }
 }

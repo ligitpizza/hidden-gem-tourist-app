@@ -34,6 +34,7 @@ class RatingsSection extends StatefulWidget {
 
 class _RatingsSectionState extends State<RatingsSection> {
   late final RatingController _controller;
+  bool _expanded = false;
 
   @override
   void initState() {
@@ -77,6 +78,8 @@ class _RatingsSectionState extends State<RatingsSection> {
           isCheckedIn: widget.isCheckedIn,
           destinationId: widget.destinationId,
           onWriteReview: () => _openWriteReview(context),
+          expanded: _expanded,
+          onExpand: () => setState(() => _expanded = true),
         ),
       ),
     );
@@ -89,12 +92,16 @@ class _RatingsSectionBody extends StatelessWidget {
     required this.isCheckedIn,
     required this.destinationId,
     required this.onWriteReview,
+    required this.expanded,
+    required this.onExpand,
   });
 
   final RatingController controller;
   final bool isCheckedIn;
   final String destinationId;
   final VoidCallback onWriteReview;
+  final bool expanded;
+  final VoidCallback onExpand;
 
   @override
   Widget build(BuildContext context) {
@@ -143,22 +150,27 @@ class _RatingsSectionBody extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 12),
-        for (final review in controller.reviews)
+        for (final review in (expanded ? controller.reviews : controller.reviews.take(3)))
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: _ReviewCard(review: review),
           ),
-        if (controller.hasMoreReviews)
+        if (!expanded && controller.reviews.length > 3)
+          Center(
+            child: TextButton(
+              onPressed: onExpand,
+              child: Text(
+                'Read All ${summary?.ratingCount ?? controller.reviews.length} Reviews',
+              ),
+            ),
+          )
+        else if (expanded && controller.hasMoreReviews)
           Center(
             child: TextButton(
               onPressed: controller.isLoadingReviews
                   ? null
                   : () => controller.loadReviews(destinationId, loadMore: true),
-              child: Text(
-                controller.isLoadingReviews
-                    ? 'Loading…'
-                    : 'Read All ${summary?.ratingCount ?? ''} Reviews'.trim(),
-              ),
+              child: Text(controller.isLoadingReviews ? 'Loading…' : 'Load More Reviews'),
             ),
           ),
       ],
