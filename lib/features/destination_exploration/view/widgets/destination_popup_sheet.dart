@@ -69,7 +69,14 @@ class DestinationPopupSheet extends ConsumerWidget {
           Text(destination.description),
           const SizedBox(height: 12),
           OutlinedButton.icon(
-            onPressed: () => controller.toggleComparisonSelection(destination.id),
+            onPressed: () {
+              final added = controller.toggleComparisonSelection(destination.id);
+              if (!added) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text(DestinationMapController.comparisonLimitMessage)),
+                );
+              }
+            },
             icon: Icon(isSelected ? Icons.check_circle : Icons.add_circle_outline),
             label: Text(isSelected ? 'Selected for Comparison' : 'Select for Comparison'),
             style: isSelected

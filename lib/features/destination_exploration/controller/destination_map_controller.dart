@@ -8,6 +8,11 @@ import '../model/destination_exploration_repository.dart'
     show DestinationExplorationRepository, legDistanceKm, orderByNearestNeighbor;
 import '../model/map_destination.dart';
 
+/// The map's two display modes: normal browsing (tap for a brief popup,
+/// double-tap for the full detail page) vs. comparison selection (tap
+/// toggles a destination in/out of [DestinationMapController.selectedForComparison]).
+enum MapViewMode { explore, comparison }
+
 /// Business logic for the Interactive Destination Map. Kept as a plain
 /// [ChangeNotifier] per the module's MVC convention (see
 /// itinerary_planning's ItineraryPlannerController for the same pattern).
@@ -54,6 +59,18 @@ class DestinationMapController extends ChangeNotifier {
   String? clusterMessage;
 
   final Set<String> selectedForComparison = {};
+  MapViewMode mode = MapViewMode.explore;
+
+  /// Shown by the view when a selection attempt is rejected because the
+  /// 3-destination comparison cap is already reached.
+  static const comparisonLimitMessage =
+      'You can compare up to 3 destinations — remove one first.';
+
+  void setMode(MapViewMode newMode) {
+    if (mode == newMode) return;
+    mode = newMode;
+    notifyListeners();
+  }
 
   List<MapDestination> get filteredDestinations {
     if (selectedCategories.isEmpty) return destinations;
@@ -178,14 +195,19 @@ class DestinationMapController extends ChangeNotifier {
   bool get canCompare =>
       selectedForComparison.length == 2 || selectedForComparison.length == 3;
 
-  void toggleComparisonSelection(String id) {
+  /// Toggles [id] in/out of the comparison selection. Returns false (and
+  /// leaves the selection unchanged) if adding would exceed the 3-item cap,
+  /// so the view can surface [comparisonLimitMessage].
+  bool toggleComparisonSelection(String id) {
     if (selectedForComparison.contains(id)) {
       selectedForComparison.remove(id);
-    } else {
-      if (selectedForComparison.length >= 3) return;
-      selectedForComparison.add(id);
+      notifyListeners();
+      return true;
     }
+    if (selectedForComparison.length >= 3) return false;
+    selectedForComparison.add(id);
     notifyListeners();
+    return true;
   }
 
   void clearComparisonSelection() {
