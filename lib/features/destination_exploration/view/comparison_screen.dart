@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/hidden_gem.dart';
 import '../../itinerary_planning/controller/itinerary_planner_controller.dart';
 import '../controller/comparison_controller.dart';
@@ -144,13 +145,51 @@ class _SideBySideView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final count = controller.destinations.length;
+
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Side-by-Side Comparison',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'A data-driven evaluation of your top-tier shortlisted destinations.',
+                style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppTheme.primarySeed,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'Compare $count',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
         Expanded(
           child: ListView.separated(
-            padding: const EdgeInsets.all(16),
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: controller.destinations.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
             itemBuilder: (context, index) =>
                 _ComparisonCard(destination: controller.destinations[index]),
           ),
@@ -158,7 +197,7 @@ class _SideBySideView extends StatelessWidget {
         SafeArea(
           top: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
             child: FilledButton.icon(
               onPressed: onCalculate,
               icon: const Icon(Icons.auto_awesome),
@@ -178,40 +217,93 @@ class _ComparisonCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+    return SizedBox(
+      width: 220,
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        margin: EdgeInsets.zero,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            Stack(
               children: [
-                CircleAvatar(
-                  backgroundColor: categoryColor(destination.category),
-                  child: Icon(categoryIcon(destination.category), color: Colors.white),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(destination.name, style: Theme.of(context).textTheme.titleMedium),
-                      if (destination.city.isNotEmpty) Text(destination.city),
-                    ],
+                destination.imageUrls.isNotEmpty
+                    ? Image.network(
+                        destination.imageUrls.first,
+                        height: 130,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _ImagePlaceholder(destination: destination),
+                      )
+                    : _ImagePlaceholder(destination: destination),
+                Positioned(
+                  left: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: categoryColor(destination.category),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      destination.category.label.toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 16,
-              runSpacing: 8,
-              children: [
-                _Stat(label: 'Hidden Gem Score', value: destination.hiddenGemScore.toStringAsFixed(2)),
-                _Stat(label: 'User Rating', value: '${destination.avgRating.toStringAsFixed(1)}★'),
-                _Stat(label: 'Crowd Level', value: destination.crowdLevel.label),
-                _DistanceStat(destination: destination),
-              ],
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    destination.name,
+                    style: Theme.of(context).textTheme.titleMedium,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (destination.city.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Icon(Icons.location_on_outlined,
+                            size: 13, color: Theme.of(context).colorScheme.outline),
+                        const SizedBox(width: 2),
+                        Expanded(
+                          child: Text(
+                            destination.city,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context).colorScheme.outline,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  _ScoreBlock(
+                    label: 'HIDDEN GEM SCORE',
+                    value: '${(destination.hiddenGemScore * 10).toStringAsFixed(1)}/10',
+                  ),
+                  const Divider(height: 20),
+                  _ScoreBlock(
+                    label: 'USER RATING',
+                    value: '★${destination.avgRating.toStringAsFixed(1)}',
+                  ),
+                  const Divider(height: 20),
+                  _DistanceBlock(destination: destination),
+                ],
+              ),
             ),
           ],
         ),
@@ -220,19 +312,51 @@ class _ComparisonCard extends StatelessWidget {
   }
 }
 
-class _Stat extends StatelessWidget {
-  const _Stat({required this.label, required this.value});
+class _ImagePlaceholder extends StatelessWidget {
+  const _ImagePlaceholder({required this.destination});
+
+  final ComparisonDestination destination;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 130,
+      width: double.infinity,
+      color: categoryColor(destination.category).withValues(alpha: 0.15),
+      child: Icon(categoryIcon(destination.category), color: categoryColor(destination.category)),
+    );
+  }
+}
+
+class _ScoreBlock extends StatelessWidget {
+  const _ScoreBlock({required this.label, required this.value, this.caption});
 
   final String label;
   final String value;
+  final String? caption;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            letterSpacing: 0.5,
+            color: Theme.of(context).colorScheme.outline,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        if (caption != null && caption!.isNotEmpty)
+          Text(
+            caption!,
+            style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.outline),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
       ],
     );
   }
@@ -240,8 +364,8 @@ class _Stat extends StatelessWidget {
 
 /// Distance is reference-only (FR3.6) — computed asynchronously via the
 /// device's location, never part of the Best Pick score.
-class _DistanceStat extends StatelessWidget {
-  const _DistanceStat({required this.destination});
+class _DistanceBlock extends StatelessWidget {
+  const _DistanceBlock({required this.destination});
 
   final ComparisonDestination destination;
 
@@ -252,13 +376,34 @@ class _DistanceStat extends StatelessWidget {
       future: controller.distanceFromUser(destination),
       builder: (context, snapshot) {
         final value = snapshot.data;
-        return _Stat(
-          label: 'Distance',
-          value: value == null ? 'Not available' : '${value.toStringAsFixed(1)}km',
+        return _ScoreBlock(
+          label: 'DISTANCE',
+          value: value == null ? 'Not available' : '${value.toStringAsFixed(1)} km',
+          caption: destination.difficultyLevel,
         );
       },
     );
   }
+}
+
+/// Very rough drive-time estimate from a straight-line distance — no
+/// routing API involved, just a fixed average-speed assumption, so this is
+/// always shown with a "~" to signal it's an estimate, not a real ETA.
+int _estimateDriveMinutes(double km) => (km / 35 * 60).round();
+
+/// A short, real-data-derived summary of what's driving the recommendation
+/// — built from the two most heavily weighted priorities, not fabricated
+/// per-destination narrative.
+String _preferenceSummary(PriorityWeights weights) {
+  final entries = <MapEntry<String, double>>[
+    MapEntry('quality ratings', weights.rating),
+    MapEntry('cost efficiency', weights.cost),
+    MapEntry('low crowds', weights.crowd),
+    MapEntry('accessibility', weights.accessibility),
+  ]..sort((a, b) => b.value.compareTo(a.value));
+
+  final top = entries.take(2).map((e) => e.key).toList();
+  return 'Based on your priorities: ${top.join(' and ')}.';
 }
 
 class _BestPickView extends StatelessWidget {
@@ -273,185 +418,428 @@ class _BestPickView extends StatelessWidget {
       return const Center(child: Text('No destinations to compare.'));
     }
 
+    final matchScore = (controller.scoreFor(pick) * 100).round();
+
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.zero,
       children: [
-        Card(
-          color: categoryColor(pick.category),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          color: AppTheme.primarySeed,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.gemGoldSoft,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
                   'BEST PICK',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppTheme.primarySeed,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.2,
                     fontSize: 11,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  pick.name,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${(controller.scoreFor(pick) * 100).round()}% match score',
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text('Weighting Preferences', style: Theme.of(context).textTheme.titleSmall),
-        _WeightSlider(
-          label: 'User Rating',
-          value: controller.weights.rating,
-          onChanged: (v) => controller.setWeights(PriorityWeights(
-            rating: v,
-            cost: controller.weights.cost,
-            crowd: controller.weights.crowd,
-            accessibility: controller.weights.accessibility,
-          )),
-        ),
-        _WeightSlider(
-          label: 'Cost Efficiency',
-          value: controller.weights.cost,
-          onChanged: (v) => controller.setWeights(PriorityWeights(
-            rating: controller.weights.rating,
-            cost: v,
-            crowd: controller.weights.crowd,
-            accessibility: controller.weights.accessibility,
-          )),
-        ),
-        _WeightSlider(
-          label: 'Crowd Density',
-          value: controller.weights.crowd,
-          onChanged: (v) => controller.setWeights(PriorityWeights(
-            rating: controller.weights.rating,
-            cost: controller.weights.cost,
-            crowd: v,
-            accessibility: controller.weights.accessibility,
-          )),
-        ),
-        _WeightSlider(
-          label: 'Accessibility',
-          value: controller.weights.accessibility,
-          onChanged: (v) => controller.setWeights(PriorityWeights(
-            rating: controller.weights.rating,
-            cost: controller.weights.cost,
-            crowd: controller.weights.crowd,
-            accessibility: v,
-          )),
-        ),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _AttributeRow(label: 'Category', value: pick.category.label),
-                _AttributeRow(
-                    label: 'Hidden Gem Score', value: pick.hiddenGemScore.toStringAsFixed(2)),
-                _AttributeRow(label: 'User Rating', value: '${pick.avgRating.toStringAsFixed(1)}★'),
-                _AttributeRow(label: 'Crowd Level', value: pick.crowdLevel.label),
-                _AttributeRow(
-                  label: 'Entrance Cost',
-                  value: pick.entranceCost == null
-                      ? 'Not available'
-                      : 'RM${pick.entranceCost!.toStringAsFixed(0)}',
-                ),
-                _AttributeRow(
-                  label: 'Difficulty',
-                  value: pick.difficultyLevel ?? 'Not available',
-                ),
-                _AttributeRow(
-                  label: 'Accessibility Tags',
-                  value: pick.accessibilityTags.isEmpty
-                      ? 'Not available'
-                      : pick.accessibilityTags.join(', '),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Consumer<ComparisonController>(
-          builder: (context, controller, _) => Column(
-            children: [
-              // Reflects whether the pick is already saved/added, so the
-              // button itself is the "is this saved?" check — not just a
-              // one-off SnackBar the user has to trust and forget.
-              riverpod.Consumer(
-                builder: (context, ref, _) {
-                  final itineraryController = ref.watch(itineraryPlannerControllerProvider);
-                  final alreadyAdded =
-                      itineraryController.selectedDestinations.any((d) => d.id == pick.id);
-                  return FilledButton.icon(
-                    onPressed: alreadyAdded
-                        ? null
-                        : () async {
-                            await controller.addBestPickToItinerary(itineraryController);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('${pick.name} added to your itinerary')),
-                              );
-                            }
-                          },
-                    icon: Icon(alreadyAdded ? Icons.check_circle : Icons.card_travel),
-                    label: Text(alreadyAdded ? 'Added to Itinerary' : 'Add to Itinerary'),
-                  );
-                },
               ),
               const SizedBox(height: 8),
-              ListenableBuilder(
-                listenable: FavouriteDestinationsStore.instance,
-                builder: (context, _) {
-                  final alreadySaved = FavouriteDestinationsStore.instance.contains(pick.id);
-                  return OutlinedButton.icon(
-                    onPressed: alreadySaved
-                        ? null
-                        : () {
-                            controller.saveToFavourites(pick);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('${pick.name} saved to favourites')),
-                            );
-                          },
-                    icon: Icon(alreadySaved ? Icons.favorite : Icons.favorite_border),
-                    label: Text(alreadySaved ? 'Saved to Favourites' : 'Save to Favourites'),
-                  );
-                },
+              Text(
+                pick.name,
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall
+                    ?.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 8),
-              TextButton.icon(
-                onPressed: () async {
-                  await controller.shareComparison();
-                  if (controller.shareError != null && context.mounted) {
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(SnackBar(content: Text(controller.shareError!)));
-                  }
-                },
-                icon: const Icon(Icons.share),
-                label: const Text('Share Comparison'),
+              const SizedBox(height: 4),
+              Text(
+                _preferenceSummary(controller.weights),
+                style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          value: matchScore / 100,
+                          strokeWidth: 3,
+                          backgroundColor: Colors.white24,
+                          valueColor: const AlwaysStoppedAnimation(AppTheme.gemGold),
+                        ),
+                        const Icon(Icons.check, color: Colors.white, size: 18),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    '$matchScore% MATCH SCORE',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.tune, size: 16, color: Theme.of(context).colorScheme.outline),
+                  const SizedBox(width: 6),
+                  Text(
+                    'WEIGHTING PREFERENCES',
+                    style: TextStyle(
+                      fontSize: 11,
+                      letterSpacing: 0.5,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _CompactWeightSlider(
+                      label: 'User Rating',
+                      value: controller.weights.rating,
+                      onChanged: (v) => controller.setWeights(PriorityWeights(
+                        rating: v,
+                        cost: controller.weights.cost,
+                        crowd: controller.weights.crowd,
+                        accessibility: controller.weights.accessibility,
+                      )),
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: _CompactWeightSlider(
+                      label: 'Cost Efficiency',
+                      value: controller.weights.cost,
+                      onChanged: (v) => controller.setWeights(PriorityWeights(
+                        rating: controller.weights.rating,
+                        cost: v,
+                        crowd: controller.weights.crowd,
+                        accessibility: controller.weights.accessibility,
+                      )),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _CompactWeightSlider(
+                      label: 'Crowd Density',
+                      value: controller.weights.crowd,
+                      onChanged: (v) => controller.setWeights(PriorityWeights(
+                        rating: controller.weights.rating,
+                        cost: controller.weights.cost,
+                        crowd: v,
+                        accessibility: controller.weights.accessibility,
+                      )),
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: _CompactWeightSlider(
+                      label: 'Accessibility',
+                      value: controller.weights.accessibility,
+                      onChanged: (v) => controller.setWeights(PriorityWeights(
+                        rating: controller.weights.rating,
+                        cost: controller.weights.cost,
+                        crowd: controller.weights.crowd,
+                        accessibility: v,
+                      )),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Card(
+                clipBehavior: Clip.antiAlias,
+                margin: EdgeInsets.zero,
+                child: Table(
+                  columnWidths: const {0: FractionColumnWidth(0.38)},
+                  children: [
+                    _tableRow(
+                      context,
+                      'Attribute',
+                      pick.name,
+                      isHeader: true,
+                    ),
+                    if (pick.imageUrls.isNotEmpty)
+                      _tableRow(
+                        context,
+                        'Photo',
+                        null,
+                        valueWidget: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            pick.imageUrls.first,
+                            height: 56,
+                            width: 80,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    _tableRow(
+                      context,
+                      'Category',
+                      null,
+                      valueWidget: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: categoryColor(pick.category).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            pick.category.label,
+                            style: TextStyle(
+                              color: categoryColor(pick.category),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    _tableRow(
+                      context,
+                      'Hidden Gem Score',
+                      null,
+                      valueWidget: Row(
+                        children: [
+                          const Icon(Icons.emoji_events, size: 16, color: AppTheme.gemGold),
+                          const SizedBox(width: 4),
+                          Text(
+                            (pick.hiddenGemScore * 10).toStringAsFixed(1),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _tableRow(
+                      context,
+                      'User Rating',
+                      '★ ${pick.avgRating.toStringAsFixed(1)}',
+                    ),
+                    _tableRow(
+                      context,
+                      'Distance',
+                      null,
+                      valueWidget: _DistanceCell(destination: pick),
+                    ),
+                    _tableRow(
+                      context,
+                      'Crowd Level',
+                      null,
+                      valueWidget: _CrowdLevelCell(level: pick.crowdLevel),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Consumer<ComparisonController>(
+            builder: (context, controller, _) => Column(
+              children: [
+                // Reflects whether the pick is already saved/added, so the
+                // button itself is the "is this saved?" check — not just a
+                // one-off SnackBar the user has to trust and forget.
+                riverpod.Consumer(
+                  builder: (context, ref, _) {
+                    final itineraryController = ref.watch(itineraryPlannerControllerProvider);
+                    final alreadyAdded =
+                        itineraryController.selectedDestinations.any((d) => d.id == pick.id);
+                    return FilledButton.icon(
+                      onPressed: alreadyAdded
+                          ? null
+                          : () async {
+                              await controller.addBestPickToItinerary(itineraryController);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('${pick.name} added to your itinerary')),
+                                );
+                              }
+                            },
+                      icon: Icon(alreadyAdded ? Icons.check_circle : Icons.card_travel),
+                      label: Text(alreadyAdded ? 'Added to Itinerary' : 'Add to Itinerary'),
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+                ListenableBuilder(
+                  listenable: FavouriteDestinationsStore.instance,
+                  builder: (context, _) {
+                    final alreadySaved = FavouriteDestinationsStore.instance.contains(pick.id);
+                    return OutlinedButton.icon(
+                      onPressed: alreadySaved
+                          ? null
+                          : () {
+                              controller.saveToFavourites(pick);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('${pick.name} saved to favourites')),
+                              );
+                            },
+                      icon: Icon(alreadySaved ? Icons.favorite : Icons.favorite_border),
+                      label: Text(alreadySaved ? 'Saved to Favourites' : 'Save to Favourites'),
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: () async {
+                    await controller.shareComparison();
+                    if (controller.shareError != null && context.mounted) {
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text(controller.shareError!)));
+                    }
+                  },
+                  icon: const Icon(Icons.share),
+                  label: const Text('Share Comparison'),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  TableRow _tableRow(
+    BuildContext context,
+    String label,
+    String? value, {
+    Widget? valueWidget,
+    bool isHeader = false,
+  }) {
+    final labelStyle = isHeader
+        ? const TextStyle(fontWeight: FontWeight.bold)
+        : TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 13);
+    final valueStyle = isHeader
+        ? const TextStyle(fontWeight: FontWeight.bold)
+        : const TextStyle(fontWeight: FontWeight.w600);
+
+    return TableRow(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        ),
+      ),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Text(label, style: labelStyle),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: valueWidget ?? Text(value ?? '', style: valueStyle),
         ),
       ],
     );
   }
 }
 
-class _WeightSlider extends StatelessWidget {
-  const _WeightSlider({required this.label, required this.value, required this.onChanged});
+class _DistanceCell extends StatelessWidget {
+  const _DistanceCell({required this.destination});
+
+  final ComparisonDestination destination;
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = context.read<ComparisonController>();
+    return FutureBuilder<double?>(
+      future: controller.distanceFromUser(destination),
+      builder: (context, snapshot) {
+        final km = snapshot.data;
+        if (km == null) {
+          return const Text('Not available', style: TextStyle(fontWeight: FontWeight.w600));
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${km.toStringAsFixed(1)} km', style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              '~${_estimateDriveMinutes(km)} min drive',
+              style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.outline),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _CrowdLevelCell extends StatelessWidget {
+  const _CrowdLevelCell({required this.level});
+
+  final CrowdLevel level;
+
+  @override
+  Widget build(BuildContext context) {
+    final filled = switch (level) {
+      CrowdLevel.low => 1,
+      CrowdLevel.medium => 2,
+      CrowdLevel.high => 4,
+    };
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < 4; i++)
+          Padding(
+            padding: const EdgeInsets.only(right: 3),
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: i < filled
+                    ? AppTheme.primarySeed
+                    : Theme.of(context).colorScheme.outlineVariant,
+              ),
+            ),
+          ),
+        const SizedBox(width: 6),
+        Text(level.label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+      ],
+    );
+  }
+}
+
+class _CompactWeightSlider extends StatelessWidget {
+  const _CompactWeightSlider({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
 
   final String label;
   final double value;
@@ -459,37 +847,22 @@ class _WeightSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(width: 110, child: Text(label, style: const TextStyle(fontSize: 12))),
-        Expanded(
+        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 4,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+          ),
           child: Slider(
             value: value.clamp(0, 1),
             onChanged: onChanged,
           ),
         ),
       ],
-    );
-  }
-}
-
-class _AttributeRow extends StatelessWidget {
-  const _AttributeRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: Colors.grey)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
-        ],
-      ),
     );
   }
 }

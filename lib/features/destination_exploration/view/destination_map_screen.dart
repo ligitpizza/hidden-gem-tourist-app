@@ -5,16 +5,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/theme/app_theme.dart';
+import '../../../shared/models/hidden_gem.dart';
 import '../../gamification_journal/controller/checkin_controller.dart';
 import '../../gamification_journal/model/destination_model.dart';
 import '../../gamification_journal/view/checkin/destination_detail_screen.dart';
+import '../../itinerary_planning/controller/itinerary_planner_controller.dart';
+import '../../itinerary_planning/view/itinerary_routes.dart';
 import '../controller/destination_map_controller.dart';
 import '../model/map_destination.dart';
 import 'comparison_routes.dart';
+import 'destination_search_screen.dart';
 import 'widgets/category_filter_bar.dart';
 import 'widgets/category_style.dart';
 import 'widgets/destination_popup_sheet.dart';
@@ -34,9 +40,16 @@ class DestinationMapScreen extends ConsumerWidget {
         child: Column(
           children: [
             const SizedBox(height: 8),
-            _MapModeSwitcher(controller: controller),
-            const SizedBox(height: 8),
-            const CategoryFilterBar(),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Expanded(child: _MapModeSwitcher(controller: controller)),
+                  const SizedBox(width: 8),
+                  const CategoryFilterBar(),
+                ],
+              ),
+            ),
             const SizedBox(height: 8),
             Expanded(child: _MapBody(controller: controller)),
           ],
@@ -55,24 +68,21 @@ class _MapModeSwitcher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: SegmentedButton<MapViewMode>(
-        segments: const [
-          ButtonSegment(
-            value: MapViewMode.explore,
-            label: Text('Map View'),
-            icon: Icon(Icons.map_outlined),
-          ),
-          ButtonSegment(
-            value: MapViewMode.comparison,
-            label: Text('Comparison'),
-            icon: Icon(Icons.compare_arrows),
-          ),
-        ],
-        selected: {controller.mode},
-        onSelectionChanged: (selection) => controller.setMode(selection.first),
-      ),
+    return SegmentedButton<MapViewMode>(
+      segments: const [
+        ButtonSegment(
+          value: MapViewMode.explore,
+          label: Text('Map View'),
+          icon: Icon(Icons.map_outlined),
+        ),
+        ButtonSegment(
+          value: MapViewMode.comparison,
+          label: Text('Comparison'),
+          icon: Icon(Icons.compare_arrows),
+        ),
+      ],
+      selected: {controller.mode},
+      onSelectionChanged: (selection) => controller.setMode(selection.first),
     );
   }
 }
@@ -89,23 +99,55 @@ class _MapBody extends StatefulWidget {
 class _MapBodyState extends State<_MapBody> {
   DestinationMapController get controller => widget.controller;
 
-  // onMarkerTap (below) is the marker-cluster package's only per-marker
-  // gesture hook, and single-tap already opens a blocking modal sheet — so
-  // double-tap can't be resolved by Flutter's gesture arena. Instead, a
-  // single tap is held for a short window in case a second tap on the same
-  // marker follows, in which case it's treated as a double-tap.
-  static const _doubleTapWindow = Duration(milliseconds: 300);
-  String? _pendingTapId;
-  Timer? _tapTimer;
+  final MapController _mapController = MapController();
 
-  // The last-tapped destination while in comparison mode, shown as a
-  // preview card above the selection summary panel (cleared on mode switch).
-  MapDestination? _previewDestination;
+  Future<void> _viewThemedTrail() async {
+    await controller.viewThemedCluster(origin: controller.selectedDestination);
+    final anchor = controller.clusterAnchor;
+    if (anchor != null) {
+      _mapController.move(anchor.location, 14);
+    }
+  }
 
-  @override
-  void dispose() {
-    _tapTimer?.cancel();
-    super.dispose();
+  void _zoomIn() {
+    final camera = _mapController.camera;
+    _mapController.move(camera.center, camera.zoom + 1);
+  }
+
+  void _zoomOut() {
+    final camera = _mapController.camera;
+    _mapController.move(camera.center, camera.zoom - 1);
+  }
+
+  Future<void> _locateMe() async {
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location permission is required to locate you on the map.'),
+            ),
+          );
+        }
+        return;
+      }
+      final position =
+          await Geolocator.getCurrentPosition(timeLimit: const Duration(seconds: 5));
+      final point = LatLng(position.latitude, position.longitude);
+      controller.setUserLocation(point);
+      _mapController.move(point, 15);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't determine your location right now.")),
+        );
+      }
+    }
   }
 
   void _handleMarkerTap(String id) {
@@ -114,26 +156,11 @@ class _MapBodyState extends State<_MapBody> {
     final destination = matches.first;
 
     if (controller.mode == MapViewMode.comparison) {
-      setState(() => _previewDestination = destination);
       _toggleComparison(destination.id);
       return;
     }
 
-    if (_pendingTapId == id && _tapTimer != null) {
-      _tapTimer!.cancel();
-      _tapTimer = null;
-      _pendingTapId = null;
-      _openDetail(destination);
-      return;
-    }
-
-    _tapTimer?.cancel();
-    _pendingTapId = id;
-    _tapTimer = Timer(_doubleTapWindow, () {
-      _tapTimer = null;
-      _pendingTapId = null;
-      _openPopup(destination);
-    });
+    _openPopup(destination);
   }
 
   void _toggleComparison(String id) {
@@ -154,16 +181,15 @@ class _MapBodyState extends State<_MapBody> {
     ).whenComplete(controller.clearSelection);
   }
 
-  void _openDetail(MapDestination destination) {
-    // The detail screen's badge-progress lookup reads
-    // CheckInController.destinations, which is otherwise only populated by
-    // visiting the Journal tab — make sure it's loaded so badge matching
-    // works when the detail screen is reached from this map instead.
+  /// Opens a single destination's detail page directly — used by the
+  /// themed trail card's tappable stop rows, which aren't behind a popup
+  /// sheet so there's nothing to pop first (contrast with
+  /// DestinationPopupSheet's own View Details, which closes itself first).
+  void _openStopDetail(MapDestination destination) {
     final checkInController = context.read<CheckInController>();
     if (checkInController.destinations.isEmpty) {
       unawaited(checkInController.loadDestinations().catchError((_) {}));
     }
-
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => DestinationDetailScreen(
@@ -197,6 +223,7 @@ class _MapBodyState extends State<_MapBody> {
     return Stack(
       children: [
         FlutterMap(
+          mapController: _mapController,
           options: const MapOptions(
             initialCenter: LatLng(5.4164, 100.3327), // Penang — matches the seeded dataset
             initialZoom: 12,
@@ -208,6 +235,17 @@ class _MapBodyState extends State<_MapBody> {
             ),
             MarkerClusterLayerWidget(
               options: MarkerClusterLayerOptions(
+                // A clustered bubble routes taps through the package's own
+                // onClusterTap (just zooms in) instead of onMarkerTap below,
+                // so a destination inside an unspread cluster can't be
+                // selected until you zoom in past it — same as tapping any
+                // cluster to explore it normally. (A per-mode radius was
+                // tried here to disable clustering entirely in Comparison
+                // mode, but MarkerClusterLayerOptions rebuilds its whole
+                // cluster tree from scratch on every rebuild — i.e. on every
+                // selection toggle — and radius 1 is the most expensive
+                // shape for that tree to recompute, which introduced visible
+                // lag. Kept constant instead.)
                 maxClusterRadius: 45,
                 markers: [
                   for (final destination in controller.filteredDestinations)
@@ -264,20 +302,47 @@ class _MapBodyState extends State<_MapBody> {
                   ),
                 ],
               ),
+            // "You are here" — set by the locate-me control and by View
+            // Themed Trail when it resolves current location. Kept out of
+            // the clustered destination layer so it never merges into a
+            // cluster bubble.
+            if (controller.userLocation != null)
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: controller.userLocation!,
+                    width: 24,
+                    height: 24,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.blue,
+                        border: Border.all(color: Colors.white, width: 3),
+                        boxShadow: const [
+                          BoxShadow(color: Colors.black26, blurRadius: 4),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
         if (controller.mode == MapViewMode.explore) ...[
-          Positioned(
-            right: 16,
-            bottom: 16,
-            child: _MapActionsFab(controller: controller),
-          ),
+          // Hidden while the trail card is already showing — re-offering
+          // the same trigger next to its own result is redundant clutter.
+          if (controller.clusterAnchor == null && controller.clusterMessage == null)
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: _MapActionsFab(onPressed: _viewThemedTrail),
+            ),
           if (controller.clusterAnchor != null || controller.clusterMessage != null)
             Positioned(
               left: 16,
               right: 16,
               bottom: 84,
-              child: _ClusterCard(controller: controller),
+              child: _ClusterCard(controller: controller, onStopTap: _openStopDetail),
             ),
         ],
         if (controller.mode == MapViewMode.comparison)
@@ -285,24 +350,107 @@ class _MapBodyState extends State<_MapBody> {
             left: 16,
             right: 16,
             bottom: 16,
-            child: _ComparisonSelectionPanel(
-              controller: controller,
-              preview: _previewDestination,
-            ),
+            child: _ComparisonSelectionPanel(controller: controller),
           ),
+        Positioned(
+          right: 16,
+          top: 16,
+          child: _MapZoomControls(
+            onZoomIn: _zoomIn,
+            onZoomOut: _zoomOut,
+            onLocateMe: _locateMe,
+            onSearch: controller.mode == MapViewMode.comparison
+                ? () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const DestinationSearchScreen()),
+                    )
+                : null,
+          ),
+        ),
       ],
     );
   }
 }
 
+/// Right-side zoom/locate controls, visible in both map modes. Search sits
+/// below locate-me and only appears in Comparison mode — it's an alternate
+/// way to pick destinations for comparison, not a general map action.
+class _MapZoomControls extends StatelessWidget {
+  const _MapZoomControls({
+    required this.onZoomIn,
+    required this.onZoomOut,
+    required this.onLocateMe,
+    required this.onSearch,
+  });
+
+  final VoidCallback onZoomIn;
+  final VoidCallback onZoomOut;
+  final VoidCallback onLocateMe;
+  final VoidCallback? onSearch;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _MapControlButton(icon: Icons.add, tooltip: 'Zoom in', onPressed: onZoomIn),
+        const SizedBox(height: 8),
+        _MapControlButton(icon: Icons.remove, tooltip: 'Zoom out', onPressed: onZoomOut),
+        const SizedBox(height: 16),
+        _MapControlButton(icon: Icons.my_location, tooltip: 'My location', onPressed: onLocateMe),
+        if (onSearch != null) ...[
+          const SizedBox(height: 16),
+          _MapControlButton(
+            icon: Icons.search,
+            tooltip: 'Search destinations to compare',
+            onPressed: onSearch!,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _MapControlButton extends StatelessWidget {
+  const _MapControlButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      shape: const CircleBorder(),
+      elevation: 2,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onPressed,
+        child: Tooltip(
+          message: tooltip,
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Icon(icon, size: 20, color: Colors.black87),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Shown at the bottom of the map while [MapViewMode.comparison] is active:
-/// a preview of the last-tapped destination (with an explicit add/remove
-/// action) above a running summary of the current selection.
+/// tapping a marker directly toggles it in/out of the selection (see
+/// [_MapBodyState._handleMarkerTap]) — this is just the running summary of
+/// whatever's currently selected, with the button to go compare them.
 class _ComparisonSelectionPanel extends StatelessWidget {
-  const _ComparisonSelectionPanel({required this.controller, required this.preview});
+  const _ComparisonSelectionPanel({required this.controller});
 
   final DestinationMapController controller;
-  final MapDestination? preview;
 
   @override
   Widget build(BuildContext context) {
@@ -310,141 +458,80 @@ class _ComparisonSelectionPanel extends StatelessWidget {
     final selected =
         controller.destinations.where((d) => selectedIds.contains(d.id)).toList();
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (preview != null) ...[
-          _ComparisonPreviewCard(destination: preview!, controller: controller),
-          const SizedBox(height: 8),
-        ],
-        if (selected.isNotEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+    // Gated on the selection Set directly (the source of truth updated
+    // synchronously by toggleComparisonSelection) rather than the
+    // destinations-join above, so the card can never lag behind a tap.
+    if (selectedIds.isEmpty) return const SizedBox.shrink();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'SELECT DESTINATIONS',
-                              style: TextStyle(
-                                fontSize: 11,
-                                letterSpacing: 1,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            Text(
-                              '${selected.length} item${selected.length == 1 ? '' : 's'} selected',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                          ],
+                      Text(
+                        'SELECT DESTINATIONS',
+                        style: TextStyle(
+                          fontSize: 11,
+                          letterSpacing: 1,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
-                      SizedBox(
-                        width: 24.0 + 22.0 * (selected.length - 1),
-                        height: 32,
-                        child: Stack(
-                          children: [
-                            for (var i = 0; i < selected.length; i++)
-                              Positioned(
-                                left: i * 22.0,
-                                child: CircleAvatar(
-                                  radius: 16,
-                                  backgroundColor: categoryColor(selected[i].category),
-                                  backgroundImage: selected[i].imageUrls.isNotEmpty
-                                      ? NetworkImage(selected[i].imageUrls.first)
-                                      : null,
-                                  child: selected[i].imageUrls.isEmpty
-                                      ? Icon(categoryIcon(selected[i].category),
-                                          size: 16, color: Colors.white)
-                                      : null,
-                                ),
-                              ),
-                          ],
-                        ),
+                      Text(
+                        '${selected.length} item${selected.length == 1 ? '' : 's'} selected',
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: selected.length >= 2
-                        ? () => context.push(ComparisonRoutes.compare, extra: selectedIds.toList())
-                        : null,
-                    icon: const Icon(Icons.compare_arrows),
-                    label: Text(
-                      selected.length < 2
-                          ? 'Select at least 2 to compare'
-                          : 'Compare ${selected.length} Destination${selected.length == 1 ? '' : 's'}',
-                    ),
+                ),
+                SizedBox(
+                  width: 24.0 + 22.0 * (selected.length - 1),
+                  height: 32,
+                  child: Stack(
+                    children: [
+                      for (var i = 0; i < selected.length; i++)
+                        Positioned(
+                          left: i * 22.0,
+                          child: CircleAvatar(
+                            radius: 16,
+                            backgroundColor: categoryColor(selected[i].category),
+                            backgroundImage: selected[i].imageUrls.isNotEmpty
+                                ? NetworkImage(selected[i].imageUrls.first)
+                                : null,
+                            child: selected[i].imageUrls.isEmpty
+                                ? Icon(categoryIcon(selected[i].category),
+                                    size: 16, color: Colors.white)
+                                : null,
+                          ),
+                        ),
+                    ],
                   ),
-                ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.clear),
+                  tooltip: 'Clear selected destinations',
+                  onPressed: controller.clearComparisonSelection,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: selected.length >= 2
+                  ? () => context.push(ComparisonRoutes.compare, extra: selectedIds.toList())
+                  : null,
+              icon: const Icon(Icons.compare_arrows),
+              label: Text(
+                selected.length < 2
+                    ? 'Select at least 2 to compare'
+                    : 'Compare ${selected.length} Destination${selected.length == 1 ? '' : 's'}',
               ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _ComparisonPreviewCard extends StatelessWidget {
-  const _ComparisonPreviewCard({required this.destination, required this.controller});
-
-  final MapDestination destination;
-  final DestinationMapController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final isSelected = controller.selectedForComparison.contains(destination.id);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: destination.imageUrls.isNotEmpty
-                  ? Image.network(
-                      destination.imageUrls.first,
-                      width: 56,
-                      height: 56,
-                      fit: BoxFit.cover,
-                    )
-                  : Container(
-                      width: 56,
-                      height: 56,
-                      color: categoryColor(destination.category),
-                      child: Icon(categoryIcon(destination.category), color: Colors.white),
-                    ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(destination.name, style: Theme.of(context).textTheme.titleMedium),
-                  Text('${destination.avgRating.toStringAsFixed(1)}★'),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: () {
-                final added = controller.toggleComparisonSelection(destination.id);
-                if (!added) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text(DestinationMapController.comparisonLimitMessage)),
-                  );
-                }
-              },
-              icon: Icon(isSelected ? Icons.check : Icons.add),
-              label: Text(isSelected ? 'Added' : 'Add to Compare'),
             ),
           ],
         ),
@@ -457,64 +544,286 @@ class _ComparisonPreviewCard extends StatelessWidget {
 /// here too, but now has its own dedicated mode via [_MapModeSwitcher], so
 /// this only needs to trigger the themed trail anymore.
 class _MapActionsFab extends StatelessWidget {
-  const _MapActionsFab({required this.controller});
+  const _MapActionsFab({required this.onPressed});
 
-  final DestinationMapController controller;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     return FloatingActionButton.extended(
       heroTag: 'mapAction_viewThemedTrail',
-      onPressed: () => controller.viewThemedCluster(origin: controller.selectedDestination),
+      onPressed: onPressed,
       icon: const Icon(Icons.route_outlined),
       label: const Text('View Themed Trail'),
     );
   }
 }
 
+/// A trail-flavored word per category, used for the cluster badge/title
+/// ("Heritage Cluster" / "Heritage Trail" for culture, etc.) — purely a
+/// display label, doesn't change what [HiddenGemCategory] means anywhere
+/// else.
+String _trailFlavor(HiddenGemCategory category) => switch (category) {
+      HiddenGemCategory.culture => 'Heritage',
+      HiddenGemCategory.nature => 'Nature',
+      HiddenGemCategory.food => 'Culinary',
+      HiddenGemCategory.viewpoint => 'Scenic',
+      HiddenGemCategory.craft => 'Artisan',
+    };
+
+/// First sentence of a destination's description, capped to a short
+/// highlight line for the trail stop list — the data has no dedicated
+/// "highlight" field, so this is the closest approximation without
+/// inventing content.
+String _shortHighlight(String description) {
+  final trimmed = description.trim();
+  if (trimmed.isEmpty) return '';
+  final firstSentence = trimmed.split(RegExp(r'(?<=[.!?])\s')).first;
+  if (firstSentence.length <= 42) return firstSentence;
+  return '${firstSentence.substring(0, 42).trimRight()}…';
+}
+
 class _ClusterCard extends StatelessWidget {
-  const _ClusterCard({required this.controller});
+  const _ClusterCard({required this.controller, required this.onStopTap});
 
   final DestinationMapController controller;
+  final ValueChanged<MapDestination> onStopTap;
 
   @override
   Widget build(BuildContext context) {
+    final anchor = controller.clusterAnchor;
+
+    if (anchor == null) {
+      // Loading/error/empty states — no trail data to show yet.
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  controller.clusterMessage ?? 'Suggested Trail',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              IconButton(icon: const Icon(Icons.close), onPressed: controller.clearCluster),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final flavor = _trailFlavor(anchor.category);
+    final stopCount = 1 + controller.clusterStops.length;
+
+    // Positioned(left, right, bottom) with no top constraint lets this card
+    // grow upward without bound — with a header, up to 4 numbered stops, and
+    // a footer, that easily exceeds the visible screen height, pushing the
+    // header (and its close button) off the top of the screen entirely.
+    // Capping the card and letting only the stop list scroll keeps the
+    // header/footer always reachable.
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+      clipBehavior: Clip.antiAlias,
+      margin: EdgeInsets.zero,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 14, 8, 16),
+            color: AppTheme.primarySeed,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Text(
-                    controller.clusterMessage ?? 'Suggested Trail',
-                    style: Theme.of(context).textTheme.titleMedium,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.gemGoldSoft,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '$flavor Cluster',
+                          style: const TextStyle(
+                            color: AppTheme.primarySeed,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${controller.totalDistanceKm.toStringAsFixed(1)}km total',
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                      onPressed: controller.clearCluster,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '$flavor Trail',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: controller.clearCluster,
+                const SizedBox(height: 4),
+                Text(
+                  'Discover $stopCount curated ${flavor.toLowerCase()} '
+                  'destination${stopCount == 1 ? '' : 's'} along this trail.',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12.5),
                 ),
               ],
             ),
-            if (controller.clusterAnchor != null) ...[
-              Text('${controller.totalDistanceKm.toStringAsFixed(1)}km total'),
-              const SizedBox(height: 8),
-              Text('1. ${controller.clusterAnchor!.name} • Selected Anchor'),
-              for (var i = 0; i < controller.clusterStops.length; i++)
-                Text(
-                  '${i + 2}. ${controller.clusterStops[i].name} • '
-                  '${controller.legDistancesKm[i].toStringAsFixed(1)}km away',
-                ),
-              const SizedBox(height: 8),
-              const Text(
-                'Suggested path only — not a navigable route',
-                style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+              child: Column(
+                children: [
+                  _TrailStopRow(
+                    number: 1,
+                    isAnchor: true,
+                    name: anchor.name,
+                    detail: 'Selected Anchor',
+                    highlight: _shortHighlight(anchor.description),
+                    onTap: () => onStopTap(anchor),
+                  ),
+                  for (var i = 0; i < controller.clusterStops.length; i++)
+                    _TrailStopRow(
+                      number: i + 2,
+                      isAnchor: false,
+                      name: controller.clusterStops[i].name,
+                      detail: '${controller.legDistancesKm[i].toStringAsFixed(1)}km away',
+                      highlight: _shortHighlight(controller.clusterStops[i].description),
+                      onTap: () => onStopTap(controller.clusterStops[i]),
+                    ),
+                ],
               ),
-            ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  final itineraryController = ProviderScope.containerOf(context, listen: false)
+                      .read(itineraryPlannerControllerProvider);
+                  final added = controller.addTrailToItinerary(itineraryController);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        added == 0
+                            ? 'This trail is already in your itinerary'
+                            : 'Added $added stop${added == 1 ? '' : 's'} to your itinerary',
+                      ),
+                      action: SnackBarAction(
+                        label: 'View',
+                        onPressed: () => context.push(ItineraryRoutes.planRoute),
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.card_travel),
+                label: const Text('Add Trail to Itinerary'),
+              ),
+            ),
+          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 14, color: Theme.of(context).colorScheme.outline),
+                const SizedBox(width: 6),
+                Text(
+                  'Suggested path only — not a navigable route',
+                  style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.outline),
+                ),
+              ],
+            ),
+          ),
+        ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrailStopRow extends StatelessWidget {
+  const _TrailStopRow({
+    required this.number,
+    required this.isAnchor,
+    required this.name,
+    required this.detail,
+    required this.highlight,
+    required this.onTap,
+  });
+
+  final int number;
+  final bool isAnchor;
+  final String name;
+  final String detail;
+  final String highlight;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isAnchor ? AppTheme.primarySeed : Colors.transparent,
+                border: isAnchor ? null : Border.all(color: AppTheme.gemGold, width: 1.5),
+              ),
+              child: Text(
+                '$number',
+                style: TextStyle(
+                  color: isAnchor ? Colors.white : AppTheme.gemGold,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  const SizedBox(height: 2),
+                  Text(
+                    highlight.isEmpty ? detail : '$detail • $highlight',
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outline),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, size: 18, color: Theme.of(context).colorScheme.outline),
           ],
         ),
       ),

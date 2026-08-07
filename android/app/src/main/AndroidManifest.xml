@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for the interactive map's "View Themed Trail" (anchors on
+         the user's current location when none is selected) and the
+         locate-me control — without these, geolocator's permission request
+         never shows the system prompt at all (silently denied). -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <application
         android:label="collab"
         android:name="${applicationName}"

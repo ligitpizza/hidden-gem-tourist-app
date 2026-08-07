@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../shared/models/destination.dart' as shared;
 import '../../../shared/models/hidden_gem.dart';
+import '../../itinerary_planning/controller/itinerary_planner_controller.dart';
 import '../model/destination_exploration_repository.dart'
     show DestinationExplorationRepository, legDistanceKm, orderByNearestNeighbor;
 import '../model/map_destination.dart';
@@ -60,6 +62,17 @@ class DestinationMapController extends ChangeNotifier {
 
   final Set<String> selectedForComparison = {};
   MapViewMode mode = MapViewMode.explore;
+
+  /// The user's last-known position — set by [viewThemedCluster] (when
+  /// resolving from current location) and by the map's locate-me control,
+  /// so a single "you are here" marker stays in sync regardless of which
+  /// action fetched it.
+  LatLng? userLocation;
+
+  void setUserLocation(LatLng point) {
+    userLocation = point;
+    notifyListeners();
+  }
 
   /// Shown by the view when a selection attempt is rejected because the
   /// 3-destination comparison cap is already reached.
@@ -159,6 +172,7 @@ class DestinationMapController extends ChangeNotifier {
           notifyListeners();
           return;
         }
+        userLocation = point;
         anchor = await _repository.nearestDestination(point);
         if (anchor == null) {
           clusterAnchor = null;
@@ -192,6 +206,32 @@ class DestinationMapController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Adds every stop of the current themed trail (anchor + [clusterStops])
+  /// to the itinerary planner — the trail's one follow-up action, since
+  /// otherwise viewing it has no real outcome beyond dismissing the card.
+  /// Returns how many were newly added (already-planned stops are skipped,
+  /// not duplicated) so the view can show accurate feedback.
+  int addTrailToItinerary(ItineraryPlannerController itineraryController) {
+    final anchor = clusterAnchor;
+    if (anchor == null) return 0;
+
+    var added = 0;
+    for (final destination in [anchor, ...clusterStops]) {
+      final alreadyPlanned =
+          itineraryController.selectedDestinations.any((d) => d.id == destination.id);
+      if (alreadyPlanned) continue;
+      itineraryController.addDestination(shared.Destination(
+        id: destination.id,
+        name: destination.name,
+        city: '',
+        category: _representativeCategory(destination.category),
+        location: destination.location,
+      ));
+      added++;
+    }
+    return added;
+  }
+
   bool get canCompare =>
       selectedForComparison.length == 2 || selectedForComparison.length == 3;
 
@@ -214,6 +254,28 @@ class DestinationMapController extends ChangeNotifier {
     if (selectedForComparison.isEmpty) return;
     selectedForComparison.clear();
     notifyListeners();
+  }
+}
+
+/// A representative [shared.DestinationCategory] for a [HiddenGemCategory] —
+/// lossy (several raw categories bucket into one HiddenGemCategory) but
+/// good enough for the itinerary integration, which only needs *a*
+/// reasonable category for display. Mirrors
+/// ComparisonController's identical mapping (destination_exploration's own
+/// small, self-contained duplication rather than a shared cross-file
+/// dependency for a 6-line switch).
+shared.DestinationCategory _representativeCategory(HiddenGemCategory category) {
+  switch (category) {
+    case HiddenGemCategory.food:
+      return shared.DestinationCategory.restaurant;
+    case HiddenGemCategory.culture:
+      return shared.DestinationCategory.heritageSite;
+    case HiddenGemCategory.nature:
+      return shared.DestinationCategory.park;
+    case HiddenGemCategory.viewpoint:
+      return shared.DestinationCategory.viewpoint;
+    case HiddenGemCategory.craft:
+      return shared.DestinationCategory.craft;
   }
 }
 

@@ -6,40 +6,67 @@ import '../../../../shared/models/hidden_gem.dart';
 import '../../controller/destination_map_controller.dart';
 import 'category_style.dart';
 
-/// Horizontal row of category filter chips (FR1.3) — toggling a chip
-/// narrows [DestinationMapController.filteredDestinations]; deselecting
-/// all chips shows every destination again (A1).
+/// A small filter icon that opens a vertical category checklist in a
+/// bottom sheet (FR1.3) — kept off the map header itself so the header
+/// doesn't get cluttered with a horizontal row of chips. Toggling a
+/// category narrows [DestinationMapController.filteredDestinations];
+/// deselecting all of them shows every destination again (A1).
 class CategoryFilterBar extends ConsumerWidget {
   const CategoryFilterBar({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.watch(destinationMapControllerProvider);
+    final activeCount = controller.selectedCategories.length;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final category in HiddenGemCategory.values)
-            FilterChip(
-              avatar: Icon(
-                categoryIcon(category),
-                size: 18,
-                color: controller.selectedCategories.contains(category)
-                    ? Colors.white
-                    : categoryColor(category),
-              ),
-              label: Text(category.label),
-              selected: controller.selectedCategories.contains(category),
-              selectedColor: categoryColor(category),
-              labelStyle: TextStyle(
-                color: controller.selectedCategories.contains(category) ? Colors.white : null,
-              ),
-              onSelected: (_) => controller.toggleCategory(category),
+    return Badge(
+      label: Text('$activeCount'),
+      isLabelVisible: activeCount > 0,
+      child: IconButton.outlined(
+        icon: const Icon(Icons.tune),
+        tooltip: 'Filter by category',
+        onPressed: () => _showCategorySheet(context, controller),
+      ),
+    );
+  }
+
+  void _showCategorySheet(BuildContext context, DestinationMapController controller) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => ListenableBuilder(
+        listenable: controller,
+        builder: (context, _) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Filter by Category', style: Theme.of(context).textTheme.titleMedium),
+                    if (controller.selectedCategories.isNotEmpty)
+                      TextButton(
+                        onPressed: controller.clearFilters,
+                        child: const Text('Clear all'),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                for (final category in HiddenGemCategory.values)
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    secondary: Icon(categoryIcon(category), color: categoryColor(category)),
+                    title: Text(category.label),
+                    value: controller.selectedCategories.contains(category),
+                    onChanged: (_) => controller.toggleCategory(category),
+                  ),
+              ],
             ),
-        ],
+          ),
+        ),
       ),
     );
   }

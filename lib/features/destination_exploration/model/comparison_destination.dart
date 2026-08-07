@@ -23,6 +23,7 @@ class ComparisonDestination {
   final List<String> accessibilityTags;
   final int? visitDurationMinutes;
   final String? operatingHours;
+  final List<String> imageUrls;
 
   const ComparisonDestination({
     required this.id,
@@ -40,6 +41,7 @@ class ComparisonDestination {
     this.accessibilityTags = const [],
     this.visitDurationMinutes,
     this.operatingHours,
+    this.imageUrls = const [],
   });
 
   /// Computed on demand from the shared formula — never stored, so the

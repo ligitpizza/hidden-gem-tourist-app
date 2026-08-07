@@ -34,12 +34,23 @@ class DestinationSearchController extends ChangeNotifier {
 
   Future<void> _loadTrending() async {
     try {
-      trending = await _repository.searchDestinations();
+      // A generous limit (not the default 20) so visibleTrending's
+      // client-side category filter usually has enough of each category to
+      // show, instead of narrowing an already-small top-rated list to zero.
+      trending = await _repository.searchDestinations(limit: 60);
       notifyListeners();
     } catch (_) {
       // Background load at construction time; leave trending as its default
       // empty list rather than letting the failure propagate.
     }
+  }
+
+  /// [trending], narrowed to [categoryFilter] — the trending list itself is
+  /// a fixed top-rated snapshot loaded once, so filtering happens here
+  /// rather than re-fetching every time the category changes.
+  List<MapDestination> get visibleTrending {
+    if (categoryFilter == null) return trending;
+    return trending.where((d) => d.category == categoryFilter).toList();
   }
 
   /// Completes the pending completer if it exists and hasn't been completed yet.
@@ -107,8 +118,22 @@ class DestinationSearchController extends ChangeNotifier {
   }
 
   void setCategoryFilter(HiddenGemCategory? category) {
+    if (categoryFilter == category) return;
     categoryFilter = category;
-    if (query.trim().isNotEmpty) search(query);
+    if (query.trim().isNotEmpty) {
+      // search() already calls notifyListeners() once its debounce settles.
+      search(query);
+    } else {
+      // No active query means search() never runs — without this, neither
+      // the pill highlight nor visibleTrending would ever update.
+      notifyListeners();
+    }
+  }
+
+  void clearRecentSearches() {
+    if (recentSearches.isEmpty) return;
+    recentSearches.clear();
+    notifyListeners();
   }
 
   void clearQuery() {

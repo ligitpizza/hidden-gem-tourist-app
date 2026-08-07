@@ -38,7 +38,9 @@ class AppBottomNavBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 64,
+          // 64 was too tight — content (icon container + spacing + label)
+          // overflowed by ~1px on some devices' font/scale metrics.
+          height: 72,
           child: Row(
             children: [
               for (var i = 0; i < _destinations.length; i++)

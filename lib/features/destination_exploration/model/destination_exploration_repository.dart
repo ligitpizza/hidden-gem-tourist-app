@@ -70,6 +70,9 @@ class DestinationExplorationRepository {
     final rawTags = row['accessibility_tags'];
     final accessibilityTags =
         rawTags is List ? rawTags.whereType<String>().toList() : const <String>[];
+    final rawImages = row['images'];
+    final imageUrls =
+        rawImages is List ? rawImages.whereType<String>().toList() : const <String>[];
 
     return ComparisonDestination(
       id: row['id'] as String,
@@ -90,6 +93,7 @@ class DestinationExplorationRepository {
       accessibilityTags: accessibilityTags,
       visitDurationMinutes: (row['visit_duration_minutes'] as num?)?.toInt(),
       operatingHours: row['operating_hours'] as String?,
+      imageUrls: imageUrls,
     );
   }
 
