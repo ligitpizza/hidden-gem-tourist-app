@@ -13,8 +13,8 @@ class _NavDestination {
 /// + [_primaryRight] always show; [_secondary] lives behind the "More" tab.
 const _destinations = [
   _NavDestination(icon: Icons.map_outlined, selectedIcon: Icons.map, label: 'Map'), // 0
-  _NavDestination(icon: Icons.smart_toy_outlined, selectedIcon: Icons.smart_toy, label: 'Assistant'), // 1
-  _NavDestination(icon: Icons.explore_outlined, selectedIcon: Icons.explore, label: 'Explore'), // 2
+  _NavDestination(icon: Icons.explore_outlined, selectedIcon: Icons.explore, label: 'Explore'), // 1
+  _NavDestination(icon: Icons.smart_toy_outlined, selectedIcon: Icons.smart_toy, label: 'Assistant'), // 2
   _NavDestination(icon: Icons.bookmark_outline, selectedIcon: Icons.bookmark, label: 'Saved'), // 3
   _NavDestination(icon: Icons.luggage_outlined, selectedIcon: Icons.luggage, label: 'Travel Prep'), // 4
   _NavDestination(icon: Icons.auto_stories_outlined, selectedIcon: Icons.auto_stories, label: 'Journal'), // 5
@@ -22,12 +22,12 @@ const _destinations = [
 ];
 
 /// Always-visible tabs, either side of the center "More" button.
-const _primaryLeft = [0, 1]; // Map, Explore
+const _primaryLeft = [0, 2]; // Map, Assistant
 const _primaryRight = [5, 6]; // Journal, Profile
 
 /// Tucked behind "More" — everything not important enough for the primary
 /// row, revealed as a horizontal strip above it.
-const _secondary = [2, 3, 4]; // Assistant, Saved, Travel Prep
+const _secondary = [1, 3, 4]; // Explore, Saved, Travel Prep
 
 /// Two-layer bottom nav: a primary row (Map, Explore, More, Journal,
 /// Profile) always visible, and a secondary horizontal strip (Assistant,
