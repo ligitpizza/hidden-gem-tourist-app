@@ -119,6 +119,12 @@ class ComparisonController extends ChangeNotifier {
     return ratingW * ratingNorm + crowdW * crowdScore + accessibilityW * accessibilityNorm;
   }
 
+  /// The composite Best Pick score for [destination] under the current
+  /// [weights] — exposes the otherwise-private scoring calculation so the
+  /// View can show a match score/percentage (FR3.8), without duplicating
+  /// the formula.
+  double scoreFor(ComparisonDestination destination) => _compositeScore(destination);
+
   ComparisonDestination? get bestPick {
     if (destinations.isEmpty) return null;
     var best = destinations.first;

@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../controller/destination_map_controller.dart';
+import 'comparison_routes.dart';
 import 'widgets/category_filter_bar.dart';
 import 'widgets/category_style.dart';
 import 'widgets/destination_popup_sheet.dart';
@@ -173,10 +175,15 @@ class _MapActionsFabState extends State<_MapActionsFab> {
 
   void _compareDestinations() {
     setState(() => _expanded = false);
-    final message = widget.controller.canCompare
-        ? '${widget.controller.selectedForComparison.length} selected — comparison screen coming soon'
-        : 'Select 2-3 destinations to compare';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    if (widget.controller.canCompare) {
+      context.push(
+        ComparisonRoutes.compare,
+        extra: widget.controller.selectedForComparison.toList(),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Select 2-3 destinations to compare')));
   }
 
   @override

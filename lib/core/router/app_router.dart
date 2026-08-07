@@ -21,6 +21,8 @@ import '../../features/itinerary_planning/view/itinerary_routes.dart';
 import '../../features/itinerary_planning/view/plan_route_screen.dart';
 import '../../features/itinerary_planning/view/route_optimized_screen.dart';
 import '../../features/assistant/model/assistant_feed_item.dart';
+import '../../features/destination_exploration/view/comparison_routes.dart';
+import '../../features/destination_exploration/view/comparison_screen.dart';
 import '../../features/destination_exploration/view/destination_map_screen.dart';
 import '../../features/profile/view/profile_screen.dart';
 import '../../features/recommendations/view/recommendations_routes.dart';
@@ -90,6 +92,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RecommendationsRoutes.scoreDetail,
         builder: (context, state) =>
             ScoreDetailScreen(item: state.extra as AssistantFeedItem),
+      ),
+      GoRoute(
+        path: ComparisonRoutes.compare,
+        builder: (context, state) =>
+            ComparisonScreen(destinationIds: state.extra as List<String>),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
