@@ -4,10 +4,29 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:collab/features/destination_exploration/controller/destination_map_controller.dart';
+import 'package:collab/features/destination_exploration/model/destination_exploration_repository.dart';
 import 'package:collab/features/destination_exploration/model/map_destination.dart';
 import 'package:collab/features/destination_exploration/view/widgets/destination_popup_sheet.dart';
 import 'package:collab/shared/models/hidden_gem.dart';
+
+class _EmptyRepository extends DestinationExplorationRepository {
+  @override
+  Future<List<MapDestination>> loadDestinations() async => const [];
+}
+
+Widget _wrap(Widget child, {DestinationMapController? controller}) {
+  return ProviderScope(
+    overrides: [
+      destinationMapControllerProvider.overrideWith(
+        (ref) => controller ?? DestinationMapController(repository: _EmptyRepository()),
+      ),
+    ],
+    child: MaterialApp(home: Scaffold(body: child)),
+  );
+}
 
 class _TestHttpClientRequest implements HttpClientRequest {
   final Completer<HttpClientResponse> _completer = Completer();
@@ -96,11 +115,7 @@ void main() {
       location: LatLng(5.4, 100.3),
     );
 
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(body: DestinationPopupSheet(destination: destination)),
-      ),
-    );
+    await tester.pumpWidget(_wrap(const DestinationPopupSheet(destination: destination)));
 
     expect(find.text('Test Place'), findsOneWidget);
     expect(find.text('A place worth visiting.'), findsOneWidget);
@@ -118,13 +133,39 @@ void main() {
       imageUrls: ['https://example.com/a.jpg', 'https://example.com/b.jpg'],
     );
 
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(body: DestinationPopupSheet(destination: destination)),
-      ),
-    );
+    await tester.pumpWidget(_wrap(const DestinationPopupSheet(destination: destination)));
 
     expect(find.byType(Image), findsNWidgets(2));
     expect(find.byIcon(Icons.image_not_supported_outlined), findsNothing);
+  });
+
+  testWidgets('tapping "Select for Comparison" toggles selection on the controller', (tester) async {
+    const destination = MapDestination(
+      id: '3',
+      name: 'Comparable Place',
+      description: 'Worth comparing.',
+      category: HiddenGemCategory.craft,
+      location: LatLng(5.4, 100.3),
+    );
+    final controller = DestinationMapController(repository: _EmptyRepository());
+
+    await tester.pumpWidget(
+      _wrap(const DestinationPopupSheet(destination: destination), controller: controller),
+    );
+
+    expect(controller.selectedForComparison, isEmpty);
+    expect(find.text('Select for Comparison'), findsOneWidget);
+
+    await tester.tap(find.text('Select for Comparison'));
+    await tester.pump();
+
+    expect(controller.selectedForComparison, {'3'});
+    expect(find.text('Selected for Comparison'), findsOneWidget);
+
+    await tester.tap(find.text('Selected for Comparison'));
+    await tester.pump();
+
+    expect(controller.selectedForComparison, isEmpty);
+    expect(find.text('Select for Comparison'), findsOneWidget);
   });
 }
