@@ -1,3 +1,5 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../model/badge_model.dart';
 import '../../model/check_in_model.dart';
 import '../../model/destination_model.dart';
@@ -5,86 +7,39 @@ import '../../model/user_badge_model.dart';
 
 /// Phase 1 mock implementation of the badge system.
 ///
+/// The badge catalogue is shared reference content, so it's loaded from
+/// the real Supabase `journal_badges` table and cached in memory (same
+/// pattern as MockCheckInService's destination cache), unless pre-seeded
+/// via the constructor (used by tests to avoid a real Supabase call).
+///
 /// evaluateAndUnlockBadges() stands in for the Supabase trigger described
 /// in the doc: "PostgreSQL database triggers automatically recalculate
 /// user milestones upon successful check-ins." In Phase 2 this becomes a
 /// realtime listener on the EarnedBadges table instead of a manual call.
 class MockBadgeService {
+  MockBadgeService({List<BadgeModel>? seedCatalogue})
+      : catalogue = seedCatalogue ?? [],
+        _catalogueLoaded = seedCatalogue != null;
+
   final List<UserBadgeModel> _userBadges = [];
 
-  final List<BadgeModel> catalogue = [
-    BadgeModel(
-      id: 'b001',
-      name: 'First Steps',
-      description: 'Complete your first check-in.',
-      iconFilename: 'first_steps.png',
-      criteriaType: BadgeCriteriaType.totalCheckIns,
-      threshold: 1,
-    ),
-    BadgeModel(
-      id: 'b002',
-      name: 'Explorer',
-      description: 'Check in at 10 different hidden gems.',
-      iconFilename: 'explorer.png',
-      criteriaType: BadgeCriteriaType.totalCheckIns,
-      threshold: 10,
-    ),
-    BadgeModel(
-      id: 'b003',
-      name: 'Nature Lover',
-      description: 'Visit 5 nature spots.',
-      iconFilename: 'nature_lover.png',
-      criteriaType: BadgeCriteriaType.categoryCount,
-      threshold: 5,
-      targetValue: 'Nature',
-    ),
-    BadgeModel(
-      id: 'b004',
-      name: 'Culture Seeker',
-      description: 'Visit 3 culture spots.',
-      iconFilename: 'culture_seeker.png',
-      criteriaType: BadgeCriteriaType.categoryCount,
-      threshold: 3,
-      targetValue: 'Culture',
-    ),
-    BadgeModel(
-      id: 'b005',
-      name: 'Foodie Trail',
-      description: 'Visit 3 food destinations.',
-      iconFilename: 'foodie_trail.png',
-      criteriaType: BadgeCriteriaType.categoryCount,
-      threshold: 3,
-      targetValue: 'Food',
-    ),
-    BadgeModel(
-      id: 'b006',
-      name: 'Perak Wanderer',
-      description: 'Check in at 3 destinations in Perak.',
-      iconFilename: 'perak_wanderer.png',
-      criteriaType: BadgeCriteriaType.stateVisit,
-      threshold: 3,
-      targetValue: 'Perak',
-    ),
-    BadgeModel(
-      id: 'b007',
-      name: 'Quiz Beginner',
-      description: 'Complete 5 cultural quizzes.',
-      iconFilename: 'quiz_beginner.png',
-      criteriaType: BadgeCriteriaType.quizzesCompleted,
-      threshold: 5,
-    ),
-    BadgeModel(
-      id: 'b008',
-      name: 'Quiz Intermediate',
-      description: 'Complete 15 cultural quizzes.',
-      iconFilename: 'quiz_intermediate.png',
-      criteriaType: BadgeCriteriaType.quizzesCompleted,
-      threshold: 15,
-    ),
-  ];
+  List<BadgeModel> catalogue;
+  bool _catalogueLoaded;
+
+  Future<void> _ensureCatalogueLoaded() async {
+    if (_catalogueLoaded) return;
+    try {
+      final rows = await Supabase.instance.client.from('journal_badges').select();
+      catalogue = rows.map((row) => BadgeModel.fromJson(row)).toList();
+      _catalogueLoaded = true;
+    } catch (_) {
+      // Leave catalogue empty and _catalogueLoaded false so a later call
+      // can retry instead of permanently caching a failure.
+    }
+  }
 
   Future<List<BadgeModel>> fetchAllBadges() async {
-    await Future.delayed(const Duration(milliseconds: 300));
+    await _ensureCatalogueLoaded();
     return catalogue;
   }
 
@@ -93,12 +48,14 @@ class MockBadgeService {
     return _userBadges.where((ub) => ub.userId == userId).toList();
   }
 
-  /// Counts how many check-ins (or quizzes) satisfy a badge's criteria.
+  /// Counts how many check-ins (or quizzes, or RM) satisfy a badge's criteria.
   int _countForCriteria(
     BadgeModel badge,
     List<CheckInModel> checkIns,
     Map<String, DestinationModel> destinationsById,
     int quizzesCompleted,
+    double economicImpactTotalRM,
+    int perfectQuizCount,
   ) {
     switch (badge.criteriaType) {
       case BadgeCriteriaType.totalCheckIns:
@@ -120,6 +77,10 @@ class MockBadgeService {
             .length;
       case BadgeCriteriaType.quizzesCompleted:
         return quizzesCompleted;
+      case BadgeCriteriaType.economicImpactRM:
+        return economicImpactTotalRM.floor();
+      case BadgeCriteriaType.quizPerfectScore:
+        return perfectQuizCount;
     }
   }
 
@@ -129,7 +90,11 @@ class MockBadgeService {
     required List<CheckInModel> checkIns,
     required Map<String, DestinationModel> destinationsById,
     int quizzesCompleted = 0,
+    double economicImpactTotalRM = 0,
+    int perfectQuizCount = 0,
   }) async {
+    await _ensureCatalogueLoaded();
+
     final earnedIds = _userBadges
         .where((ub) => ub.userId == userId)
         .map((ub) => ub.badgeId)
@@ -145,6 +110,8 @@ class MockBadgeService {
               checkIns,
               destinationsById,
               quizzesCompleted,
+              economicImpactTotalRM,
+              perfectQuizCount,
             ),
             target: b.threshold,
           ),
@@ -160,8 +127,11 @@ class MockBadgeService {
     required List<CheckInModel> checkIns,
     required Map<String, DestinationModel> destinationsById,
     int quizzesCompleted = 0,
+    double economicImpactTotalRM = 0,
+    int perfectQuizCount = 0,
   }) async {
     await Future.delayed(const Duration(milliseconds: 400));
+    await _ensureCatalogueLoaded();
 
     final earnedIds = _userBadges
         .where((ub) => ub.userId == userId)
@@ -177,6 +147,8 @@ class MockBadgeService {
         checkIns,
         destinationsById,
         quizzesCompleted,
+        economicImpactTotalRM,
+        perfectQuizCount,
       );
       if (count >= badge.threshold) {
         _userBadges.add(

@@ -50,7 +50,7 @@ class _JournalMediaCarouselState extends State<JournalMediaCarousel> {
       builder: (sheetContext) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,14 +67,14 @@ class _JournalMediaCarouselState extends State<JournalMediaCarousel> {
                           height: 44,
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            color: AppColors.surfaceContainerHigh,
+                            color: AppColors.of(context).surfaceContainerHigh,
                             borderRadius: BorderRadius.circular(AppRadius.md),
                           ),
                           child: Icon(
                             item.type == JournalMediaType.video
                                 ? Icons.videocam_outlined
                                 : Icons.image_outlined,
-                            color: AppColors.onSurfaceVariant,
+                            color: AppColors.of(context).onSurfaceVariant,
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -85,7 +85,7 @@ class _JournalMediaCarouselState extends State<JournalMediaCarousel> {
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                          icon: Icon(Icons.delete_outline, color: AppColors.of(context).error),
                           onPressed: () {
                             widget.onRemove(item.id);
                             Navigator.of(sheetContext).pop();
@@ -168,11 +168,11 @@ class _JournalMediaCarouselState extends State<JournalMediaCarousel> {
             for (var i = 0; i < widget.media.length; i++)
               AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
-                margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                margin: EdgeInsets.symmetric(horizontal: 2.5),
                 width: i == _page ? 16 : 6,
                 height: 6,
                 decoration: BoxDecoration(
-                  color: i == _page ? AppColors.primary : AppColors.outlineVariant,
+                  color: i == _page ? AppColors.of(context).primary : AppColors.of(context).outlineVariant,
                   borderRadius: BorderRadius.circular(AppRadius.full),
                 ),
               ),
@@ -209,7 +209,7 @@ class _MediaTile extends StatelessWidget {
             left: 10,
             top: 10,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+              padding: EdgeInsets.symmetric(horizontal: 9, vertical: 3),
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.45),
                 borderRadius: BorderRadius.circular(AppRadius.full),
@@ -221,11 +221,11 @@ class _MediaTile extends StatelessWidget {
             ),
           ),
           if (isVideo)
-            const Center(
+            Center(
               child: CircleAvatar(
                 radius: 20,
                 backgroundColor: Colors.white,
-                child: Icon(Icons.play_arrow, color: AppColors.primary),
+                child: Icon(Icons.play_arrow, color: AppColors.of(context).primary),
               ),
             ),
         ],
@@ -269,14 +269,14 @@ class _ManageTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadius.xl),
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLow,
+          color: AppColors.of(context).surfaceContainerLow,
           borderRadius: BorderRadius.circular(AppRadius.xl),
-          border: Border.all(color: AppColors.outlineVariant, width: 1.5),
+          border: Border.all(color: AppColors.of(context).outlineVariant, width: 1.5),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.tune, color: AppColors.onSurfaceVariant, size: 24),
+            Icon(Icons.tune, color: AppColors.of(context).onSurfaceVariant, size: 24),
             const SizedBox(height: 6),
             Text('Manage', style: AppTypography.labelSm),
           ],
@@ -303,14 +303,14 @@ class _AddTile extends StatelessWidget {
         aspectRatio: 16 / 10,
         child: Container(
           decoration: BoxDecoration(
-            color: AppColors.surfaceContainerLow,
+            color: AppColors.of(context).surfaceContainerLow,
             borderRadius: BorderRadius.circular(AppRadius.xl),
-            border: Border.all(color: AppColors.outlineVariant, width: 1.5),
+            border: Border.all(color: AppColors.of(context).outlineVariant, width: 1.5),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.add_photo_alternate_outlined, color: AppColors.onSurfaceVariant, size: 26),
+              Icon(Icons.add_photo_alternate_outlined, color: AppColors.of(context).onSurfaceVariant, size: 26),
               const SizedBox(height: 6),
               Text('Add photos or a video', style: AppTypography.labelSm),
             ],

@@ -12,6 +12,27 @@ String _journalCategoryLabel(HiddenGemCategory category) => switch (category) {
       HiddenGemCategory.craft => 'Culture',
     };
 
+/// The `destinations` table only carries a town/area-level `city` column
+/// (e.g. "George Town", "Batu Ferringhi") — there's no real Malaysian
+/// state column. Both the Dashboard's "states explored" ring and this
+/// module's stateVisit badges need an actual state, so this resolves the
+/// known towns to their state; anything unrecognised falls back to the
+/// raw city value rather than silently guessing, so new areas still show
+/// *something* meaningful instead of breaking.
+const Map<String, String> _cityToState = {
+  'george town': 'Penang',
+  'batu ferringhi': 'Penang',
+  'teluk bahang': 'Penang',
+  'balik pulau': 'Penang',
+  'bayan lepas': 'Penang',
+  'butterworth': 'Penang',
+};
+
+String stateForCity(String city) {
+  final match = _cityToState[city.trim().toLowerCase()];
+  return match ?? city;
+}
+
 class DestinationModel {
   final String id;
   final String name;

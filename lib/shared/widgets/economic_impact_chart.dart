@@ -13,11 +13,17 @@ class EconomicImpactChart extends StatelessWidget {
 
   final List<EconomicImpactSlice> breakdown;
 
-  static const Map<LocalSupportOption, Color> _sliceColors = {
-    LocalSupportOption.foodCafe: AppColors.primaryContainer,
-    LocalSupportOption.souvenirsHandicrafts: AppColors.secondaryContainer,
-    LocalSupportOption.localGuideTransport: AppColors.tertiaryContainer,
-  };
+  Color _colorFor(BuildContext context, LocalSupportOption option) {
+    final colors = AppColors.of(context);
+    switch (option) {
+      case LocalSupportOption.foodCafe:
+        return colors.primaryContainer;
+      case LocalSupportOption.souvenirsHandicrafts:
+        return colors.secondaryContainer;
+      case LocalSupportOption.localGuideTransport:
+        return colors.tertiaryContainer;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,9 +37,9 @@ class EconomicImpactChart extends StatelessWidget {
             margin: const EdgeInsets.only(top: 4, bottom: 12),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.outlineVariant, width: 8, style: BorderStyle.solid),
+              border: Border.all(color: AppColors.of(context).outlineVariant, width: 8, style: BorderStyle.solid),
             ),
-            child: const Icon(Icons.lock_outline, size: 30, color: AppColors.outline),
+            child: Icon(Icons.lock_outline, size: 30, color: AppColors.of(context).outline),
           ),
           Text(
             'Log spending in a journal entry to unlock your local-economy breakdown here.',
@@ -55,10 +61,10 @@ class EconomicImpactChart extends StatelessWidget {
               sections: breakdown.map((slice) {
                 return PieChartSectionData(
                   value: slice.amountRM,
-                  color: _sliceColors[slice.option] ?? AppColors.primaryContainer,
+                  color: _colorFor(context, slice.option),
                   title: '${slice.percentageOfTotal.toStringAsFixed(0)}%',
                   radius: 46,
-                  titleStyle: AppTypography.labelSm.copyWith(color: AppColors.onPrimary, fontSize: 11),
+                  titleStyle: AppTypography.labelSm.copyWith(color: AppColors.of(context).onPrimary, fontSize: 11),
                 );
               }).toList(),
             ),
@@ -74,7 +80,7 @@ class EconomicImpactChart extends StatelessWidget {
                   width: 10,
                   height: 10,
                   decoration: BoxDecoration(
-                    color: _sliceColors[slice.option] ?? AppColors.primaryContainer,
+                    color: _colorFor(context, slice.option),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -82,7 +88,7 @@ class EconomicImpactChart extends StatelessWidget {
                 Expanded(child: Text(slice.option.label, style: AppTypography.bodySm)),
                 Text(
                   'RM ${slice.amountRM.toStringAsFixed(0)}',
-                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.onSurface),
+                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.of(context).onSurface),
                 ),
               ],
             ),

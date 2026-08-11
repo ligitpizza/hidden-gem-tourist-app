@@ -18,6 +18,10 @@ String _filterTagFor(BadgeModel badge) {
       return 'Regional';
     case BadgeCriteriaType.quizzesCompleted:
       return 'Quiz';
+    case BadgeCriteriaType.economicImpactRM:
+      return 'Impact';
+    case BadgeCriteriaType.quizPerfectScore:
+      return 'Quiz';
   }
 }
 
@@ -60,7 +64,7 @@ class _BadgeGalleryScreenState extends State<BadgeGalleryScreen> {
                     height: 4,
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: AppColors.outlineVariant,
+                      color: AppColors.of(context).outlineVariant,
                       borderRadius: BorderRadius.circular(AppRadius.full),
                     ),
                   ),
@@ -69,13 +73,13 @@ class _BadgeGalleryScreenState extends State<BadgeGalleryScreen> {
                     height: 76,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: isUnlocked ? AppColors.secondaryContainer : AppColors.surfaceVariant,
+                      color: isUnlocked ? AppColors.of(context).secondaryContainer : AppColors.of(context).surfaceVariant,
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       isUnlocked ? Icons.workspace_premium : Icons.lock_outline,
                       size: 36,
-                      color: isUnlocked ? AppColors.onSecondaryContainer : AppColors.outline,
+                      color: isUnlocked ? AppColors.of(context).onSecondaryContainer : AppColors.of(context).outline,
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -84,7 +88,7 @@ class _BadgeGalleryScreenState extends State<BadgeGalleryScreen> {
                   Text(
                     isUnlocked ? 'ACHIEVEMENT UNLOCKED' : 'IN PROGRESS',
                     style: AppTypography.labelMd.copyWith(
-                      color: isUnlocked ? AppColors.secondary : AppColors.onSurfaceVariant,
+                      color: isUnlocked ? AppColors.of(context).secondary : AppColors.of(context).onSurfaceVariant,
                       letterSpacing: 0.08 * 14,
                     ),
                   ),
@@ -92,7 +96,7 @@ class _BadgeGalleryScreenState extends State<BadgeGalleryScreen> {
                   Text(
                     badge.description,
                     textAlign: TextAlign.center,
-                    style: AppTypography.bodySm.copyWith(color: AppColors.onSurfaceVariant),
+                    style: AppTypography.bodySm.copyWith(color: AppColors.of(context).onSurfaceVariant),
                   ),
                   if (!isUnlocked && progress != null) ...[
                     const SizedBox(height: 6),
@@ -207,7 +211,7 @@ class _BadgeGalleryScreenState extends State<BadgeGalleryScreen> {
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryContainer,
+                    color: AppColors.of(context).primaryContainer,
                     borderRadius: BorderRadius.circular(AppRadius.xl),
                   ),
                   child: Column(
@@ -225,7 +229,7 @@ class _BadgeGalleryScreenState extends State<BadgeGalleryScreen> {
                       const SizedBox(height: 6),
                       Text(
                         "You've unlocked ${badgeController.userBadges.length} of ${badgeController.allBadges.length} explorer badges. Keep journaling to earn more!",
-                        style: AppTypography.bodySm.copyWith(color: AppColors.primaryFixedDim),
+                        style: AppTypography.bodySm.copyWith(color: AppColors.of(context).primaryFixedDim),
                       ),
                     ],
                   ),
@@ -247,10 +251,10 @@ class _BadgeGalleryScreenState extends State<BadgeGalleryScreen> {
                         selected: selected,
                         onSelected: (_) => setState(() => _selectedFilter = filter),
                         showCheckmark: false,
-                        backgroundColor: AppColors.surfaceContainerHigh,
-                        selectedColor: AppColors.primary,
+                        backgroundColor: AppColors.of(context).surfaceContainerHigh,
+                        selectedColor: AppColors.of(context).primary,
                         labelStyle: AppTypography.labelMd.copyWith(
-                          color: selected ? AppColors.onPrimary : AppColors.onSurfaceVariant,
+                          color: selected ? AppColors.of(context).onPrimary : AppColors.of(context).onSurfaceVariant,
                           letterSpacing: 0,
                         ),
                         side: BorderSide.none,

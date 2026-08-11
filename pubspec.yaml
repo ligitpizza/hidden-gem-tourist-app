@@ -74,6 +74,7 @@ dependencies:
   # Design (Module 6 gamification/journal theme + charts)
   google_fonts: ^6.2.1
   fl_chart: ^0.69.0
+  image_picker: ^1.1.2        # Module 6 journal photo/video attachments
 
 dev_dependencies:
   flutter_test:

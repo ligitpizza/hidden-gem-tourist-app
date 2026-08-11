@@ -74,7 +74,7 @@ class MockCheckInService {
     final city = (row['city'] as String?)?.trim();
     return DestinationModel.fromMapDestination(
       mapDestination,
-      state: (city != null && city.isNotEmpty) ? city : 'Penang',
+      state: (city != null && city.isNotEmpty) ? stateForCity(city) : 'Penang',
     );
   }
 

@@ -40,7 +40,7 @@ class CategoryBreakdownList extends StatelessWidget {
                 children: [
                   Text(
                     entry.key,
-                    style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.onSurface),
+                    style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.of(context).onSurface),
                   ),
                   Text('${entry.value}', style: AppTypography.bodySm),
                 ],
@@ -51,8 +51,8 @@ class CategoryBreakdownList extends StatelessWidget {
                 child: LinearProgressIndicator(
                   value: ratio,
                   minHeight: 7,
-                  backgroundColor: AppColors.surfaceContainerHigh,
-                  color: AppColors.primaryContainer,
+                  backgroundColor: AppColors.of(context).surfaceContainerHigh,
+                  color: AppColors.of(context).primaryContainer,
                 ),
               ),
             ],

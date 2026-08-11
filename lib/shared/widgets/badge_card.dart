@@ -4,27 +4,36 @@ import '../../config/theme.dart';
 import '../../features/gamification_journal/model/badge_model.dart';
 import '../../features/gamification_journal/model/user_badge_model.dart';
 
-/// Icon shown per badge — mapped by id since the mock catalogue only
-/// carries an `iconFilename` string with no real asset behind it yet.
+/// Icon shown per badge — derived from `criteriaType` (and `targetValue`
+/// for category/state-specific badges) rather than a fixed per-id switch,
+/// since the catalogue now comes from Supabase and its ids aren't known
+/// at compile time.
 IconData iconForBadge(BadgeModel badge) {
-  switch (badge.id) {
-    case 'b001':
+  switch (badge.criteriaType) {
+    case BadgeCriteriaType.totalCheckIns:
+      if (badge.threshold >= 40) return Icons.military_tech_outlined;
+      if (badge.threshold >= 10) return Icons.explore_outlined;
       return Icons.flag_outlined;
-    case 'b002':
-      return Icons.explore_outlined;
-    case 'b003':
-      return Icons.park_outlined;
-    case 'b004':
-      return Icons.temple_buddhist_outlined;
-    case 'b005':
-      return Icons.ramen_dining_outlined;
-    case 'b006':
+    case BadgeCriteriaType.categoryCount:
+      switch (badge.targetValue) {
+        case 'Nature':
+          return Icons.park_outlined;
+        case 'Food':
+          return Icons.ramen_dining_outlined;
+        case 'Culture':
+          return Icons.temple_buddhist_outlined;
+        default:
+          return Icons.category_outlined;
+      }
+    case BadgeCriteriaType.stateVisit:
       return Icons.map_outlined;
-    case 'b007':
-    case 'b008':
+    case BadgeCriteriaType.quizzesCompleted:
+      if (badge.threshold >= 15) return Icons.school_outlined;
       return Icons.quiz_outlined;
-    default:
-      return Icons.emoji_events_outlined;
+    case BadgeCriteriaType.economicImpactRM:
+      return Icons.volunteer_activism_outlined;
+    case BadgeCriteriaType.quizPerfectScore:
+      return Icons.grade_outlined;
   }
 }
 
@@ -52,11 +61,11 @@ class BadgeCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: isUnlocked ? AppColors.surfaceContainerLow : AppColors.surfaceContainer,
+          color: isUnlocked ? AppColors.of(context).surfaceContainerLow : AppColors.of(context).surfaceContainer,
           border: Border.all(
             color: isUnlocked
-                ? AppColors.outlineVariant
-                : AppColors.outlineVariant.withValues(alpha: 0.5),
+                ? AppColors.of(context).outlineVariant
+                : AppColors.of(context).outlineVariant.withValues(alpha: 0.5),
           ),
           borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
@@ -68,13 +77,13 @@ class BadgeCard extends StatelessWidget {
               height: 36,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: isUnlocked ? AppColors.secondaryContainer : AppColors.surfaceVariant,
+                color: isUnlocked ? AppColors.of(context).secondaryContainer : AppColors.of(context).surfaceVariant,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 isUnlocked ? iconForBadge(badge) : Icons.lock_outline,
                 size: 17,
-                color: isUnlocked ? AppColors.onSecondaryContainer : AppColors.outline,
+                color: isUnlocked ? AppColors.of(context).onSecondaryContainer : AppColors.of(context).outline,
               ),
             ),
             const SizedBox(height: 6),
@@ -83,7 +92,7 @@ class BadgeCard extends StatelessWidget {
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: AppTypography.labelSm.copyWith(color: AppColors.onSurface, fontWeight: FontWeight.w700, fontSize: 10.5),
+              style: AppTypography.labelSm.copyWith(color: AppColors.of(context).onSurface, fontWeight: FontWeight.w700, fontSize: 10.5),
             ),
             if (!isUnlocked && progress != null) ...[
               const SizedBox(height: 5),
@@ -92,8 +101,8 @@ class BadgeCard extends StatelessWidget {
                 child: LinearProgressIndicator(
                   value: progress!.ratio,
                   minHeight: 4,
-                  backgroundColor: AppColors.outlineVariant.withValues(alpha: 0.4),
-                  color: AppColors.primary,
+                  backgroundColor: AppColors.of(context).outlineVariant.withValues(alpha: 0.4),
+                  color: AppColors.of(context).primary,
                 ),
               ),
               const SizedBox(height: 3),

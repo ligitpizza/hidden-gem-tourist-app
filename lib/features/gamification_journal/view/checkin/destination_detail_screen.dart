@@ -39,7 +39,10 @@ String? _nearestBadgeProgressMessage(
       case BadgeCriteriaType.stateVisit:
         return relevantDestination != null && badge.targetValue == relevantDestination.state;
       case BadgeCriteriaType.quizzesCompleted:
+      case BadgeCriteriaType.quizPerfectScore:
         return quizContext;
+      case BadgeCriteriaType.economicImpactRM:
+        return false;
     }
   }
 
@@ -71,6 +74,10 @@ String? _nearestBadgeProgressMessage(
       'Visit $remaining more $spot in ${badge.targetValue} to achieve ${badge.name}',
     BadgeCriteriaType.quizzesCompleted =>
       'Complete $remaining more quiz${remaining == 1 ? '' : 'zes'} to achieve ${badge.name}',
+    BadgeCriteriaType.quizPerfectScore =>
+      'Score full marks on $remaining more quiz${remaining == 1 ? '' : 'zes'} to achieve ${badge.name}',
+    BadgeCriteriaType.economicImpactRM =>
+      'Log RM$remaining more in local spending to achieve ${badge.name}',
   };
 }
 
@@ -177,6 +184,10 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
     await badgeController.evaluateAfterCheckIn(
       checkIns: checkInController.history,
       destinationsById: destinationsById,
+      economicImpactTotalRM: journalController.entries.fold<double>(
+        0,
+        (sum, e) => sum + e.totalSpendingRM,
+      ),
     );
 
     if (!mounted) return;
@@ -185,7 +196,7 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
       for (final badge in badgeController.newlyEarned) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: AppColors.primaryContainer,
+            backgroundColor: AppColors.of(context).primaryContainer,
             content: Text('Badge unlocked: ${badge.name}'),
           ),
         );
@@ -198,8 +209,8 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
       if (progressMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: AppColors.surfaceContainerHigh,
-            content: Text(progressMessage, style: const TextStyle(color: AppColors.onSurface)),
+            backgroundColor: AppColors.of(context).surfaceContainerHigh,
+            content: Text(progressMessage, style: TextStyle(color: AppColors.of(context).onSurface)),
           ),
         );
       }
@@ -230,6 +241,7 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
     setState(() => _quizLoading = true);
     final checkInController = context.read<CheckInController>();
     final badgeController = context.read<BadgeController>();
+    final journalController = context.read<JournalController>();
 
     final attempt = await quizController.submitAnswers(
       destinationId: widget.destination.id,
@@ -243,6 +255,11 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
       checkIns: checkInController.history,
       destinationsById: destinationsById,
       quizzesCompleted: quizController.completedQuizCount,
+      economicImpactTotalRM: journalController.entries.fold<double>(
+        0,
+        (sum, e) => sum + e.totalSpendingRM,
+      ),
+      perfectQuizCount: quizController.perfectQuizCount,
     );
 
     final newlyEarned = List.of(badgeController.newlyEarned);
@@ -254,7 +271,7 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
       for (final badge in newlyEarned) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: AppColors.primaryContainer,
+            backgroundColor: AppColors.of(context).primaryContainer,
             content: Text('Badge unlocked: ${badge.name}'),
           ),
         );
@@ -264,8 +281,8 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
       if (progressMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: AppColors.surfaceContainerHigh,
-            content: Text(progressMessage, style: const TextStyle(color: AppColors.onSurface)),
+            backgroundColor: AppColors.of(context).surfaceContainerHigh,
+            content: Text(progressMessage, style: TextStyle(color: AppColors.of(context).onSurface)),
           ),
         );
       }
@@ -332,12 +349,12 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
               const SizedBox(height: 4),
               Row(
                 children: [
-                  const Icon(Icons.check_circle, size: 16, color: AppColors.onPrimaryContainer),
+                  Icon(Icons.check_circle, size: 16, color: AppColors.of(context).onPrimaryContainer),
                   const SizedBox(width: 6),
                   Text(
                     "You're checked in — journal draft created",
                     style: AppTypography.bodySm.copyWith(
-                      color: AppColors.onPrimaryContainer,
+                      color: AppColors.of(context).onPrimaryContainer,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -475,9 +492,9 @@ class _LockedCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 18),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
+        color: AppColors.of(context).surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.outlineVariant, style: BorderStyle.solid),
+        border: Border.all(color: AppColors.of(context).outlineVariant, style: BorderStyle.solid),
       ),
       child: Row(
         children: [
@@ -485,10 +502,10 @@ class _LockedCard extends StatelessWidget {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: AppColors.surfaceContainerHigh,
+              color: AppColors.of(context).surfaceContainerHigh,
               borderRadius: BorderRadius.circular(AppRadius.base),
             ),
-            child: const Icon(Icons.lock_outline, size: 17, color: AppColors.outline),
+            child: Icon(Icons.lock_outline, size: 17, color: AppColors.of(context).outline),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -496,7 +513,7 @@ class _LockedCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Destination quiz', style: AppTypography.headlineSm.copyWith(fontSize: 14.5)),
-                Text('5 questions · check in to unlock', style: AppTypography.bodySm.copyWith(color: AppColors.outline)),
+                Text('5 questions · check in to unlock', style: AppTypography.bodySm.copyWith(color: AppColors.of(context).outline)),
               ],
             ),
           ),
@@ -516,14 +533,14 @@ class _LoadingCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 18),
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.primaryContainerTint,
+        color: AppColors.of(context).primaryContainerTint,
         borderRadius: BorderRadius.circular(AppRadius.xl),
       ),
-      child: const Center(
+      child: Center(
         child: SizedBox(
           height: 22,
           width: 22,
-          child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.primaryContainer),
+          child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.of(context).primaryContainer),
         ),
       ),
     );
@@ -556,7 +573,7 @@ class _ActiveCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 18),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.primaryContainerTint,
+        color: AppColors.of(context).primaryContainerTint,
         borderRadius: BorderRadius.circular(AppRadius.xl),
       ),
       child: Column(
@@ -568,10 +585,10 @@ class _ActiveCard extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: AppColors.primaryContainer,
+                  color: AppColors.of(context).primaryContainer,
                   borderRadius: BorderRadius.circular(AppRadius.base),
                 ),
-                child: const Icon(Icons.quiz_outlined, size: 17, color: AppColors.onPrimaryContainer),
+                child: Icon(Icons.quiz_outlined, size: 17, color: AppColors.of(context).onPrimaryContainer),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -581,7 +598,7 @@ class _ActiveCard extends StatelessWidget {
                     Text('Destination quiz', style: AppTypography.headlineSm.copyWith(fontSize: 14.5)),
                     Text(
                       'Question ${currentIndex + 1} of ${questions.length}',
-                      style: AppTypography.bodySm.copyWith(color: AppColors.onPrimaryContainer, fontWeight: FontWeight.w600),
+                      style: AppTypography.bodySm.copyWith(color: AppColors.of(context).onPrimaryContainer, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -598,10 +615,10 @@ class _ActiveCard extends StatelessWidget {
                     height: 4,
                     decoration: BoxDecoration(
                       color: i < currentIndex
-                          ? AppColors.primary
+                          ? AppColors.of(context).primary
                           : i == currentIndex
-                          ? AppColors.onPrimaryContainer
-                          : AppColors.outlineVariant,
+                          ? AppColors.of(context).onPrimaryContainer
+                          : AppColors.of(context).outlineVariant,
                       borderRadius: BorderRadius.circular(AppRadius.full),
                     ),
                   ),
@@ -653,10 +670,10 @@ class _QuizOption extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         decoration: BoxDecoration(
-          color: selected ? AppColors.surfaceContainerLowest : AppColors.surfaceContainerLowest.withValues(alpha: 0.6),
+          color: selected ? AppColors.of(context).surfaceContainerLowest : AppColors.of(context).surfaceContainerLowest.withValues(alpha: 0.6),
           borderRadius: BorderRadius.circular(AppRadius.lg),
           border: Border.all(
-            color: selected ? AppColors.primary : AppColors.outlineVariant,
+            color: selected ? AppColors.of(context).primary : AppColors.of(context).outlineVariant,
             width: 1.5,
           ),
         ),
@@ -667,11 +684,11 @@ class _QuizOption extends StatelessWidget {
               height: 18,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: selected ? AppColors.primary : Colors.transparent,
-                border: Border.all(color: selected ? AppColors.primary : AppColors.outline, width: 1.5),
+                color: selected ? AppColors.of(context).primary : Colors.transparent,
+                border: Border.all(color: selected ? AppColors.of(context).primary : AppColors.of(context).outline, width: 1.5),
               ),
               child: selected
-                  ? const Icon(Icons.circle, size: 8, color: AppColors.onPrimary)
+                  ? Icon(Icons.circle, size: 8, color: AppColors.of(context).onPrimary)
                   : null,
             ),
             const SizedBox(width: 10),
@@ -679,7 +696,7 @@ class _QuizOption extends StatelessWidget {
               child: Text(
                 label,
                 style: AppTypography.bodySm.copyWith(
-                  color: AppColors.onSurface,
+                  color: AppColors.of(context).onSurface,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
@@ -711,7 +728,7 @@ class _ResultCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 18),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.primaryContainerTint,
+        color: AppColors.of(context).primaryContainerTint,
         borderRadius: BorderRadius.circular(AppRadius.xl),
       ),
       child: Column(
@@ -722,13 +739,13 @@ class _ResultCard extends StatelessWidget {
               Container(
                 width: 46,
                 height: 46,
-                decoration: const BoxDecoration(
-                  color: AppColors.secondaryContainer,
+                decoration: BoxDecoration(
+                  color: AppColors.of(context).secondaryContainer,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   attempt.passed ? Icons.emoji_events : Icons.replay_circle_filled,
-                  color: AppColors.onSecondaryContainer,
+                  color: AppColors.of(context).onSecondaryContainer,
                   size: 24,
                 ),
               ),
@@ -759,17 +776,17 @@ class _ResultCard extends StatelessWidget {
                 margin: const EdgeInsets.only(bottom: 6),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AppColors.secondaryContainer,
+                  color: AppColors.of(context).secondaryContainer,
                   borderRadius: BorderRadius.circular(AppRadius.full),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.emoji_events, size: 14, color: AppColors.onSecondaryContainer),
+                    Icon(Icons.emoji_events, size: 14, color: AppColors.of(context).onSecondaryContainer),
                     const SizedBox(width: 6),
                     Text(
                       'Badge unlocked — ${badge.name}',
-                      style: AppTypography.labelSm.copyWith(color: AppColors.onSecondaryContainer),
+                      style: AppTypography.labelSm.copyWith(color: AppColors.of(context).onSecondaryContainer),
                     ),
                   ],
                 ),
@@ -780,14 +797,14 @@ class _ResultCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
-                color: AppColors.surfaceContainerLowest,
+                color: AppColors.of(context).surfaceContainerLowest,
                 borderRadius: BorderRadius.circular(AppRadius.lg),
-                border: Border.all(color: AppColors.outlineVariant),
+                border: Border.all(color: AppColors.of(context).outlineVariant),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.lightbulb_outline, size: 17, color: AppColors.onSecondaryContainer),
+                  Icon(Icons.lightbulb_outline, size: 17, color: AppColors.of(context).onSecondaryContainer),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -795,10 +812,10 @@ class _ResultCard extends StatelessWidget {
                       children: [
                         Text(
                           'CULTURAL FACT OF THE DAY',
-                          style: AppTypography.labelSm.copyWith(color: AppColors.onSecondaryContainer, fontSize: 10),
+                          style: AppTypography.labelSm.copyWith(color: AppColors.of(context).onSecondaryContainer, fontSize: 10),
                         ),
                         const SizedBox(height: 3),
-                        Text(dailyFact!.factText, style: AppTypography.bodySm.copyWith(color: AppColors.onSurface)),
+                        Text(dailyFact!.factText, style: AppTypography.bodySm.copyWith(color: AppColors.of(context).onSurface)),
                       ],
                     ),
                   ),
@@ -831,15 +848,15 @@ class _ImagePlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.primaryContainerTint,
+      color: AppColors.of(context).primaryContainerTint,
       child: Center(
         child: loading
-            ? const SizedBox(
+            ? SizedBox(
                 width: 22,
                 height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.primaryContainer),
+                child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.of(context).primaryContainer),
               )
-            : const Icon(Icons.image_outlined, size: 48, color: AppColors.primaryContainer),
+            : Icon(Icons.image_outlined, size: 48, color: AppColors.of(context).primaryContainer),
       ),
     );
   }
@@ -855,10 +872,10 @@ class _CategoryChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.primaryContainerTint,
+        color: AppColors.of(context).primaryContainerTint,
         borderRadius: BorderRadius.circular(AppRadius.full),
       ),
-      child: Text(label, style: AppTypography.labelSm.copyWith(color: AppColors.primaryContainer)),
+      child: Text(label, style: AppTypography.labelSm.copyWith(color: AppColors.of(context).primaryContainer)),
     );
   }
 }
@@ -875,14 +892,14 @@ class _InfoRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
+        color: AppColors.of(context).surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.outlineVariant),
+        border: Border.all(color: AppColors.of(context).outlineVariant),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 17, color: AppColors.onPrimaryContainer),
+          Icon(icon, size: 17, color: AppColors.of(context).onPrimaryContainer),
           const SizedBox(width: 11),
           Expanded(
             child: Column(
@@ -890,7 +907,7 @@ class _InfoRow extends StatelessWidget {
               children: [
                 Text(label.toUpperCase(), style: AppTypography.labelSm.copyWith(fontSize: 10.5)),
                 const SizedBox(height: 3),
-                Text(value, style: AppTypography.bodySm.copyWith(color: AppColors.onSurface)),
+                Text(value, style: AppTypography.bodySm.copyWith(color: AppColors.of(context).onSurface)),
               ],
             ),
           ),
@@ -911,9 +928,9 @@ class _LocationRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
+        color: AppColors.of(context).surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.outlineVariant),
+        border: Border.all(color: AppColors.of(context).outlineVariant),
       ),
       child: Row(
         children: [
@@ -922,10 +939,10 @@ class _LocationRow extends StatelessWidget {
             height: 54,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.surfaceContainerHigh,
+              color: AppColors.of(context).surfaceContainerHigh,
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
-            child: const Icon(Icons.map_outlined, color: AppColors.primaryContainer),
+            child: Icon(Icons.map_outlined, color: AppColors.of(context).primaryContainer),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -936,7 +953,7 @@ class _LocationRow extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   "${destination.latitude.toStringAsFixed(4)}° N, ${destination.longitude.toStringAsFixed(4)}° E · ${destination.state}",
-                  style: AppTypography.bodySm.copyWith(color: AppColors.onSurface),
+                  style: AppTypography.bodySm.copyWith(color: AppColors.of(context).onSurface),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
@@ -945,7 +962,7 @@ class _LocationRow extends StatelessWidget {
                     minimumSize: const Size(0, 32),
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     textStyle: AppTypography.labelSm,
-                    side: const BorderSide(color: AppColors.outline, width: 1.5),
+                    side: BorderSide(color: AppColors.of(context).outline, width: 1.5),
                   ),
                   icon: const Icon(Icons.directions_outlined, size: 15),
                   label: const Text('Get directions'),

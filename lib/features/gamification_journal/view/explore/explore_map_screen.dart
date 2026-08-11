@@ -112,7 +112,7 @@ class _MapPin extends StatelessWidget {
     return Icon(
       Icons.location_on,
       size: selected ? 40 : 34,
-      color: selected ? AppColors.primary : AppColors.primaryContainer,
+      color: selected ? AppColors.of(context).primary : AppColors.of(context).primaryContainer,
       shadows: const [Shadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 1))],
     );
   }
@@ -127,11 +127,11 @@ class _DestinationPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
+        color: AppColors.of(context).surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.outlineVariant),
+        border: Border.all(color: AppColors.of(context).outlineVariant),
         boxShadow: const [
           BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 6)),
         ],
@@ -181,14 +181,14 @@ class _DestinationList extends StatelessWidget {
     final states = byState.keys.toList()..sort();
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       children: [
         for (final state in states) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
             child: Text(
               state,
-              style: AppTypography.labelMd.copyWith(color: AppColors.onSurfaceVariant, letterSpacing: 0),
+              style: AppTypography.labelMd.copyWith(color: AppColors.of(context).onSurfaceVariant, letterSpacing: 0),
             ),
           ),
           for (final destination in byState[state]!) _DestinationTile(destination: destination, onTap: onTap),
@@ -210,12 +210,12 @@ class _DestinationTile extends StatelessWidget {
           onTap: () => onTap(destination),
           borderRadius: BorderRadius.circular(AppRadius.xl),
           child: Container(
-            margin: const EdgeInsets.only(bottom: 10),
+            margin: EdgeInsets.only(bottom: 10),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.surfaceContainerLow,
+              color: AppColors.of(context).surfaceContainerLow,
               borderRadius: BorderRadius.circular(AppRadius.xl),
-              border: Border.all(color: AppColors.outlineVariant),
+              border: Border.all(color: AppColors.of(context).outlineVariant),
             ),
             child: Row(
               children: [
@@ -241,7 +241,7 @@ class _DestinationTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right, color: AppColors.outline),
+                Icon(Icons.chevron_right, color: AppColors.of(context).outline),
               ],
             ),
           ),
@@ -261,11 +261,11 @@ class _ThumbnailImage extends StatelessWidget {
       fit: BoxFit.cover,
       loadingBuilder: (context, child, progress) {
         if (progress == null) return child;
-        return Container(color: AppColors.primaryContainerTint);
+        return Container(color: AppColors.of(context).primaryContainerTint);
       },
       errorBuilder: (context, error, stackTrace) => Container(
-        color: AppColors.primaryContainerTint,
-        child: const Icon(Icons.image_outlined, color: AppColors.primaryContainer),
+        color: AppColors.of(context).primaryContainerTint,
+        child: Icon(Icons.image_outlined, color: AppColors.of(context).primaryContainer),
       ),
     );
   }
@@ -279,14 +279,14 @@ class _CategoryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.primaryContainerTint,
+        color: AppColors.of(context).primaryContainerTint,
         borderRadius: BorderRadius.circular(AppRadius.full),
       ),
       child: Text(
         label,
-        style: AppTypography.labelSm.copyWith(color: AppColors.primaryContainer),
+        style: AppTypography.labelSm.copyWith(color: AppColors.of(context).primaryContainer),
       ),
     );
   }

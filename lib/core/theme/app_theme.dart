@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../config/theme.dart';
+
 /// App-wide theme, seeded from the product's primary brand color
 /// (#1B4332 — deep forest green). Material 3's [ColorScheme.fromSeed]
 /// derives the full tonal palette (surfaces, containers, on-colors) from
@@ -97,6 +99,9 @@ class AppTheme {
           side: BorderSide(color: colorScheme.outlineVariant),
         ),
       ),
+      extensions: [
+        brightness == Brightness.light ? AppColorTokens.light : AppColorTokens.dark,
+      ],
     );
   }
 }

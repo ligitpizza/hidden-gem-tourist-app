@@ -42,12 +42,16 @@ class BadgeController extends ChangeNotifier {
     required List<CheckInModel> checkIns,
     required Map<String, DestinationModel> destinationsById,
     int quizzesCompleted = 0,
+    double economicImpactTotalRM = 0,
+    int perfectQuizCount = 0,
   }) async {
     newlyEarned = await _service.evaluateAndUnlockBadges(
       userId: userId,
       checkIns: checkIns,
       destinationsById: destinationsById,
       quizzesCompleted: quizzesCompleted,
+      economicImpactTotalRM: economicImpactTotalRM,
+      perfectQuizCount: perfectQuizCount,
     );
     _userBadges = await _service.fetchUserBadges(userId);
     _progress = await _service.computeProgress(
@@ -55,6 +59,8 @@ class BadgeController extends ChangeNotifier {
       checkIns: checkIns,
       destinationsById: destinationsById,
       quizzesCompleted: quizzesCompleted,
+      economicImpactTotalRM: economicImpactTotalRM,
+      perfectQuizCount: perfectQuizCount,
     );
     notifyListeners();
   }
@@ -65,10 +71,14 @@ class BadgeController extends ChangeNotifier {
     required List<CheckInModel> checkIns,
     required Map<String, DestinationModel> destinationsById,
     required int quizzesCompleted,
+    double economicImpactTotalRM = 0,
+    int perfectQuizCount = 0,
   }) => evaluateAfterCheckIn(
     checkIns: checkIns,
     destinationsById: destinationsById,
     quizzesCompleted: quizzesCompleted,
+    economicImpactTotalRM: economicImpactTotalRM,
+    perfectQuizCount: perfectQuizCount,
   );
 
   void clearNewlyEarned() {

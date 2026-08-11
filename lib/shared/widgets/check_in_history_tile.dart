@@ -35,11 +35,11 @@ class CheckInHistoryTile extends StatelessWidget {
     return Opacity(
       opacity: checkIn.isHidden ? 0.5 : 1,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
+        margin: EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLow,
+          color: AppColors.of(context).surfaceContainerLow,
           borderRadius: BorderRadius.circular(AppRadius.xl),
-          border: Border.all(color: AppColors.outlineVariant),
+          border: Border.all(color: AppColors.of(context).outlineVariant),
         ),
         // A ListTile paints its own background/ink splashes on the
         // *nearest* Material ancestor — without this transparent Material
@@ -54,10 +54,10 @@ class CheckInHistoryTile extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: AppColors.primaryContainerTint,
+                color: AppColors.of(context).primaryContainerTint,
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),
-              child: const Icon(Icons.location_on, color: AppColors.primaryContainer),
+              child: Icon(Icons.location_on, color: AppColors.of(context).primaryContainer),
             ),
             title: Text(
               destination?.name ?? 'Unknown destination',
@@ -70,7 +70,7 @@ class CheckInHistoryTile extends StatelessWidget {
             trailing: IconButton(
               icon: Icon(
                 checkIn.isHidden ? Icons.visibility_off : Icons.visibility,
-                color: AppColors.onSurfaceVariant,
+                color: AppColors.of(context).onSurfaceVariant,
               ),
               tooltip: checkIn.isHidden ? 'Unhide' : 'Hide',
               onPressed: onToggleHidden,

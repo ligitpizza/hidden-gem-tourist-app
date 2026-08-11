@@ -74,11 +74,11 @@ class _QuizListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
+        color: AppColors.of(context).surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.outlineVariant),
+        border: Border.all(color: AppColors.of(context).outlineVariant),
       ),
       // A ListTile paints its own background/ink splashes on the nearest
       // Material ancestor — without this transparent Material in between,
@@ -97,10 +97,10 @@ class _QuizListTile extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: AppColors.primaryContainerTint,
+              color: AppColors.of(context).primaryContainerTint,
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
-            child: const Icon(Icons.quiz_outlined, color: AppColors.primaryContainer),
+            child: Icon(Icons.quiz_outlined, color: AppColors.of(context).primaryContainer),
           ),
           title: Text(destination.name, style: AppTypography.bodyMd.copyWith(fontWeight: FontWeight.w600)),
           subtitle: Text(
@@ -110,11 +110,11 @@ class _QuizListTile extends StatelessWidget {
                 ? 'Passed · ${attempt!.scorePercentage.toStringAsFixed(0)}%'
                 : 'Try again · ${attempt!.scorePercentage.toStringAsFixed(0)}%',
             style: AppTypography.bodySm.copyWith(
-              color: attempt?.passed == true ? AppColors.primaryContainer : AppColors.onSurfaceVariant,
+              color: attempt?.passed == true ? AppColors.of(context).primaryContainer : AppColors.of(context).onSurfaceVariant,
               fontWeight: attempt?.passed == true ? FontWeight.w600 : FontWeight.w400,
             ),
           ),
-          trailing: const Icon(Icons.chevron_right, color: AppColors.outline),
+          trailing: Icon(Icons.chevron_right, color: AppColors.of(context).outline),
         ),
       ),
     );
@@ -128,11 +128,11 @@ class _NoCheckInsYet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.quiz_outlined, size: 48, color: AppColors.primaryContainer),
+            Icon(Icons.quiz_outlined, size: 48, color: AppColors.of(context).primaryContainer),
             const SizedBox(height: 12),
             Text('No quizzes yet', style: AppTypography.headlineSm),
             const SizedBox(height: 6),

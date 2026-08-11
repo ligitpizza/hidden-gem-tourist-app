@@ -1,4 +1,11 @@
-enum BadgeCriteriaType { totalCheckIns, categoryCount, stateVisit, quizzesCompleted }
+enum BadgeCriteriaType {
+  totalCheckIns,
+  categoryCount,
+  stateVisit,
+  quizzesCompleted,
+  economicImpactRM,
+  quizPerfectScore,
+}
 
 class BadgeModel {
   final String id;

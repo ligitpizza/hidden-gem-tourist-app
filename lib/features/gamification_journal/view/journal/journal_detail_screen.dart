@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../config/theme.dart';
 import '../../../../shared/widgets/app_header.dart';
 import '../../../../shared/widgets/journal_media_carousel.dart';
+import '../../controller/badge_controller.dart';
+import '../../controller/checkin_controller.dart';
 import '../../controller/journal_controller.dart';
 import '../../model/destination_model.dart';
 import '../../model/journal_entry_model.dart';
@@ -75,12 +78,17 @@ class _JournalDetailScreenState extends State<JournalDetailScreen> {
   }
 
   Future<void> _handleAddMedia(JournalMediaType type) async {
+    final picker = ImagePicker();
+    final picked = type == JournalMediaType.video
+        ? await picker.pickVideo(source: ImageSource.gallery)
+        : await picker.pickImage(source: ImageSource.gallery);
+    if (picked == null) return;
+    if (!mounted) return;
+
     final journalController = context.read<JournalController>();
-    // TODO(phase1): swap for image_picker (photo) / a video picker once
-    // device media access is wired in — this simulates picking a local file.
     await journalController.addMedia(
       widget.entry.id,
-      localFilePath: type == JournalMediaType.video ? 'mock/local_video.mp4' : 'mock/local_photo.jpg',
+      localFilePath: picked.path,
       type: type,
     );
     if (!mounted) return;
@@ -106,10 +114,28 @@ class _JournalDetailScreenState extends State<JournalDetailScreen> {
       }
     }
 
-    await context.read<JournalController>().saveDetails(
+    final journalController = context.read<JournalController>();
+    await journalController.saveDetails(
       widget.entry.id,
       notes: _notesController.text,
       spendingByCategory: spendingByCategory,
+    );
+
+    if (!mounted) return;
+
+    // Spending just changed, so re-evaluate badges in case an economic
+    // impact milestone (e.g. "Local Supporter") was just crossed.
+    final checkInController = context.read<CheckInController>();
+    final destinationsById = {
+      for (final d in checkInController.destinations) d.id: d,
+    };
+    await context.read<BadgeController>().evaluateAfterCheckIn(
+      checkIns: checkInController.history,
+      destinationsById: destinationsById,
+      economicImpactTotalRM: journalController.entries.fold<double>(
+        0,
+        (sum, e) => sum + e.totalSpendingRM,
+      ),
     );
 
     if (!mounted) return;
@@ -130,7 +156,7 @@ class _JournalDetailScreenState extends State<JournalDetailScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+            child: Text('Delete', style: TextStyle(color: AppColors.of(context).error)),
           ),
         ],
       ),
@@ -147,7 +173,7 @@ class _JournalDetailScreenState extends State<JournalDetailScreen> {
     return Scaffold(
       appBar: AppHeader.pushed(title: 'Journal entry'),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -204,10 +230,10 @@ class _JournalDetailScreenState extends State<JournalDetailScreen> {
               child: ElevatedButton(
                 onPressed: _isSaving ? null : _handleSave,
                 child: _isSaving
-                    ? const SizedBox(
+                    ? SizedBox(
                         height: 20,
                         width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.onPrimary),
+                        child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.of(context).onPrimary),
                       )
                     : const Text('Save entry'),
               ),
@@ -216,8 +242,8 @@ class _JournalDetailScreenState extends State<JournalDetailScreen> {
             SizedBox(
               width: double.infinity,
               child: TextButton.icon(
-                icon: const Icon(Icons.delete_outline, color: AppColors.error),
-                label: const Text('Delete entry', style: TextStyle(color: AppColors.error)),
+                icon: Icon(Icons.delete_outline, color: AppColors.of(context).error),
+                label: Text('Delete entry', style: TextStyle(color: AppColors.of(context).error)),
                 onPressed: _handleDelete,
               ),
             ),
@@ -236,11 +262,11 @@ class _CategorySpendRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
+        color: AppColors.of(context).surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.outlineVariant, width: 1.5),
+        border: Border.all(color: AppColors.of(context).outlineVariant, width: 1.5),
       ),
       child: Row(
         children: [
@@ -249,14 +275,14 @@ class _CategorySpendRow extends StatelessWidget {
             height: 30,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.primaryContainerTint,
+              color: AppColors.of(context).primaryContainerTint,
               borderRadius: BorderRadius.circular(AppRadius.base),
             ),
-            child: Icon(field.icon, size: 15, color: AppColors.primaryContainer),
+            child: Icon(field.icon, size: 15, color: AppColors.of(context).primaryContainer),
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(field.option.label, style: AppTypography.bodySm.copyWith(color: AppColors.onSurface, fontWeight: FontWeight.w600)),
+            child: Text(field.option.label, style: AppTypography.bodySm.copyWith(color: AppColors.of(context).onSurface, fontWeight: FontWeight.w600)),
           ),
           SizedBox(
             width: 74,
@@ -264,7 +290,7 @@ class _CategorySpendRow extends StatelessWidget {
               controller: field.controller,
               textAlign: TextAlign.right,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: AppTypography.bodySm.copyWith(color: AppColors.onSurface, fontWeight: FontWeight.w700),
+              style: AppTypography.bodySm.copyWith(color: AppColors.of(context).onSurface, fontWeight: FontWeight.w700),
               decoration: const InputDecoration(
                 isDense: true,
                 prefixText: 'RM ',

@@ -1,3 +1,7 @@
+import 'dart:io';
+
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../model/check_in_model.dart';
 import '../../model/journal_entry_model.dart';
 import '../../model/journal_media_model.dart';
@@ -6,7 +10,10 @@ import '../../model/journal_media_model.dart';
 ///
 /// createDraftFromCheckIn() stands in for the doc's "Automatically creates
 /// a journal draft upon check-in" behaviour, which in Phase 2 happens in
-/// the same Supabase transaction as the check-in itself.
+/// the same Supabase transaction as the check-in itself. Journal entries
+/// themselves stay in-memory for now, but addMedia() below already uploads
+/// for real — media is the one piece of this module backed by real
+/// Supabase Storage rather than mock data.
 class MockJournalService {
   final List<JournalEntryModel> _entries = [];
   int _idCounter = 0;
@@ -44,31 +51,35 @@ class MockJournalService {
 
   int _mediaIdCounter = 0;
 
-  /// Simulates client-side compression/upload before the media lands in
-  /// storage — mirrors the doc's flutter_image_compress step that keeps
-  /// images under 500KB (videos pass through the same mock pipeline).
+  /// Uploads the picked file to the `journal-media` Supabase Storage bucket
+  /// and attaches its public URL to the entry. The journal entry itself
+  /// stays in-memory (see class doc), but the media file this points to is
+  /// real.
   Future<JournalEntryModel> addMedia(
     String entryId, {
     required String localFilePath,
     required JournalMediaType type,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 500));
-
     final index = _entries.indexWhere((e) => e.id == entryId);
     if (index == -1) {
       throw ArgumentError('Unknown journal entry: $entryId');
     }
 
     final mediaId = 'm${(_mediaIdCounter++).toString().padLeft(4, '0')}';
-    final newMedia = JournalMediaModel(
-      id: mediaId,
-      // Stand-in for the real uploaded file — a seeded placeholder photo so
-      // the carousel has something real to render instead of a blank box
-      // (mirrors what compressAndUploadPhoto would return once wired to
-      // real storage).
-      url: 'https://picsum.photos/seed/journal-$mediaId/700/500',
-      type: type,
+    final extension = localFilePath.contains('.') ? localFilePath.split('.').last : (type == JournalMediaType.video ? 'mp4' : 'jpg');
+    final storagePath = '$entryId/$mediaId.$extension';
+
+    final storage = Supabase.instance.client.storage.from('journal-media');
+    await storage.uploadBinary(
+      storagePath,
+      await File(localFilePath).readAsBytes(),
+      fileOptions: FileOptions(
+        contentType: type == JournalMediaType.video ? 'video/mp4' : 'image/jpeg',
+      ),
     );
+    final publicUrl = storage.getPublicUrl(storagePath);
+
+    final newMedia = JournalMediaModel(id: mediaId, url: publicUrl, type: type);
 
     final updated = _entries[index].copyWith(
       media: [..._entries[index].media, newMedia],

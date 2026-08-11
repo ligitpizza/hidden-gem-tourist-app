@@ -16,7 +16,9 @@ import 'package:collab/features/gamification_journal/controller/checkin_controll
 import 'package:collab/features/gamification_journal/controller/dashboard_controller.dart';
 import 'package:collab/features/gamification_journal/controller/journal_controller.dart';
 import 'package:collab/features/gamification_journal/controller/quiz_controller.dart';
+import 'package:collab/features/gamification_journal/model/badge_model.dart';
 import 'package:collab/features/gamification_journal/model/destination_model.dart';
+import 'package:collab/features/gamification_journal/services/mock/mock_badge_service.dart';
 import 'package:collab/features/gamification_journal/services/mock/mock_checkin_service.dart';
 import 'package:collab/features/gamification_journal/view/badges/badge_gallery_screen.dart';
 import 'package:collab/features/gamification_journal/view/dashboard/dashboard_screen.dart';
@@ -42,6 +44,24 @@ CheckInController _seededCheckInController() => CheckInController(
       service: MockCheckInService(seedDestinations: [_testDestination]),
     );
 
+/// Mirrors the "First Steps" badge from the real journal_badges seed data
+/// (see supabase/migrations) without needing a live Supabase call in tests.
+final _testBadgeCatalogue = [
+  BadgeModel(
+    id: 'checkins_1',
+    name: 'First Steps',
+    description: 'Complete your first check-in.',
+    iconFilename: 'badge_checkins_1.png',
+    criteriaType: BadgeCriteriaType.totalCheckIns,
+    threshold: 1,
+  ),
+];
+
+BadgeController _seededBadgeController() => BadgeController(
+      userId: 'test-user',
+      service: MockBadgeService(seedCatalogue: _testBadgeCatalogue),
+    );
+
 Widget _testApp() {
   final router = GoRouter(
     initialLocation: ShellRoutes.journal,
@@ -56,7 +76,7 @@ Widget _testApp() {
   return MultiProvider(
     providers: [
       ChangeNotifierProvider(create: (_) => _seededCheckInController()),
-      ChangeNotifierProvider(create: (_) => BadgeController(userId: 'test-user')),
+      ChangeNotifierProvider(create: (_) => _seededBadgeController()),
       ChangeNotifierProvider(create: (_) => JournalController(userId: 'test-user')),
       ChangeNotifierProvider(create: (_) => QuizController(userId: 'test-user')),
       ChangeNotifierProvider(create: (_) => DashboardController()),
@@ -96,7 +116,7 @@ void main() {
   test('A check-in still creates a journal draft and unlocks the right badge', () async {
     final checkInController = _seededCheckInController();
     final journalController = JournalController(userId: 'test-user');
-    final badgeController = BadgeController(userId: 'test-user');
+    final badgeController = _seededBadgeController();
 
     await checkInController.loadDestinations();
     expect(checkInController.destinations, isNotEmpty);

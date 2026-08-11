@@ -101,12 +101,12 @@ class _SubmitRatingScreenState extends State<SubmitRatingScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.check_circle, size: 16, color: AppColors.onPrimaryContainer),
+                Icon(Icons.check_circle, size: 16, color: AppColors.of(context).onPrimaryContainer),
                 const SizedBox(width: 6),
                 Text(
                   'CHECK-IN COMPLETE',
                   style: AppTypography.labelSm.copyWith(
-                    color: AppColors.onPrimaryContainer,
+                    color: AppColors.of(context).onPrimaryContainer,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -133,9 +133,9 @@ class _SubmitRatingScreenState extends State<SubmitRatingScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.surfaceContainerLow,
+                color: AppColors.of(context).surfaceContainerLow,
                 borderRadius: BorderRadius.circular(AppRadius.xl),
-                border: Border.all(color: AppColors.outlineVariant),
+                border: Border.all(color: AppColors.of(context).outlineVariant),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -147,13 +147,13 @@ class _SubmitRatingScreenState extends State<SubmitRatingScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.secondaryContainer,
+                          color: AppColors.of(context).secondaryContainer,
                           borderRadius: BorderRadius.circular(AppRadius.full),
                         ),
                         child: Text(
                           bucketLabel,
                           style:
-                              AppTypography.labelMd.copyWith(color: AppColors.onSecondaryContainer),
+                              AppTypography.labelMd.copyWith(color: AppColors.of(context).onSecondaryContainer),
                         ),
                       ),
                     ],
@@ -190,7 +190,7 @@ class _SubmitRatingScreenState extends State<SubmitRatingScreen> {
             const SizedBox(height: 12),
             Row(
               children: [
-                const Icon(Icons.auto_awesome, size: 16, color: AppColors.onPrimaryContainer),
+                Icon(Icons.auto_awesome, size: 16, color: AppColors.of(context).onPrimaryContainer),
                 const SizedBox(width: 6),
                 Text('Auto-generated Tags', style: AppTypography.headlineSm.copyWith(fontSize: 15)),
               ],
@@ -204,12 +204,12 @@ class _SubmitRatingScreenState extends State<SubmitRatingScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceContainerHigh,
+                    color: AppColors.of(context).surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(AppRadius.full),
                   ),
                   child: Text(
                     '+ Add Tag',
-                    style: AppTypography.labelSm.copyWith(color: AppColors.outline),
+                    style: AppTypography.labelSm.copyWith(color: AppColors.of(context).outline),
                   ),
                 ),
               ],
@@ -223,13 +223,13 @@ class _SubmitRatingScreenState extends State<SubmitRatingScreen> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.surfaceContainerHigh,
+                color: AppColors.of(context).surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(AppRadius.lg),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.info_outline, size: 17, color: AppColors.onSurfaceVariant),
+                  Icon(Icons.info_outline, size: 17, color: AppColors.of(context).onSurfaceVariant),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(

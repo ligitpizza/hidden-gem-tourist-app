@@ -17,10 +17,10 @@ class RatingTagChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final tone = toneFor(tag);
     final background =
-        tone == RatingTagTone.caution ? AppColors.errorContainer : AppColors.secondaryContainer;
+        tone == RatingTagTone.caution ? AppColors.of(context).errorContainer : AppColors.of(context).secondaryContainer;
     final foreground = tone == RatingTagTone.caution
-        ? AppColors.onErrorContainer
-        : AppColors.onSecondaryContainer;
+        ? AppColors.of(context).onErrorContainer
+        : AppColors.of(context).onSecondaryContainer;
     final label = suffix == null ? tag : '$tag $suffix';
 
     return Container(

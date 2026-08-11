@@ -40,8 +40,8 @@ class StatRing extends StatelessWidget {
                   value: ratio,
                   strokeWidth: strokeWidth,
                   strokeCap: StrokeCap.round,
-                  backgroundColor: AppColors.outlineVariant,
-                  color: AppColors.primary,
+                  backgroundColor: AppColors.of(context).outlineVariant,
+                  color: AppColors.of(context).primary,
                 ),
               ),
               Column(

@@ -49,7 +49,7 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.explore_outlined, size: 48, color: AppColors.primaryContainer),
+            Icon(Icons.explore_outlined, size: 48, color: AppColors.of(context).primaryContainer),
             const SizedBox(height: 12),
             Text('No check-ins yet', style: AppTypography.headlineSm),
             const SizedBox(height: 6),

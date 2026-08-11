@@ -28,12 +28,12 @@ class CheckInButtonWidget extends StatelessWidget {
         ElevatedButton(
           onPressed: isLoading ? null : onPressed,
           child: isLoading
-              ? const SizedBox(
+              ? SizedBox(
                   height: 20,
                   width: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    color: AppColors.onPrimary,
+                    color: AppColors.of(context).onPrimary,
                   ),
                 )
               : const Row(
@@ -48,20 +48,20 @@ class CheckInButtonWidget extends StatelessWidget {
         if (status == CheckInStatus.error && errorMessage != null) ...[
           const SizedBox(height: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: AppColors.errorContainer,
+              color: AppColors.of(context).errorContainer,
               borderRadius: BorderRadius.circular(AppRadius.lg),
             ),
             child: Row(
               children: [
-                const Icon(Icons.error_outline, size: 15, color: AppColors.onErrorContainer),
+                Icon(Icons.error_outline, size: 15, color: AppColors.of(context).onErrorContainer),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     errorMessage!,
                     style: AppTypography.bodySm.copyWith(
-                      color: AppColors.onErrorContainer,
+                      color: AppColors.of(context).onErrorContainer,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -75,7 +75,7 @@ class CheckInButtonWidget extends StatelessWidget {
           Text(
             "You're checked in!",
             style: AppTypography.bodySm.copyWith(
-              color: AppColors.onPrimaryContainer,
+              color: AppColors.of(context).onPrimaryContainer,
               fontWeight: FontWeight.w600,
             ),
             textAlign: TextAlign.center,

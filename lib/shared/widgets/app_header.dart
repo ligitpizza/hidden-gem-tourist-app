@@ -25,26 +25,26 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.outlineVariant)),
+      decoration: BoxDecoration(
+        color: AppColors.of(context).surface,
+        border: Border(bottom: BorderSide(color: AppColors.of(context).outlineVariant)),
       ),
       child: AppBar(
         backgroundColor: Colors.transparent,
-        foregroundColor: AppColors.onSurface,
+        foregroundColor: AppColors.of(context).onSurface,
         elevation: 0,
         scrolledUnderElevation: 0,
         automaticallyImplyLeading: false,
         titleSpacing: 12,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.onSurface),
+          icon: Icon(Icons.arrow_back_ios_new, color: AppColors.of(context).onSurface),
           iconSize: 18,
           visualDensity: VisualDensity.compact,
           style: IconButton.styleFrom(
             minimumSize: const Size(36, 36),
             padding: EdgeInsets.zero,
             backgroundColor: Colors.transparent,
-            overlayColor: AppColors.onSurface,
+            overlayColor: AppColors.of(context).onSurface,
             shape: const CircleBorder(),
           ),
           onPressed: showBackButton ? () => Navigator.of(context).maybePop() : () {},

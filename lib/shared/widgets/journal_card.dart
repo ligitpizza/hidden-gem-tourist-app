@@ -34,17 +34,17 @@ class JournalCard extends StatelessWidget {
     final totalSpending = entry.totalSpendingRM;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 24),
+      margin: EdgeInsets.only(bottom: 24),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
+        color: AppColors.of(context).surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.outlineVariant),
+        border: Border.all(color: AppColors.of(context).outlineVariant),
       ),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.xl),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -62,18 +62,18 @@ class JournalCard extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           destination?.name ?? 'Unknown destination',
-                          style: AppTypography.headlineSm.copyWith(fontSize: 17, color: AppColors.primaryContainer),
+                          style: AppTypography.headlineSm.copyWith(fontSize: 17, color: AppColors.of(context).primaryContainer),
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.edit_outlined, size: 19, color: AppColors.onSurfaceVariant),
+                    icon: Icon(Icons.edit_outlined, size: 19, color: AppColors.of(context).onSurfaceVariant),
                     onPressed: onTap,
                     tooltip: 'Edit',
                   ),
                   IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 19, color: AppColors.error),
+                    icon: Icon(Icons.delete_outline, size: 19, color: AppColors.of(context).error),
                     onPressed: onDelete,
                     tooltip: 'Delete',
                   ),
@@ -89,7 +89,7 @@ class JournalCard extends StatelessWidget {
                   entry.notes,
                   maxLines: entry.media.isEmpty ? 3 : 2,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTypography.bodySm.copyWith(color: AppColors.onSurfaceVariant, height: 1.5),
+                  style: AppTypography.bodySm.copyWith(color: AppColors.of(context).onSurfaceVariant, height: 1.5),
                 ),
               ],
               const SizedBox(height: 12),
@@ -101,22 +101,22 @@ class JournalCard extends StatelessWidget {
                     _Pill(
                       icon: Icons.volunteer_activism,
                       label: 'Local Impact: RM ${totalSpending.toStringAsFixed(0)}',
-                      background: AppColors.primaryContainer,
-                      foreground: AppColors.onPrimary,
+                      background: AppColors.of(context).primaryContainer,
+                      foreground: AppColors.of(context).onPrimary,
                     )
                   else
-                    const _Pill(
+                    _Pill(
                       icon: Icons.visibility_outlined,
                       label: 'Field Note',
-                      background: AppColors.tertiaryContainer,
-                      foreground: AppColors.onTertiaryContainer,
+                      background: AppColors.of(context).tertiaryContainer,
+                      foreground: AppColors.of(context).onTertiaryContainer,
                     ),
                   if (destination != null)
                     _Pill(
                       icon: Icons.place_outlined,
                       label: destination!.category,
-                      background: AppColors.secondaryContainer,
-                      foreground: AppColors.onSecondaryContainer,
+                      background: AppColors.of(context).secondaryContainer,
+                      foreground: AppColors.of(context).onSecondaryContainer,
                     ),
                 ],
               ),

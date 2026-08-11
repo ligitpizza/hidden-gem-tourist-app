@@ -108,13 +108,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: const AppHeader.tabRoot(title: 'Dashboard'),
       body: RefreshIndicator(
         onRefresh: _refresh,
-        color: AppColors.primary,
+        color: AppColors.of(context).primary,
         child:
             dashboardController.status == DashboardStatus.loading &&
                 stats.totalCheckIns == 0
             ? const Center(child: CircularProgressIndicator())
             : ListView(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(16),
                 children: [
                   // --- Journal quick links -----------------------------
                   Row(
@@ -200,7 +200,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 const TextSpan(text: "You've contributed "),
                                 TextSpan(
                                   text: 'RM ${stats.economicImpactTotalRM.toStringAsFixed(0)}',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryContainer),
+                                  style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.of(context).primaryContainer),
                                 ),
                                 const TextSpan(text: ' directly to micro-businesses and rural communities.'),
                               ],
@@ -263,18 +263,18 @@ class _QuickLinkCard extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.lg),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        padding: EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         decoration: BoxDecoration(
-          color: AppColors.primaryContainerTint,
+          color: AppColors.of(context).primaryContainerTint,
           borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
         child: Column(
           children: [
-            Icon(icon, color: AppColors.primaryContainer),
+            Icon(icon, color: AppColors.of(context).primaryContainer),
             const SizedBox(height: 6),
             Text(
               label,
-              style: AppTypography.labelMd.copyWith(color: AppColors.primaryContainer, letterSpacing: 0),
+              style: AppTypography.labelMd.copyWith(color: AppColors.of(context).primaryContainer, letterSpacing: 0),
             ),
           ],
         ),
@@ -292,11 +292,11 @@ class _StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      padding: EdgeInsets.symmetric(vertical: 14, horizontal: 8),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
+        color: AppColors.of(context).surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.outlineVariant),
+        border: Border.all(color: AppColors.of(context).outlineVariant),
       ),
       child: Column(
         children: [
@@ -322,11 +322,11 @@ class _SectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
+        color: AppColors.of(context).surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.outlineVariant),
+        border: Border.all(color: AppColors.of(context).outlineVariant),
       ),
       child: child,
     );

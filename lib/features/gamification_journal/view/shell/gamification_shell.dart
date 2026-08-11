@@ -56,8 +56,8 @@ class _GamificationShellState extends State<GamificationShell> {
     return Scaffold(
       body: widget.navigationShell,
       bottomNavigationBar: DecoratedBox(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: AppColors.outlineVariant)),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: AppColors.of(context).outlineVariant)),
         ),
         child: NavigationBar(
           selectedIndex: widget.navigationShell.currentIndex,

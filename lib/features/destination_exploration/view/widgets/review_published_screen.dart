@@ -39,11 +39,11 @@ class ReviewPublishedScreen extends StatelessWidget {
               Container(
                 width: 64,
                 height: 64,
-                decoration: const BoxDecoration(
-                  color: AppColors.primaryContainer,
+                decoration: BoxDecoration(
+                  color: AppColors.of(context).primaryContainer,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.check, color: AppColors.onPrimaryContainer, size: 32),
+                child: Icon(Icons.check, color: AppColors.of(context).onPrimaryContainer, size: 32),
               ),
               const SizedBox(height: 16),
               Text(
@@ -62,9 +62,9 @@ class ReviewPublishedScreen extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerLow,
+                  color: AppColors.of(context).surfaceContainerLow,
                   borderRadius: BorderRadius.circular(AppRadius.xl),
-                  border: Border.all(color: AppColors.outlineVariant),
+                  border: Border.all(color: AppColors.of(context).outlineVariant),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -74,7 +74,7 @@ class ReviewPublishedScreen extends StatelessWidget {
                     const SizedBox(height: 10),
                     Text(
                       '"$reviewText"',
-                      style: AppTypography.bodySm.copyWith(color: AppColors.onSurface),
+                      style: AppTypography.bodySm.copyWith(color: AppColors.of(context).onSurface),
                     ),
                     if (tags.isNotEmpty) ...[
                       const SizedBox(height: 10),
@@ -98,9 +98,9 @@ class ReviewPublishedScreen extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceContainerLow,
+                    color: AppColors.of(context).surfaceContainerLow,
                     borderRadius: BorderRadius.circular(AppRadius.xl),
-                    border: Border.all(color: AppColors.outlineVariant),
+                    border: Border.all(color: AppColors.of(context).outlineVariant),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,8 +120,8 @@ class ReviewPublishedScreen extends StatelessWidget {
                         child: LinearProgressIndicator(
                           value: (summary.avgDifficulty / 5).clamp(0, 1),
                           minHeight: 8,
-                          backgroundColor: AppColors.surfaceContainerHigh,
-                          valueColor: const AlwaysStoppedAnimation(AppColors.secondaryContainer),
+                          backgroundColor: AppColors.of(context).surfaceContainerHigh,
+                          valueColor: AlwaysStoppedAnimation(AppColors.of(context).secondaryContainer),
                         ),
                       ),
                       if (summary.topTags.isNotEmpty) ...[
@@ -149,12 +149,12 @@ class ReviewPublishedScreen extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryContainer,
+                  color: AppColors.of(context).primaryContainer,
                   borderRadius: BorderRadius.circular(AppRadius.lg),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.emoji_events, color: AppColors.onPrimaryContainer),
+                    Icon(Icons.emoji_events, color: AppColors.of(context).onPrimaryContainer),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -163,13 +163,13 @@ class ReviewPublishedScreen extends StatelessWidget {
                           Text(
                             '+${RatingController.pointsPerContribution} Trail Points',
                             style:
-                                AppTypography.labelMd.copyWith(color: AppColors.onPrimaryContainer),
+                                AppTypography.labelMd.copyWith(color: AppColors.of(context).onPrimaryContainer),
                           ),
                           if (controller.pathfinderBadgeUnlocked)
                             Text(
                               "You've unlocked the 'Pathfinder' badge for this region.",
                               style: AppTypography.bodySm
-                                  .copyWith(color: AppColors.onPrimaryContainer),
+                                  .copyWith(color: AppColors.of(context).onPrimaryContainer),
                             ),
                         ],
                       ),

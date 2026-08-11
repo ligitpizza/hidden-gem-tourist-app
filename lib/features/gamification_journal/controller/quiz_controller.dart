@@ -19,6 +19,7 @@ class QuizController extends ChangeNotifier {
   QuizAttemptModel? lastAttempt;
   CulturalFactModel? dailyFact;
   int completedQuizCount = 0;
+  int perfectQuizCount = 0;
 
   QuizStatus status = QuizStatus.idle;
   String? errorMessage;
@@ -31,6 +32,7 @@ class QuizController extends ChangeNotifier {
   Future<void> loadHistory() async {
     attemptHistory = await _service.fetchAttemptHistory(userId);
     completedQuizCount = await _service.countCompletedQuizzes(userId);
+    perfectQuizCount = await _service.countPerfectQuizzes(userId);
     notifyListeners();
   }
 

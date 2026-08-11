@@ -25,7 +25,7 @@ class JournalTimelineScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+            child: Text('Delete', style: TextStyle(color: AppColors.of(context).error)),
           ),
         ],
       ),
@@ -55,7 +55,7 @@ class JournalTimelineScreen extends StatelessWidget {
       body: entries.isEmpty
           ? const _EmptyState()
           : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 96),
               itemCount: entries.length + 1,
               itemBuilder: (context, index) {
                 if (index == 0) {
@@ -66,12 +66,12 @@ class JournalTimelineScreen extends StatelessWidget {
                       children: [
                         Text(
                           'Journal Timeline',
-                          style: AppTypography.headlineLg.copyWith(fontSize: 28, color: AppColors.primaryContainer),
+                          style: AppTypography.headlineLg.copyWith(fontSize: 28, color: AppColors.of(context).primaryContainer),
                         ),
                         const SizedBox(height: 6),
                         Text(
                           "Your curated journey through the wild and the local communities you've supported.",
-                          style: AppTypography.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
+                          style: AppTypography.bodyMd.copyWith(color: AppColors.of(context).onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -125,18 +125,21 @@ class _TimelineRow extends StatelessWidget {
                   height: 32,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceContainer,
+                    color: AppColors.of(context).surfaceContainer,
                     shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.outlineVariant),
+                    border: Border.all(color: AppColors.of(context).outlineVariant),
                   ),
-                  child: const Icon(Icons.calendar_today, size: 14, color: AppColors.primaryContainer),
+                  child: Icon(Icons.calendar_today, size: 14, color: AppColors.of(context).primaryContainer),
                 ),
                 if (showConnector)
                   Expanded(
                     child: Center(
                       child: SizedBox(
                         width: 2,
-                        child: CustomPaint(painter: _DashedLinePainter(), size: const Size(2, double.infinity)),
+                        child: CustomPaint(
+                          painter: _DashedLinePainter(color: AppColors.of(context).outlineVariant),
+                          size: const Size(2, double.infinity),
+                        ),
                       ),
                     ),
                   ),
@@ -152,10 +155,14 @@ class _TimelineRow extends StatelessWidget {
 }
 
 class _DashedLinePainter extends CustomPainter {
+  _DashedLinePainter({required this.color});
+
+  final Color color;
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.outlineVariant
+      ..color = color
       ..strokeWidth = 2;
     const dashHeight = 4.0;
     const dashSpace = 4.0;
@@ -167,7 +174,7 @@ class _DashedLinePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _DashedLinePainter oldDelegate) => oldDelegate.color != color;
 }
 
 class _EmptyState extends StatelessWidget {
@@ -177,11 +184,11 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.menu_book_outlined, size: 48, color: AppColors.primaryContainer),
+            Icon(Icons.menu_book_outlined, size: 48, color: AppColors.of(context).primaryContainer),
             const SizedBox(height: 12),
             Text('Your journal is empty', style: AppTypography.headlineSm),
             const SizedBox(height: 6),

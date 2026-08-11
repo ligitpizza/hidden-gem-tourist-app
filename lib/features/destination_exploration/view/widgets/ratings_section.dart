@@ -146,7 +146,7 @@ class _RatingsSectionBody extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             'Check in above to write a review',
-            style: AppTypography.labelSm.copyWith(color: AppColors.outline),
+            style: AppTypography.labelSm.copyWith(color: AppColors.of(context).outline),
           ),
         ],
         const SizedBox(height: 12),
@@ -189,19 +189,19 @@ class _ReviewCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
+        color: AppColors.of(context).surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.outlineVariant),
+        border: Border.all(color: AppColors.of(context).outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const CircleAvatar(
+              CircleAvatar(
                 radius: 14,
-                backgroundColor: AppColors.surfaceContainerHigh,
-                child: Icon(Icons.person_outline, size: 16, color: AppColors.outline),
+                backgroundColor: AppColors.of(context).surfaceContainerHigh,
+                child: Icon(Icons.person_outline, size: 16, color: AppColors.of(context).outline),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -216,12 +216,12 @@ class _ReviewCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryContainerTint,
+                  color: AppColors.of(context).primaryContainerTint,
                   borderRadius: BorderRadius.circular(AppRadius.full),
                 ),
                 child: Text(
                   difficultyBucketFor(review.difficultyScore.toDouble()).label,
-                  style: AppTypography.labelSm.copyWith(color: AppColors.primaryContainer),
+                  style: AppTypography.labelSm.copyWith(color: AppColors.of(context).primaryContainer),
                 ),
               ),
             ],
@@ -229,7 +229,7 @@ class _ReviewCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             '"${review.reviewText}"',
-            style: AppTypography.bodySm.copyWith(color: AppColors.onSurface),
+            style: AppTypography.bodySm.copyWith(color: AppColors.of(context).onSurface),
           ),
           if (review.generatedTags.isNotEmpty) ...[
             const SizedBox(height: 8),
