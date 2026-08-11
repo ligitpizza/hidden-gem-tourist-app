@@ -80,4 +80,18 @@ class QuizController extends ChangeNotifier {
   /// questions for the same destination, matching the doc's reattempt rule.
   Future<void> retryQuiz(String destinationId, {int questionCount = 5}) =>
       startQuiz(destinationId, questionCount: questionCount);
+
+  /// How many checked-in destinations still need a passing attempt —
+  /// covers both "never attempted" and "attempted but failed". Drives the
+  /// pending-retake count shown on the Quizzes card/tile.
+  int pendingQuizCount(Iterable<String> checkedInDestinationIds) {
+    var count = 0;
+    for (final destinationId in checkedInDestinationIds) {
+      final passed = attemptHistory.any(
+        (a) => a.destinationId == destinationId && a.passed,
+      );
+      if (!passed) count++;
+    }
+    return count;
+  }
 }

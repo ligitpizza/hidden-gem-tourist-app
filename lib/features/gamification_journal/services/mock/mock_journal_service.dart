@@ -51,6 +51,29 @@ class MockJournalService {
 
   int _mediaIdCounter = 0;
 
+  /// Maps a file extension to its real content type. Picked videos in
+  /// particular vary a lot by device/source (.mov from iOS, .webm from some
+  /// Android sources, .mp4 elsewhere) — previously every video was labeled
+  /// 'video/mp4' regardless of its real container format, which made some
+  /// players refuse to decode a file whose bytes didn't match the declared
+  /// type ("Unable to Play Video"). Falls back to a generic octet-stream
+  /// type for anything unrecognised rather than guessing wrong.
+  static const _contentTypesByExtension = {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'heic': 'image/heic',
+    'webp': 'image/webp',
+    'gif': 'image/gif',
+    'mp4': 'video/mp4',
+    'm4v': 'video/mp4',
+    'mov': 'video/quicktime',
+    'webm': 'video/webm',
+    '3gp': 'video/3gpp',
+    'avi': 'video/x-msvideo',
+    'mkv': 'video/x-matroska',
+  };
+
   /// Uploads the picked file to the `journal-media` Supabase Storage bucket
   /// and attaches its public URL to the entry. The journal entry itself
   /// stays in-memory (see class doc), but the media file this points to is
@@ -65,18 +88,50 @@ class MockJournalService {
       throw ArgumentError('Unknown journal entry: $entryId');
     }
 
-    final mediaId = 'm${(_mediaIdCounter++).toString().padLeft(4, '0')}';
-    final extension = localFilePath.contains('.') ? localFilePath.split('.').last : (type == JournalMediaType.video ? 'mp4' : 'jpg');
+    // Entry/media ids are just in-memory counters that reset to 0 every
+    // app restart, but the Storage bucket they upload into is real and
+    // persists across restarts — a plain restart-scoped counter would
+    // reuse the exact same path ('j0000/m0000.jpg') a previous session
+    // already uploaded to, and Supabase rejects that as "already exists".
+    // Stamping the id with wall-clock time (plus the counter, in case two
+    // uploads land in the same microsecond) keeps every path unique
+    // regardless of how many times the app has restarted.
+    final mediaId = 'm${DateTime.now().microsecondsSinceEpoch}${(_mediaIdCounter++).toString().padLeft(3, '0')}';
+    final extension = localFilePath.contains('.')
+        ? localFilePath.split('.').last.toLowerCase()
+        : (type == JournalMediaType.video ? 'mp4' : 'jpg');
     final storagePath = '$entryId/$mediaId.$extension';
+    final contentType = _contentTypesByExtension[extension] ??
+        (type == JournalMediaType.video ? 'video/mp4' : 'image/jpeg');
 
     final storage = Supabase.instance.client.storage.from('journal-media');
-    await storage.uploadBinary(
-      storagePath,
-      await File(localFilePath).readAsBytes(),
-      fileOptions: FileOptions(
-        contentType: type == JournalMediaType.video ? 'video/mp4' : 'image/jpeg',
-      ),
-    );
+    try {
+      await storage.uploadBinary(
+        storagePath,
+        await File(localFilePath).readAsBytes(),
+        // upsert as a safety net — the timestamped id above should already
+        // make collisions practically impossible, but overwriting is a
+        // harmless fallback here (this bucket only ever holds mock-entry
+        // media, not anything worth protecting from an overwrite) whereas
+        // erroring out on a freak collision isn't.
+        fileOptions: FileOptions(contentType: contentType, upsert: true),
+      );
+    } on StorageException catch (e) {
+      // The client already rejects anything over 200MB before it gets here
+      // (see journal_detail_screen.dart), but this catches the case where
+      // the project's actual bucket/global limit is lower than we assumed
+      // (see the size-limit migrations' notes on the project-wide setting
+      // SQL can't reach), so the Tourist still gets a real reason instead
+      // of a generic failure.
+      final isSizeError = e.statusCode == '413' ||
+          e.message.toLowerCase().contains('exceed') ||
+          e.message.toLowerCase().contains('maximum');
+      throw Exception(
+        isSizeError
+            ? 'That file is too large for the server to accept. Try a shorter clip or a smaller file.'
+            : 'Could not upload: ${e.message}',
+      );
+    }
     final publicUrl = storage.getPublicUrl(storagePath);
 
     final newMedia = JournalMediaModel(id: mediaId, url: publicUrl, type: type);

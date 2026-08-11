@@ -4,11 +4,22 @@ class UserBadgeModel {
   final DateTime earnedAt;
   final bool isHidden;
 
+  /// False from the moment a badge is unlocked until the Tourist opens the
+  /// Badge Gallery and actually sees it — drives the "new badge" mark on
+  /// the Badges card/tile so an unlock never goes unnoticed.
+  final bool acknowledged;
+
+  /// True for badges the Tourist picked to feature on their share card
+  /// (max 3, enforced in BadgeController.togglePinned).
+  final bool isPinned;
+
   UserBadgeModel({
     required this.userId,
     required this.badgeId,
     required this.earnedAt,
     this.isHidden = false,
+    this.acknowledged = false,
+    this.isPinned = false,
   });
 
   factory UserBadgeModel.fromJson(Map<String, dynamic> json) {
@@ -17,6 +28,8 @@ class UserBadgeModel {
       badgeId: json['badge_id'] as String,
       earnedAt: DateTime.parse(json['earned_at'] as String),
       isHidden: json['is_hidden'] as bool? ?? false,
+      acknowledged: json['acknowledged'] as bool? ?? false,
+      isPinned: json['is_pinned'] as bool? ?? false,
     );
   }
 
@@ -26,15 +39,19 @@ class UserBadgeModel {
       'badge_id': badgeId,
       'earned_at': earnedAt.toIso8601String(),
       'is_hidden': isHidden,
+      'acknowledged': acknowledged,
+      'is_pinned': isPinned,
     };
   }
 
-  UserBadgeModel copyWith({bool? isHidden}) {
+  UserBadgeModel copyWith({bool? isHidden, bool? acknowledged, bool? isPinned}) {
     return UserBadgeModel(
       userId: userId,
       badgeId: badgeId,
       earnedAt: earnedAt,
       isHidden: isHidden ?? this.isHidden,
+      acknowledged: acknowledged ?? this.acknowledged,
+      isPinned: isPinned ?? this.isPinned,
     );
   }
 }

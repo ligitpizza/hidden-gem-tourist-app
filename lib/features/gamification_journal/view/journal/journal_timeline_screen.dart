@@ -9,8 +9,45 @@ import '../../../../shared/widgets/app_header.dart';
 import '../../../../shared/widgets/journal_card.dart';
 import 'journal_detail_screen.dart';
 
+/// The Journal tab's root screen — wraps [JournalTimelineBody] in a
+/// Scaffold with its own app bar and a "check in to start an entry" FAB.
 class JournalTimelineScreen extends StatelessWidget {
-  const JournalTimelineScreen({super.key});
+  const JournalTimelineScreen({super.key, this.isTabRoot = true});
+
+  /// Tab roots use [AppHeader.tabRoot] (no back button, since there's
+  /// nothing to pop to); set false if this is ever pushed on top of
+  /// something instead.
+  final bool isTabRoot;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: isTabRoot
+          ? const AppHeader.tabRoot(title: 'Journal')
+          : const AppHeader.pushed(title: 'Journal'),
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'Check in somewhere to start a new entry',
+        onPressed: () => GoRouter.of(context).go('/explore'),
+        child: const Icon(Icons.add),
+      ),
+      body: const SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 96),
+        child: JournalTimelineBody(),
+      ),
+    );
+  }
+}
+
+/// The scrollable content of the journal timeline — a header, then every
+/// entry as a connected timeline row. No Scaffold/AppBar/scrolling of its
+/// own, so it can be embedded inside another scrollable screen (Profile)
+/// as easily as it can be wrapped standalone (see [JournalTimelineScreen]).
+class JournalTimelineBody extends StatelessWidget {
+  const JournalTimelineBody({super.key, this.showHeading = true});
+
+  /// Set to false when the embedding screen already has its own "Journal"
+  /// section heading, so the two don't repeat.
+  final bool showHeading;
 
   Future<void> _confirmDelete(BuildContext context, String entryId) async {
     final confirmed = await showDialog<bool>(
@@ -45,61 +82,45 @@ class JournalTimelineScreen extends StatelessWidget {
     };
     final entries = journalController.entries;
 
-    return Scaffold(
-      appBar: const AppHeader.pushed(title: 'Journal'),
-      floatingActionButton: FloatingActionButton(
-        tooltip: 'Check in somewhere to start a new entry',
-        onPressed: () => GoRouter.of(context).go('/explore'),
-        child: const Icon(Icons.add),
-      ),
-      body: entries.isEmpty
-          ? const _EmptyState()
-          : ListView.builder(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 96),
-              itemCount: entries.length + 1,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Journal Timeline',
-                          style: AppTypography.headlineLg.copyWith(fontSize: 28, color: AppColors.of(context).primaryContainer),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          "Your curated journey through the wild and the local communities you've supported.",
-                          style: AppTypography.bodyMd.copyWith(color: AppColors.of(context).onSurfaceVariant),
-                        ),
-                      ],
-                    ),
-                  );
-                }
+    if (entries.isEmpty) {
+      return const _EmptyState();
+    }
 
-                final entry = entries[index - 1];
-                final isLast = index - 1 == entries.length - 1;
-                return _TimelineRow(
-                  showConnector: !isLast,
-                  child: JournalCard(
-                    entry: entry,
-                    destination: destinationsById[entry.destinationId],
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => JournalDetailScreen(
-                            entry: entry,
-                            destination: destinationsById[entry.destinationId],
-                          ),
-                        ),
-                      );
-                    },
-                    onDelete: () => _confirmDelete(context, entry.id),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (showHeading) ...[
+          Text(
+            'Journal Timeline',
+            style: AppTypography.headlineLg.copyWith(fontSize: 28, color: AppColors.of(context).primaryContainer),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            "Your curated journey through the wild and the local communities you've supported.",
+            style: AppTypography.bodyMd.copyWith(color: AppColors.of(context).onSurfaceVariant),
+          ),
+          const SizedBox(height: 24),
+        ],
+        for (var i = 0; i < entries.length; i++)
+          _TimelineRow(
+            showConnector: i != entries.length - 1,
+            child: JournalCard(
+              entry: entries[i],
+              destination: destinationsById[entries[i].destinationId],
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => JournalDetailScreen(
+                      entry: entries[i],
+                      destination: destinationsById[entries[i].destinationId],
+                    ),
                   ),
                 );
               },
+              onDelete: () => _confirmDelete(context, entries[i].id),
             ),
+          ),
+      ],
     );
   }
 }
@@ -184,7 +205,7 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: EdgeInsets.all(32),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

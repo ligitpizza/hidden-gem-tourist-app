@@ -823,6 +823,10 @@ class _ResultCard extends StatelessWidget {
               ),
             ),
           ],
+          if (attempt.answers.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _AnswerReview(answers: attempt.answers),
+          ],
           if (!attempt.passed) ...[
             const SizedBox(height: 14),
             SizedBox(
@@ -834,6 +838,164 @@ class _ResultCard extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Collapsible per-question breakdown so a Tourist can see exactly which
+/// answers were wrong and what the correct option actually was, instead of
+/// just a final score.
+class _AnswerReview extends StatefulWidget {
+  const _AnswerReview({required this.answers});
+
+  final List<QuizAnswerRecord> answers;
+
+  @override
+  State<_AnswerReview> createState() => _AnswerReviewState();
+}
+
+class _AnswerReviewState extends State<_AnswerReview> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Icon(Icons.fact_check_outlined, size: 17, color: colors.primaryContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Review your answers',
+                    style: AppTypography.labelMd.copyWith(color: colors.primaryContainer),
+                  ),
+                ),
+                Icon(
+                  _expanded ? Icons.expand_less : Icons.expand_more,
+                  color: colors.primaryContainer,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_expanded) ...[
+          const SizedBox(height: 8),
+          for (var i = 0; i < widget.answers.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _AnswerReviewCard(index: i + 1, answer: widget.answers[i]),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+class _AnswerReviewCard extends StatelessWidget {
+  const _AnswerReviewCard({required this.index, required this.answer});
+
+  final int index;
+  final QuizAnswerRecord answer;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(
+          color: answer.isCorrect ? colors.outlineVariant : colors.error.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                answer.isCorrect ? Icons.check_circle : Icons.cancel,
+                size: 16,
+                color: answer.isCorrect ? colors.primaryContainer : colors.error,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Q$index. ${answer.questionText}',
+                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: colors.onSurface),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (var i = 0; i < answer.options.length; i++)
+            _AnswerOptionRow(
+              text: answer.options[i],
+              isCorrectOption: i == answer.correctOptionIndex,
+              isUserChoice: i == answer.selectedOptionIndex,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnswerOptionRow extends StatelessWidget {
+  const _AnswerOptionRow({
+    required this.text,
+    required this.isCorrectOption,
+    required this.isUserChoice,
+  });
+
+  final String text;
+  final bool isCorrectOption;
+  final bool isUserChoice;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    // Correct option always shown in green; the user's own wrong pick (if
+    // different) is called out in red so both "what you picked" and "what
+    // was right" are visible at a glance.
+    final Color? tint = isCorrectOption
+        ? colors.primaryContainer
+        : (isUserChoice ? colors.error : null);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isCorrectOption
+                ? Icons.check
+                : (isUserChoice ? Icons.close : Icons.circle_outlined),
+            size: 14,
+            color: tint ?? colors.outline,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: AppTypography.bodySm.copyWith(
+                color: tint ?? colors.onSurfaceVariant,
+                fontWeight: (isCorrectOption || isUserChoice) ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
         ],
       ),
     );

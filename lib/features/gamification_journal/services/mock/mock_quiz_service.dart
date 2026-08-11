@@ -84,10 +84,18 @@ class MockQuizService {
     }
 
     var score = 0;
+    final answers = <QuizAnswerRecord>[];
     for (var i = 0; i < questions.length; i++) {
-      if (questions[i].correctOptionIndex == selectedOptionIndexes[i]) {
-        score++;
-      }
+      final isCorrect = questions[i].correctOptionIndex == selectedOptionIndexes[i];
+      if (isCorrect) score++;
+      answers.add(
+        QuizAnswerRecord(
+          questionText: questions[i].questionText,
+          options: questions[i].options,
+          correctOptionIndex: questions[i].correctOptionIndex,
+          selectedOptionIndex: selectedOptionIndexes[i],
+        ),
+      );
     }
 
     final percentage = questions.isEmpty ? 0 : (score / questions.length) * 100;
@@ -100,6 +108,7 @@ class MockQuizService {
       totalQuestions: questions.length,
       passed: percentage >= passThresholdPercent,
       attemptedAt: DateTime.now(),
+      answers: answers,
     );
 
     _attempts.add(attempt);

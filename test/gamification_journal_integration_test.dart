@@ -5,6 +5,8 @@
 //   1. The routes wired into ShellRoutes actually render the right screens.
 //   2. The mock data chain a check-in triggers — journal draft creation and
 //      badge evaluation — still works end to end.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -62,23 +64,39 @@ BadgeController _seededBadgeController() => BadgeController(
       service: MockBadgeService(seedCatalogue: _testBadgeCatalogue),
     );
 
-Widget _testApp() {
+/// Real app_router.dart's _MainShell loads every controller once at app
+/// start; this test uses its own flat router with no such shell, so the
+/// test body has to trigger the same loads itself — otherwise screens like
+/// BadgeGalleryScreen sit on an infinite loading spinner (allBadges never
+/// populates) and pumpAndSettle() hangs. Loads must fire *after* the
+/// widget is pumped, not before: this test runs inside flutter_test's
+/// FakeAsync zone, which only advances its clock while a pump is in
+/// progress, so awaiting a mock service's Future.delayed() before the
+/// first pumpWidget() would hang forever with no pump ever running to
+/// resolve it.
+Widget _testApp({
+  required CheckInController checkInController,
+  required BadgeController badgeController,
+  required JournalController journalController,
+  required QuizController quizController,
+}) {
+  const testRoot = '/journal';
   final router = GoRouter(
-    initialLocation: ShellRoutes.journal,
+    initialLocation: testRoot,
     routes: [
-      GoRoute(path: ShellRoutes.journal, builder: (c, s) => const DashboardScreen()),
+      GoRoute(path: testRoot, builder: (c, s) => const DashboardScreen()),
       GoRoute(path: ShellRoutes.journalBadges, builder: (c, s) => const BadgeGalleryScreen()),
-      GoRoute(path: ShellRoutes.journalEntries, builder: (c, s) => const JournalTimelineScreen()),
+      GoRoute(path: ShellRoutes.journalEntries, builder: (c, s) => const JournalTimelineScreen(isTabRoot: false)),
       GoRoute(path: ShellRoutes.journalQuizzes, builder: (c, s) => const QuizListScreen()),
     ],
   );
 
   return MultiProvider(
     providers: [
-      ChangeNotifierProvider(create: (_) => _seededCheckInController()),
-      ChangeNotifierProvider(create: (_) => _seededBadgeController()),
-      ChangeNotifierProvider(create: (_) => JournalController(userId: 'test-user')),
-      ChangeNotifierProvider(create: (_) => QuizController(userId: 'test-user')),
+      ChangeNotifierProvider.value(value: checkInController),
+      ChangeNotifierProvider.value(value: badgeController),
+      ChangeNotifierProvider.value(value: journalController),
+      ChangeNotifierProvider.value(value: quizController),
       ChangeNotifierProvider(create: (_) => DashboardController()),
     ],
     child: MaterialApp.router(routerConfig: router),
@@ -89,8 +107,29 @@ void main() {
   testWidgets('Dashboard loads and its quick links reach Badges, Journal and Quizzes', (
     tester,
   ) async {
-    await tester.pumpWidget(_testApp());
-    await tester.pump();
+    final checkInController = _seededCheckInController();
+    final badgeController = _seededBadgeController();
+    final journalController = JournalController(userId: 'test-user');
+    final quizController = QuizController(userId: 'test-user');
+
+    await tester.pumpWidget(
+      _testApp(
+        checkInController: checkInController,
+        badgeController: badgeController,
+        journalController: journalController,
+        quizController: quizController,
+      ),
+    );
+
+    // Fire the loads _MainShell normally triggers at app start — not
+    // awaited directly (see _testApp's doc comment above).
+    unawaited(checkInController.loadDestinations());
+    unawaited(checkInController.loadHistory());
+    unawaited(badgeController.loadBadges());
+    unawaited(journalController.loadEntries());
+    unawaited(quizController.loadDailyFact());
+    unawaited(quizController.loadHistory());
+
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.byType(DashboardScreen), findsOneWidget);

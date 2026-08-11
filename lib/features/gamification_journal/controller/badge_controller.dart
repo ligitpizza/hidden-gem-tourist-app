@@ -29,6 +29,19 @@ class BadgeController extends ChangeNotifier {
   bool isUnlocked(String badgeId) =>
       _userBadges.any((ub) => ub.badgeId == badgeId);
 
+  /// Drives the "new badge" mark on the Badges card/tile — true whenever
+  /// there's at least one unlocked badge the Tourist hasn't opened the
+  /// gallery to see yet.
+  bool get hasUnviewedBadges => _userBadges.any((ub) => !ub.acknowledged);
+
+  /// Call when the Badge Gallery is opened so the mark clears.
+  Future<void> acknowledgeAll() async {
+    if (!hasUnviewedBadges) return;
+    await _service.acknowledgeAll(userId);
+    _userBadges = await _service.fetchUserBadges(userId);
+    notifyListeners();
+  }
+
   Future<void> loadBadges() async {
     _allBadges = await _service.fetchAllBadges();
     _userBadges = await _service.fetchUserBadges(userId);
@@ -94,5 +107,33 @@ class BadgeController extends ChangeNotifier {
     );
     _userBadges = await _service.fetchUserBadges(userId);
     notifyListeners();
+  }
+
+  static const maxPinnedBadges = 3;
+
+  List<BadgeModel> get pinnedBadges {
+    final pinnedIds = _userBadges.where((ub) => ub.isPinned).map((ub) => ub.badgeId).toSet();
+    return _allBadges.where((b) => pinnedIds.contains(b.id)).toList();
+  }
+
+  bool isPinned(String badgeId) =>
+      _userBadges.any((ub) => ub.badgeId == badgeId && ub.isPinned);
+
+  /// Toggles whether a badge is featured on the profile share card.
+  /// Returns false (no-op) if pinning a 4th badge was rejected, so the
+  /// caller can show a "remove one first" message.
+  Future<bool> togglePinned(String badgeId) async {
+    final currentlyPinned = isPinned(badgeId);
+    if (!currentlyPinned && pinnedBadges.length >= maxPinnedBadges) {
+      return false;
+    }
+    await _service.setPinned(
+      userId: userId,
+      badgeId: badgeId,
+      isPinned: !currentlyPinned,
+    );
+    _userBadges = await _service.fetchUserBadges(userId);
+    notifyListeners();
+    return true;
   }
 }

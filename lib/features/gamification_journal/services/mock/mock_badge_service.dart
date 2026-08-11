@@ -176,4 +176,26 @@ class MockBadgeService {
     if (index == -1) return;
     _userBadges[index] = _userBadges[index].copyWith(isHidden: isHidden);
   }
+
+  Future<void> setPinned({
+    required String userId,
+    required String badgeId,
+    required bool isPinned,
+  }) async {
+    final index = _userBadges.indexWhere(
+      (ub) => ub.userId == userId && ub.badgeId == badgeId,
+    );
+    if (index == -1) return;
+    _userBadges[index] = _userBadges[index].copyWith(isPinned: isPinned);
+  }
+
+  /// Marks every currently-earned badge as seen — called when the Tourist
+  /// opens the Badge Gallery, clearing the "new badge" mark.
+  Future<void> acknowledgeAll(String userId) async {
+    for (var i = 0; i < _userBadges.length; i++) {
+      if (_userBadges[i].userId == userId && !_userBadges[i].acknowledged) {
+        _userBadges[i] = _userBadges[i].copyWith(acknowledged: true);
+      }
+    }
+  }
 }

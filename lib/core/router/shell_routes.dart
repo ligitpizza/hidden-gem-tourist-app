@@ -12,9 +12,9 @@ class ShellRoutes {
   static const ecoPartners = '/travel-prep/eco-partners';
   static const documentVault = '/travel-prep/document-vault';
 
-  // Module 6 — Gamification & Travel Journal. Check-in isn't linked from
-  // here yet (see DestinationDetailScreen) — it still needs to be wired
-  // into the existing map screen.
+  // Module 6 — Gamification & Travel Journal. The Journal tab itself shows
+  // the entries timeline directly; Badges/Quizzes/Check-in history are
+  // pushed from the bottom nav's More menu instead of living on the tab.
   static const journal = '/journal';
   static const journalBadges = '/journal/badges';
   static const journalEntries = '/journal/entries';

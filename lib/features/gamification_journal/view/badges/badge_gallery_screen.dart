@@ -35,6 +35,16 @@ class BadgeGalleryScreen extends StatefulWidget {
 class _BadgeGalleryScreenState extends State<BadgeGalleryScreen> {
   String _selectedFilter = 'All';
 
+  @override
+  void initState() {
+    super.initState();
+    // Opening the gallery counts as "checking what you unlocked" — clears
+    // the new-badge mark on the Badges card/tile.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => context.read<BadgeController>().acknowledgeAll(),
+    );
+  }
+
   void _showBadgeDetail(
     BuildContext context, {
     required BadgeModel badge,
@@ -170,6 +180,35 @@ class _BadgeGalleryScreenState extends State<BadgeGalleryScreen> {
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      icon: Icon(
+                        badgeController.isPinned(badge.id) ? Icons.star : Icons.star_outline,
+                        size: 16,
+                      ),
+                      label: Text(
+                        badgeController.isPinned(badge.id) ? 'Remove from Share Card' : 'Feature on Share Card',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onPressed: !isUnlocked
+                          ? null
+                          : () async {
+                              final ok = await badgeController.togglePinned(badge.id);
+                              if (!sheetContext.mounted) return;
+                              if (!ok) {
+                                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('You can feature up to 3 badges — remove one first.'),
+                                  ),
+                                );
+                                return;
+                              }
+                              Navigator.of(sheetContext).pop();
+                            },
+                    ),
                   ),
                 ],
               ),

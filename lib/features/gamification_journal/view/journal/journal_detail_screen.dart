@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -36,6 +38,7 @@ class _JournalDetailScreenState extends State<JournalDetailScreen> {
   late List<_CategoryField> _categoryFields;
   late List<JournalMediaModel> _media;
   bool _isSaving = false;
+  bool _isUploadingMedia = false;
 
   @override
   void initState() {
@@ -77,7 +80,18 @@ class _JournalDetailScreenState extends State<JournalDetailScreen> {
     });
   }
 
+  // Matches the journal-media Storage bucket's file_size_limit (see
+  // supabase/migrations/20260813090000_journal_media_size_limit_increase.sql)
+  // — checked client-side first so an oversized file fails fast with a
+  // clear reason instead of after a slow upload attempt that Supabase
+  // rejects anyway. 200MB comfortably covers a short (~10-20s) travel
+  // clip at typical phone-camera bitrate — nothing here compresses video
+  // before upload, so it can run larger than you'd expect.
+  static const _maxMediaBytes = 200 * 1024 * 1024;
+
   Future<void> _handleAddMedia(JournalMediaType type) async {
+    if (_isUploadingMedia) return;
+
     final picker = ImagePicker();
     final picked = type == JournalMediaType.video
         ? await picker.pickVideo(source: ImageSource.gallery)
@@ -85,14 +99,38 @@ class _JournalDetailScreenState extends State<JournalDetailScreen> {
     if (picked == null) return;
     if (!mounted) return;
 
-    final journalController = context.read<JournalController>();
-    await journalController.addMedia(
-      widget.entry.id,
-      localFilePath: picked.path,
-      type: type,
-    );
+    final sizeBytes = await File(picked.path).length();
     if (!mounted) return;
-    _syncMediaFromController();
+    if (sizeBytes > _maxMediaBytes) {
+      final sizeMb = (sizeBytes / (1024 * 1024)).toStringAsFixed(1);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${type == JournalMediaType.video ? 'This video' : 'This photo'} is ${sizeMb}MB — the limit is 200MB. Try a shorter clip or a smaller file.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isUploadingMedia = true);
+    final journalController = context.read<JournalController>();
+    try {
+      await journalController.addMedia(
+        widget.entry.id,
+        localFilePath: picked.path,
+        type: type,
+      );
+      if (!mounted) return;
+      if (journalController.status == JournalStatus.error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(journalController.errorMessage ?? 'Could not attach media.')),
+        );
+      }
+      _syncMediaFromController();
+    } finally {
+      if (mounted) setState(() => _isUploadingMedia = false);
+    }
   }
 
   Future<void> _handleRemoveMedia(String mediaId) async {
@@ -140,7 +178,10 @@ class _JournalDetailScreenState extends State<JournalDetailScreen> {
 
     if (!mounted) return;
     setState(() => _isSaving = false);
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Journal entry saved')));
+    // Pops back to the timeline instead of a snackbar-on-this-screen — the
+    // updated entry is right there in the list, which is confirmation
+    // enough (matches _handleDelete's pattern below).
+    Navigator.of(context).pop();
   }
 
   Future<void> _handleDelete() async {
@@ -190,6 +231,7 @@ class _JournalDetailScreenState extends State<JournalDetailScreen> {
 
             JournalMediaCarousel(
               media: _media,
+              isUploading: _isUploadingMedia,
               onAddPhoto: () => _handleAddMedia(JournalMediaType.photo),
               onAddVideo: () => _handleAddMedia(JournalMediaType.video),
               onRemove: _handleRemoveMedia,

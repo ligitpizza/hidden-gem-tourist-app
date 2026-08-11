@@ -69,9 +69,11 @@ class JournalController extends ChangeNotifier {
       );
       _replaceEntry(updated);
       status = JournalStatus.idle;
-    } catch (_) {
+    } catch (e) {
       status = JournalStatus.error;
-      errorMessage = 'Could not attach media. Please try again.';
+      errorMessage = e is Exception
+          ? e.toString().replaceFirst('Exception: ', '')
+          : 'Could not attach media. Please try again.';
     }
     notifyListeners();
   }

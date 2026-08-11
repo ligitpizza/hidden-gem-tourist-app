@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../config/theme.dart';
 import '../../features/gamification_journal/model/journal_media_model.dart';
+import 'journal_video_player_screen.dart';
 
 /// Horizontally-scrolling photo/video carousel for a journal entry. When
 /// there's already at least one item, a trailing "Manage" tile opens a
@@ -14,12 +15,18 @@ class JournalMediaCarousel extends StatefulWidget {
     required this.onAddPhoto,
     required this.onAddVideo,
     required this.onRemove,
+    this.isUploading = false,
   });
 
   final List<JournalMediaModel> media;
   final VoidCallback onAddPhoto;
   final VoidCallback onAddVideo;
   final ValueChanged<String> onRemove;
+
+  /// True while a picked photo/video is being uploaded — disables the add
+  /// buttons (so a Tourist can't fire off a pile of taps while waiting)
+  /// and shows a progress indicator so the wait itself is visible.
+  final bool isUploading;
 
   @override
   State<JournalMediaCarousel> createState() => _JournalMediaCarouselState();
@@ -42,6 +49,7 @@ class _JournalMediaCarouselState extends State<JournalMediaCarousel> {
   }
 
   void _manage(BuildContext context) {
+    if (widget.isUploading) return;
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -133,7 +141,20 @@ class _JournalMediaCarouselState extends State<JournalMediaCarousel> {
     final hasMedia = widget.media.isNotEmpty;
 
     if (!hasMedia) {
-      return _AddTile(onAddPhoto: widget.onAddPhoto, onAddVideo: widget.onAddVideo, fullWidth: true);
+      return Column(
+        children: [
+          _AddTile(
+            onAddPhoto: widget.onAddPhoto,
+            onAddVideo: widget.onAddVideo,
+            fullWidth: true,
+            disabled: widget.isUploading,
+          ),
+          if (widget.isUploading) ...[
+            const SizedBox(height: 10),
+            const _UploadProgressRow(),
+          ],
+        ],
+      );
     }
 
     final pageCount = widget.media.length + 1; // + trailing manage tile
@@ -150,7 +171,7 @@ class _JournalMediaCarouselState extends State<JournalMediaCarousel> {
               if (index == widget.media.length) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 6),
-                  child: _ManageTile(onTap: () => _manage(context)),
+                  child: _ManageTile(onTap: () => _manage(context), disabled: widget.isUploading),
                 );
               }
               final item = widget.media[index];
@@ -178,6 +199,41 @@ class _JournalMediaCarouselState extends State<JournalMediaCarousel> {
               ),
           ],
         ),
+        if (widget.isUploading) ...[
+          const SizedBox(height: 10),
+          const _UploadProgressRow(),
+        ],
+      ],
+    );
+  }
+}
+
+class _UploadProgressRow extends StatelessWidget {
+  const _UploadProgressRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return Row(
+      children: [
+        SizedBox(
+          width: 14,
+          height: 14,
+          child: CircularProgressIndicator(strokeWidth: 2, color: colors.primary),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.full),
+            child: LinearProgressIndicator(
+              minHeight: 4,
+              backgroundColor: colors.outlineVariant.withValues(alpha: 0.4),
+              color: colors.primary,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text('Uploading…', style: AppTypography.labelSm),
       ],
     );
   }
@@ -188,47 +244,62 @@ class _MediaTile extends StatelessWidget {
 
   final JournalMediaModel item;
 
+  void _openVideo(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => JournalVideoPlayerScreen(url: item.url)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isVideo = item.type == JournalMediaType.video;
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppRadius.xl),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.network(
-            item.url,
-            fit: BoxFit.cover,
-            loadingBuilder: (context, child, progress) {
-              if (progress == null) return child;
-              return _fallback(isVideo, loading: true);
-            },
-            errorBuilder: (context, error, stackTrace) => _fallback(isVideo, loading: false),
-          ),
-          Positioned(
-            left: 10,
-            top: 10,
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(AppRadius.full),
+      child: GestureDetector(
+        onTap: isVideo ? () => _openVideo(context) : null,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Video files can't be decoded as images — a video's tile is
+            // always the dark placeholder with a play button; only photos
+            // actually load through Image.network.
+            if (isVideo)
+              _fallback(isVideo, loading: false)
+            else
+              Image.network(
+                item.url,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return _fallback(isVideo, loading: true);
+                },
+                errorBuilder: (context, error, stackTrace) => _fallback(isVideo, loading: false),
               ),
-              child: Text(
-                isVideo ? 'VIDEO' : 'PHOTO',
-                style: AppTypography.labelSm.copyWith(color: Colors.white, fontSize: 9.5),
+            Positioned(
+              left: 10,
+              top: 10,
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                ),
+                child: Text(
+                  isVideo ? 'VIDEO' : 'PHOTO',
+                  style: AppTypography.labelSm.copyWith(color: Colors.white, fontSize: 9.5),
+                ),
               ),
             ),
-          ),
-          if (isVideo)
-            Center(
-              child: CircleAvatar(
-                radius: 20,
-                backgroundColor: Colors.white,
-                child: Icon(Icons.play_arrow, color: AppColors.of(context).primary),
+            if (isVideo)
+              Center(
+                child: CircleAvatar(
+                  radius: 20,
+                  backgroundColor: Colors.white,
+                  child: Icon(Icons.play_arrow, color: AppColors.of(context).primary),
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -258,27 +329,86 @@ class _MediaTile extends StatelessWidget {
 }
 
 class _ManageTile extends StatelessWidget {
-  const _ManageTile({required this.onTap});
+  const _ManageTile({required this.onTap, this.disabled = false});
 
   final VoidCallback onTap;
+  final bool disabled;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.xl),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.of(context).surfaceContainerLow,
-          borderRadius: BorderRadius.circular(AppRadius.xl),
-          border: Border.all(color: AppColors.of(context).outlineVariant, width: 1.5),
+    final colors = AppColors.of(context);
+    return Opacity(
+      opacity: disabled ? 0.5 : 1,
+      child: InkWell(
+        onTap: disabled ? null : onTap,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        child: Container(
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(AppRadius.xl),
+            border: Border.all(color: colors.outlineVariant, width: 1.5),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.tune, color: colors.onSurfaceVariant, size: 24),
+              const SizedBox(height: 6),
+              Text('Manage', style: AppTypography.labelSm),
+            ],
+          ),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+      ),
+    );
+  }
+}
+
+/// Two explicit, equally-discoverable buttons — a plain tap used to only
+/// add a photo, with video reachable solely via a long-press nobody would
+/// find on their own.
+class _AddTile extends StatelessWidget {
+  const _AddTile({
+    required this.onAddPhoto,
+    required this.onAddVideo,
+    this.fullWidth = false,
+    this.disabled = false,
+  });
+
+  final VoidCallback onAddPhoto;
+  final VoidCallback onAddVideo;
+  final bool fullWidth;
+  final bool disabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return AspectRatio(
+      aspectRatio: 16 / 10,
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+          border: Border.all(color: colors.outlineVariant, width: 1.5),
+        ),
+        child: Row(
           children: [
-            Icon(Icons.tune, color: AppColors.of(context).onSurfaceVariant, size: 24),
-            const SizedBox(height: 6),
-            Text('Manage', style: AppTypography.labelSm),
+            Expanded(
+              child: _AddTileButton(
+                icon: Icons.add_photo_alternate_outlined,
+                label: 'Add photo',
+                onTap: onAddPhoto,
+                disabled: disabled,
+              ),
+            ),
+            VerticalDivider(width: 1, thickness: 1.5, color: colors.outlineVariant),
+            Expanded(
+              child: _AddTileButton(
+                icon: Icons.videocam_outlined,
+                label: 'Add video',
+                onTap: onAddVideo,
+                disabled: disabled,
+              ),
+            ),
           ],
         ),
       ),
@@ -286,35 +416,32 @@ class _ManageTile extends StatelessWidget {
   }
 }
 
-class _AddTile extends StatelessWidget {
-  const _AddTile({required this.onAddPhoto, required this.onAddVideo, this.fullWidth = false});
+class _AddTileButton extends StatelessWidget {
+  const _AddTileButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.disabled = false,
+  });
 
-  final VoidCallback onAddPhoto;
-  final VoidCallback onAddVideo;
-  final bool fullWidth;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool disabled;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onAddPhoto,
-      onLongPress: onAddVideo,
-      borderRadius: BorderRadius.circular(AppRadius.xl),
-      child: AspectRatio(
-        aspectRatio: 16 / 10,
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.of(context).surfaceContainerLow,
-            borderRadius: BorderRadius.circular(AppRadius.xl),
-            border: Border.all(color: AppColors.of(context).outlineVariant, width: 1.5),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.add_photo_alternate_outlined, color: AppColors.of(context).onSurfaceVariant, size: 26),
-              const SizedBox(height: 6),
-              Text('Add photos or a video', style: AppTypography.labelSm),
-            ],
-          ),
+    return Opacity(
+      opacity: disabled ? 0.5 : 1,
+      child: InkWell(
+        onTap: disabled ? null : onTap,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: AppColors.of(context).onSurfaceVariant, size: 26),
+            const SizedBox(height: 6),
+            Text(label, style: AppTypography.labelSm),
+          ],
         ),
       ),
     );

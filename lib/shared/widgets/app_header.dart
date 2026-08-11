@@ -6,9 +6,8 @@ import '../../config/theme.dart';
 /// instead of a colored bar, per the Field Journal design system's
 /// "Overlays" spec. Two variants:
 /// - [AppHeader.tabRoot] — bottom-nav tab screens (Explore, Journal,
-///   Badges, Quiz, Dashboard). Leading is styled like a back arrow but
-///   currently does nothing — TODO: wire up once these screens have
-///   somewhere real to go (e.g. a drawer/menu).
+///   Badges, Quiz, Dashboard). No leading icon — there's nothing to go
+///   back to from a tab root.
 /// - [AppHeader.pushed] — screens reached by pushing (Destination Detail,
 ///   Journal Detail, Check-in History, …): a real back button.
 class AppHeader extends StatelessWidget implements PreferredSizeWidget {
@@ -35,20 +34,22 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
         elevation: 0,
         scrolledUnderElevation: 0,
         automaticallyImplyLeading: false,
-        titleSpacing: 12,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, color: AppColors.of(context).onSurface),
-          iconSize: 18,
-          visualDensity: VisualDensity.compact,
-          style: IconButton.styleFrom(
-            minimumSize: const Size(36, 36),
-            padding: EdgeInsets.zero,
-            backgroundColor: Colors.transparent,
-            overlayColor: AppColors.of(context).onSurface,
-            shape: const CircleBorder(),
-          ),
-          onPressed: showBackButton ? () => Navigator.of(context).maybePop() : () {},
-        ),
+        titleSpacing: showBackButton ? 12 : 20,
+        leading: showBackButton
+            ? IconButton(
+                icon: Icon(Icons.arrow_back_ios_new, color: AppColors.of(context).onSurface),
+                iconSize: 18,
+                visualDensity: VisualDensity.compact,
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(36, 36),
+                  padding: EdgeInsets.zero,
+                  backgroundColor: Colors.transparent,
+                  overlayColor: AppColors.of(context).onSurface,
+                  shape: const CircleBorder(),
+                ),
+                onPressed: () => Navigator.of(context).maybePop(),
+              )
+            : null,
         title: Text(title, style: AppTypography.headlineSm),
         actions: actions,
       ),

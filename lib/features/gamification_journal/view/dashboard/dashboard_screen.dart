@@ -8,7 +8,6 @@ import '../../controller/badge_controller.dart';
 import '../../controller/checkin_controller.dart';
 import '../../controller/dashboard_controller.dart';
 import '../../controller/journal_controller.dart';
-import '../../controller/quiz_controller.dart';
 import '../../../../shared/widgets/app_header.dart';
 import '../../../../shared/widgets/category_breakdown_list.dart';
 import '../../../../shared/widgets/check_in_history_tile.dart';
@@ -44,25 +43,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _badgeController.addListener(_refresh);
     _journalController.addListener(_refresh);
 
-    // This screen is the Journal tab's root, so it also owns the module's
-    // one-time initial data load (destinations, check-in history, badge
-    // catalogue, journal entries, daily fact) — nothing else in the app
-    // triggers these.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadInitialData());
-  }
-
-  Future<void> _loadInitialData() async {
-    if (!mounted) return;
-    final quizController = context.read<QuizController>();
-
-    await _checkInController.loadDestinations();
-    await _checkInController.loadHistory();
-    await _badgeController.loadBadges();
-    await _journalController.loadEntries();
-    await quizController.loadDailyFact();
-    await quizController.loadHistory();
-
-    await _refresh();
+    // The app shell (_MainShell in app_router.dart) owns the module's
+    // one-time initial data load at app start, so this just needs an
+    // initial aggregation once that data starts arriving — the listeners
+    // above already keep it live after that.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
   }
 
   @override
