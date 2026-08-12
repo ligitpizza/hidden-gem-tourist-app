@@ -365,9 +365,16 @@ class _MapBodyState extends State<_MapBody> {
               child: _MapActionsFab(onPressed: _viewThemedTrail),
             ),
           if (controller.clusterAnchor != null || controller.clusterMessage != null)
+            // right is inset past the zoom/locate control column (see
+            // _MapZoomControls, right:16 + 40 wide) so the card's own close
+            // button in its header never sits underneath those buttons —
+            // previously the card spanned right:16 like everything else,
+            // and since the zoom controls paint after it in the Stack, they
+            // covered the close button entirely, leaving no way to dismiss
+            // the card once it was showing.
             Positioned(
               left: 16,
-              right: 16,
+              right: 72,
               bottom: 84,
               child: _ClusterCard(controller: controller, onStopTap: _openStopDetail),
             ),

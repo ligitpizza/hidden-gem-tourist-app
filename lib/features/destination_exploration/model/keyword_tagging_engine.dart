@@ -4,25 +4,46 @@
 /// (lib/features/travel_prep/model/eco_partner_repository.dart).
 ///
 /// A keyword preceded by a negation cue within a few words ("unable to use
-/// wheelchair", "no parking") is not tagged — a small, deterministic
-/// word-window check, not real negation scope parsing. It won't catch every
-/// phrasing (e.g. a negation more than [_negationWindowWords] words earlier),
-/// and a keyword mentioned both negated and plainly elsewhere in the same
-/// review still tags normally on its clean occurrence.
+/// wheelchair", "no parking") is not tagged with its positive meaning — a
+/// small, deterministic word-window check, not real negation scope parsing.
+/// It won't catch every phrasing (e.g. a negation more than
+/// [_negationWindowWords] words earlier). For keywords whose [_KeywordRule]
+/// defines a [_KeywordRule.negatedTag] (currently wheelchair/stroller), a
+/// negated mention tags that explicit opposite instead of just being
+/// dropped — e.g. "unable to use wheelchair" tags "wheelchair-unfriendly".
+/// A keyword mentioned both negated and plainly elsewhere in the same
+/// review tags both the positive and negative tag (an honest reflection of
+/// a mixed review), since each occurrence is judged independently.
 class KeywordTaggingEngine {
   KeywordTaggingEngine._();
 
-  static const Map<String, String> _keywordToTag = {
-    'slippery': 'slippery when wet',
-    'wheelchair': 'wheelchair-friendly',
-    'stroller': 'stroller-friendly',
-    'steep': 'steep terrain',
-    'stairs': 'many stairs',
-    'parking': 'parking available',
-    'crowded': 'crowded',
-    'family': 'family-friendly',
-    'kids': 'family-friendly',
-    'shade': 'shaded',
+  static const Map<String, _KeywordRule> _keywordToTag = {
+    'slippery': _KeywordRule('slippery when wet'),
+    'wheelchair': _KeywordRule('wheelchair-friendly', negatedTag: 'wheelchair-unfriendly'),
+    'stroller': _KeywordRule('stroller-friendly', negatedTag: 'stroller-unfriendly'),
+    'steep': _KeywordRule('steep terrain'),
+    'stairs': _KeywordRule('many stairs'),
+    'parking': _KeywordRule('parking available'),
+    'crowded': _KeywordRule('crowded'),
+    'family': _KeywordRule('family-friendly'),
+    'kids': _KeywordRule('family-friendly'),
+    'shade': _KeywordRule('shaded'),
+    'ramp': _KeywordRule('ramp available'),
+    'handrail': _KeywordRule('handrail available'),
+    'railing': _KeywordRule('handrail available'),
+    'uneven': _KeywordRule('uneven terrain'),
+    'narrow': _KeywordRule('narrow pathway'),
+    'muddy': _KeywordRule('muddy when wet'),
+    'toilet': _KeywordRule('restroom available'),
+    'restroom': _KeywordRule('restroom available'),
+    'bench': _KeywordRule('seating available'),
+    'seating': _KeywordRule('seating available'),
+    'signpost': _KeywordRule('well signposted'),
+    'signage': _KeywordRule('well signposted'),
+    'elderly': _KeywordRule('elderly-friendly'),
+    'senior': _KeywordRule('elderly-friendly'),
+    'pet': _KeywordRule('pet-friendly'),
+    'dog': _KeywordRule('pet-friendly'),
   };
 
   static const List<String> _negationCues = [
@@ -47,22 +68,29 @@ class KeywordTaggingEngine {
     final lower = reviewText.toLowerCase();
     final tags = <String>[];
     for (final entry in _keywordToTag.entries) {
-      if (tags.contains(entry.value)) continue;
-      if (_hasUnnegatedMatch(lower, entry.key)) {
-        tags.add(entry.value);
+      final rule = entry.value;
+      if (!tags.contains(rule.tag) && _hasMatch(lower, entry.key, negated: false)) {
+        tags.add(rule.tag);
+      }
+      final negatedTag = rule.negatedTag;
+      if (negatedTag != null &&
+          !tags.contains(negatedTag) &&
+          _hasMatch(lower, entry.key, negated: true)) {
+        tags.add(negatedTag);
       }
     }
     return tags;
   }
 
-  /// True if [keyword] occurs in [lower] at least once without a negation
-  /// cue immediately before it.
-  static bool _hasUnnegatedMatch(String lower, String keyword) {
+  /// True if [keyword] occurs in [lower] at least once whose negation state
+  /// (preceded by a negation cue within [_negationWindowWords] words, or
+  /// not) matches [negated].
+  static bool _hasMatch(String lower, String keyword, {required bool negated}) {
     var searchStart = 0;
     while (true) {
       final index = lower.indexOf(keyword, searchStart);
       if (index == -1) return false;
-      if (!_isNegated(lower, index)) return true;
+      if (_isNegated(lower, index) == negated) return true;
       searchStart = index + keyword.length;
     }
   }
@@ -78,4 +106,11 @@ class KeywordTaggingEngine {
 
     return _negationCues.any(windowText.contains);
   }
+}
+
+class _KeywordRule {
+  const _KeywordRule(this.tag, {this.negatedTag});
+
+  final String tag;
+  final String? negatedTag;
 }

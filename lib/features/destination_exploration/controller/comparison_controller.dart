@@ -3,7 +3,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../shared/models/destination.dart' as shared;
-import '../../../shared/models/hidden_gem.dart' show HiddenGemCategory;
+import '../../../shared/models/hidden_gem.dart' show HiddenGemCategory, HiddenGemCategoryX;
 import '../../itinerary_planning/controller/itinerary_planner_controller.dart';
 import '../model/comparison_destination.dart';
 import '../model/crowd_level.dart';
@@ -161,17 +161,30 @@ class ComparisonController extends ChangeNotifier {
     FavouriteDestinationsStore.instance.add(destination);
   }
 
+  /// A per-destination breakdown (category, rating, Hidden Gem score,
+  /// entrance cost, crowd level) rather than just names + one score, so the
+  /// shared text stands on its own the way the itinerary's share summary
+  /// does (see ItineraryPlannerController.buildShareSummary) instead of
+  /// needing the app open to make sense of it.
   String buildShareSummary() {
-    final buffer = StringBuffer()..writeln('Comparing ${destinations.length} destinations:');
-    for (final destination in destinations) {
-      buffer.writeln(
-        '- ${destination.name} (${destination.avgRating.toStringAsFixed(1)}★, '
-        'Hidden Gem ${destination.hiddenGemScore.toStringAsFixed(2)})',
-      );
-    }
+    final buffer = StringBuffer()
+      ..writeln('My comparison: ${destinations.map((d) => d.name).join(' vs ')}');
     final pick = bestPick;
     if (pick != null) buffer.writeln('Best Pick: ${pick.name}');
-    return buffer.toString();
+    buffer.writeln();
+
+    for (final destination in destinations) {
+      buffer
+        ..writeln('${destination.name} — ${destination.category.label}')
+        ..writeln(
+          '★${destination.avgRating.toStringAsFixed(1)} | '
+          'Hidden Gem ${(destination.hiddenGemScore * 10).toStringAsFixed(1)}/10 | '
+          '${_formatEntranceCost(destination.entranceCost)} | '
+          '${destination.crowdLevel.label} crowds',
+        )
+        ..writeln();
+    }
+    return buffer.toString().trimRight();
   }
 
   Future<void> shareComparison() async {
@@ -183,6 +196,12 @@ class ComparisonController extends ChangeNotifier {
     }
     notifyListeners();
   }
+}
+
+String _formatEntranceCost(double? cost) {
+  if (cost == null) return 'Cost not listed';
+  if (cost == 0) return 'Free entry';
+  return 'RM ${cost.toStringAsFixed(2)}';
 }
 
 /// A representative [shared.DestinationCategory] for a [HiddenGemCategory] —

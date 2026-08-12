@@ -15,6 +15,16 @@ void main() {
       expect(KeywordTaggingEngine.tagsFor('good family spot'), ['family-friendly']);
       expect(KeywordTaggingEngine.tagsFor('lots of shade'), ['shaded']);
       expect(KeywordTaggingEngine.tagsFor('slippery when wet'), ['slippery when wet']);
+      expect(KeywordTaggingEngine.tagsFor('a ramp leads up to the entrance'), ['ramp available']);
+      expect(KeywordTaggingEngine.tagsFor('sturdy handrail the whole way'), ['handrail available']);
+      expect(KeywordTaggingEngine.tagsFor('very uneven ground'), ['uneven terrain']);
+      expect(KeywordTaggingEngine.tagsFor('a narrow path near the edge'), ['narrow pathway']);
+      expect(KeywordTaggingEngine.tagsFor('gets muddy after rain'), ['muddy when wet']);
+      expect(KeywordTaggingEngine.tagsFor('clean public toilet on site'), ['restroom available']);
+      expect(KeywordTaggingEngine.tagsFor('a few benches to rest on'), ['seating available']);
+      expect(KeywordTaggingEngine.tagsFor('well signposted trail'), ['well signposted']);
+      expect(KeywordTaggingEngine.tagsFor('good for elderly visitors'), ['elderly-friendly']);
+      expect(KeywordTaggingEngine.tagsFor('brought my dog along'), ['pet-friendly']);
     });
 
     test('is case-insensitive', () {
@@ -25,7 +35,7 @@ void main() {
       final tags = KeywordTaggingEngine.tagsFor(
         'The path was a bit slippery but wheelchair-friendly at the base, wheelchair ramps everywhere',
       );
-      expect(tags, ['slippery when wet', 'wheelchair-friendly']);
+      expect(tags, ['slippery when wet', 'wheelchair-friendly', 'ramp available']);
     });
 
     test('returns an empty list when nothing matches', () {
@@ -34,27 +44,33 @@ void main() {
   });
 
   group('KeywordTaggingEngine.tagsFor negation handling', () {
-    test('does not tag a keyword immediately preceded by a negation cue', () {
-      expect(KeywordTaggingEngine.tagsFor('unable to use wheelchair'), isEmpty);
+    test('drops a keyword with no negated-tag counterpart when negated', () {
       expect(KeywordTaggingEngine.tagsFor('no parking on site'), isEmpty);
       expect(KeywordTaggingEngine.tagsFor("doesn't have stairs"), isEmpty);
-      expect(KeywordTaggingEngine.tagsFor('not wheelchair friendly'), isEmpty);
     });
 
-    test('still tags a keyword mentioned without negation elsewhere in the review', () {
+    test('tags the explicit opposite when a keyword with a negated-tag counterpart is negated', () {
+      expect(KeywordTaggingEngine.tagsFor('unable to use wheelchair'), ['wheelchair-unfriendly']);
+      expect(KeywordTaggingEngine.tagsFor('not wheelchair friendly'), ['wheelchair-unfriendly']);
+      expect(KeywordTaggingEngine.tagsFor('no stroller access here'), ['stroller-unfriendly']);
+    });
+
+    test('tags both the positive and negated counterpart for a mixed review', () {
       final tags = KeywordTaggingEngine.tagsFor(
         'Unable to use wheelchair on the upper trail, but the lower path is wheelchair friendly',
       );
-      expect(tags, ['wheelchair-friendly']);
+      expect(tags, ['wheelchair-friendly', 'wheelchair-unfriendly']);
     });
 
     test('a negation cue far outside the word window does not suppress the tag', () {
       // "Not" here modifies "crowded", not "wheelchair" — 7 words separate
-      // them, past the 4-word negation window, so wheelchair still tags.
+      // them, past the 4-word negation window, so wheelchair still tags
+      // positively and not its negated counterpart.
       final tags = KeywordTaggingEngine.tagsFor(
         'Not crowded at all on weekdays, and the wheelchair access was great',
       );
       expect(tags, contains('wheelchair-friendly'));
+      expect(tags, isNot(contains('wheelchair-unfriendly')));
     });
   });
 

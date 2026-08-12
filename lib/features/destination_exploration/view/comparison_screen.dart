@@ -1,9 +1,14 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' hide ChangeNotifierProvider, Consumer;
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/hidden_gem.dart';
@@ -714,13 +719,7 @@ class _BestPickView extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 TextButton.icon(
-                  onPressed: () async {
-                    await controller.shareComparison();
-                    if (controller.shareError != null && context.mounted) {
-                      ScaffoldMessenger.of(context)
-                          .showSnackBar(SnackBar(content: Text(controller.shareError!)));
-                    }
-                  },
+                  onPressed: () => _shareComparisonAsImage(context, controller),
                   icon: const Icon(Icons.share),
                   label: const Text('Share Comparison'),
                 ),
@@ -761,6 +760,178 @@ class _BestPickView extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           child: valueWidget ?? Text(value ?? '', style: valueStyle),
+        ),
+      ],
+    );
+  }
+}
+
+/// Captures [_ShareableComparisonCard] as a PNG and shares it alongside
+/// [ComparisonController.buildShareSummary]'s text — mirrors
+/// RouteOptimizedScreen's `_captureShareCard`/`_shareAsImage` (see
+/// itinerary_planning/view/route_optimized_screen.dart) so a shared
+/// comparison looks like the same kind of branded card a shared itinerary
+/// does, instead of a bare text message.
+Future<void> _shareComparisonAsImage(BuildContext context, ComparisonController controller) async {
+  final boundaryKey = GlobalKey();
+  final overlay = Overlay.of(context);
+  late OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (context) => Positioned(
+      left: -4000,
+      top: 0,
+      child: Material(
+        type: MaterialType.transparency,
+        child: RepaintBoundary(
+          key: boundaryKey,
+          child: _ShareableComparisonCard(controller: controller),
+        ),
+      ),
+    ),
+  );
+
+  Uint8List? bytes;
+  try {
+    overlay.insert(entry);
+    // Let the entry actually paint before reading its layer.
+    await WidgetsBinding.instance.endOfFrame;
+
+    final boundary = boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (boundary != null) {
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      bytes = byteData?.buffer.asUint8List();
+    }
+  } finally {
+    entry.remove();
+  }
+
+  if (bytes == null) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't share the comparison right now.")),
+      );
+    }
+    return;
+  }
+
+  final file = XFile.fromData(bytes, name: 'comparison.png', mimeType: 'image/png');
+  await Share.shareXFiles(
+    [file],
+    subject: 'My destination comparison',
+    text: controller.buildShareSummary(),
+  );
+}
+
+/// The branded card captured for "Share Comparison" — same visual language
+/// as itinerary_planning's `_ShareableItineraryCard` (dark primarySeed
+/// background, gold accents) so a shared comparison and a shared itinerary
+/// read as the same app/family of content.
+class _ShareableComparisonCard extends StatelessWidget {
+  const _ShareableComparisonCard({required this.controller});
+
+  final ComparisonController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final pick = controller.bestPick;
+
+    return Material(
+      color: AppTheme.primarySeed,
+      child: Container(
+        width: 360,
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.diamond, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                const Text(
+                  'Hidden Gems of Malaysia',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Comparing ${controller.destinations.length} Destinations',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                height: 1.3,
+              ),
+            ),
+            if (pick != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withAlpha(30),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.emoji_events, color: Color(0xFFE8D9A0), size: 14),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Best Pick: ${pick.name}',
+                        style: const TextStyle(
+                          color: Color(0xFFE8D9A0),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 18),
+            for (final destination in controller.destinations) ...[
+              _ComparisonCardRow(destination: destination, isBestPick: destination.id == pick?.id),
+              if (destination != controller.destinations.last) const SizedBox(height: 12),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ComparisonCardRow extends StatelessWidget {
+  const _ComparisonCardRow({required this.destination, required this.isBestPick});
+
+  final ComparisonDestination destination;
+  final bool isBestPick;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                destination.name,
+                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (isBestPick) const Icon(Icons.emoji_events, color: Color(0xFFE8D9A0), size: 14),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '★${destination.avgRating.toStringAsFixed(1)}  •  '
+          'Hidden Gem ${(destination.hiddenGemScore * 10).toStringAsFixed(1)}/10  •  '
+          '${destination.crowdLevel.label} crowds',
+          style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 11),
         ),
       ],
     );
