@@ -16,7 +16,9 @@ import '../../gamification_journal/controller/checkin_controller.dart';
 import '../../gamification_journal/model/destination_model.dart';
 import '../../gamification_journal/view/checkin/destination_detail_screen.dart';
 import '../../itinerary_planning/controller/itinerary_planner_controller.dart';
+import '../../itinerary_planning/model/itinerary_stop.dart' show StopBadge;
 import '../../itinerary_planning/view/itinerary_routes.dart';
+import '../../itinerary_planning/view/widgets/badge_pill.dart';
 import '../controller/destination_map_controller.dart';
 import '../model/map_destination.dart';
 import 'comparison_routes.dart';
@@ -252,22 +254,47 @@ class _MapBodyState extends State<_MapBody> {
                     Marker(
                       key: ValueKey(destination.id),
                       point: destination.location,
-                      width: 40,
-                      height: 40,
+                      width: 44,
+                      height: 44,
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          Icon(
-                            categoryIcon(destination.category),
-                            color: categoryColor(destination.category),
-                            size: 32,
+                          // A solid colored pin (white ring + shadow) reads
+                          // clearly against any map tile color; the old bare
+                          // colored icon blended into busy OSM tiles.
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: categoryColor(destination.category),
+                              border: Border.all(color: Colors.white, width: 2.5),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black45,
+                                  blurRadius: 4,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              categoryIcon(destination.category),
+                              color: Colors.white,
+                              size: 20,
+                            ),
                           ),
                           if (controller.mode == MapViewMode.comparison &&
                               controller.selectedForComparison.contains(destination.id))
-                            const Positioned(
-                              right: 0,
-                              top: 0,
-                              child: Icon(Icons.check_circle, size: 16, color: Colors.green),
+                            Positioned(
+                              right: -2,
+                              top: -2,
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white,
+                                ),
+                                child: const Icon(Icons.check_circle, size: 18, color: Colors.green),
+                              ),
                             ),
                         ],
                       ),
@@ -583,6 +610,19 @@ String _shortHighlight(String description) {
   return '${firstSentence.substring(0, 42).trimRight()}…';
 }
 
+/// h:mm AM/PM, matching the Day Trip screen's stop-time formatting.
+String _formatTrailTime(DateTime time) {
+  final hour12 = time.hour % 12 == 0 ? 12 : time.hour % 12;
+  final minute = time.minute.toString().padLeft(2, '0');
+  final period = time.hour < 12 ? 'AM' : 'PM';
+  return '$hour12:$minute $period';
+}
+
+/// No real routing API backs this trail, so drive time is a rough estimate
+/// off straight-line distance — same formula already used for the
+/// comparison screen's drive-time captions.
+int _estimateTrailDriveMinutes(double km) => (km / 35 * 60).round();
+
 class _ClusterCard extends StatelessWidget {
   const _ClusterCard({required this.controller, required this.onStopTap});
 
@@ -592,6 +632,7 @@ class _ClusterCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final anchor = controller.clusterAnchor;
+    final colorScheme = Theme.of(context).colorScheme;
 
     if (anchor == null) {
       // Loading/error/empty states — no trail data to show yet.
@@ -614,11 +655,21 @@ class _ClusterCard extends StatelessWidget {
     }
 
     final flavor = _trailFlavor(anchor.category);
-    final stopCount = 1 + controller.clusterStops.length;
+    final legs = controller.legDistancesKm;
+
+    // Arrival time per stop: the anchor is "now" (the user's current
+    // position/time); each following stop's time is the previous arrival
+    // plus that leg's estimated drive time.
+    final arrivalTimes = <DateTime>[DateTime.now()];
+    for (final legKm in legs) {
+      arrivalTimes.add(arrivalTimes.last.add(Duration(minutes: _estimateTrailDriveMinutes(legKm))));
+    }
+
+    final stops = [anchor, ...controller.clusterStops];
 
     // Positioned(left, right, bottom) with no top constraint lets this card
-    // grow upward without bound — with a header, up to 4 numbered stops, and
-    // a footer, that easily exceeds the visible screen height, pushing the
+    // grow upward without bound — with a header, up to 4 stops, and a
+    // footer, that easily exceeds the visible screen height, pushing the
     // header (and its close button) off the top of the screen entirely.
     // Capping the card and letting only the stop list scroll keeps the
     // header/footer always reachable.
@@ -626,206 +677,244 @@ class _ClusterCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       margin: EdgeInsets.zero,
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
         child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 14, 8, 16),
-            color: AppTheme.primarySeed,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.gemGoldSoft,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          '$flavor Cluster',
-                          style: const TextStyle(
-                            color: AppTheme.primarySeed,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$flavor Trail',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.onSurface,
                       ),
                     ),
-                    Text(
-                      '${controller.totalDistanceKm.toStringAsFixed(1)}km total',
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white70, size: 20),
-                      onPressed: controller.clearCluster,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  '$flavor Trail',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Discover $stopCount curated ${flavor.toLowerCase()} '
-                  'destination${stopCount == 1 ? '' : 's'} along this trail.',
-                  style: const TextStyle(color: Colors.white70, fontSize: 12.5),
-                ),
-              ],
-            ),
-          ),
-          Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-              child: Column(
-                children: [
-                  _TrailStopRow(
-                    number: 1,
-                    isAnchor: true,
-                    name: anchor.name,
-                    detail: 'Selected Anchor',
-                    highlight: _shortHighlight(anchor.description),
-                    onTap: () => onStopTap(anchor),
+                  Text(
+                    '${controller.totalDistanceKm.toStringAsFixed(1)}km total',
+                    style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
                   ),
-                  for (var i = 0; i < controller.clusterStops.length; i++)
-                    _TrailStopRow(
-                      number: i + 2,
-                      isAnchor: false,
-                      name: controller.clusterStops[i].name,
-                      detail: '${controller.legDistancesKm[i].toStringAsFixed(1)}km away',
-                      highlight: _shortHighlight(controller.clusterStops[i].description),
-                      onTap: () => onStopTap(controller.clusterStops[i]),
-                    ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: controller.clearCluster,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  ),
                 ],
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-            child: SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  final itineraryController = ProviderScope.containerOf(context, listen: false)
-                      .read(itineraryPlannerControllerProvider);
-                  final added = controller.addTrailToItinerary(itineraryController);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        added == 0
-                            ? 'This trail is already in your itinerary'
-                            : 'Added $added stop${added == 1 ? '' : 's'} to your itinerary',
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                child: Column(
+                  children: [
+                    for (var i = 0; i < stops.length; i++)
+                      _TrailTimelineEntry(
+                        isAnchor: i == 0,
+                        isLast: i == stops.length - 1,
+                        time: _formatTrailTime(arrivalTimes[i]),
+                        title: stops[i].name,
+                        meta: stops[i].category.label,
+                        description: i == 0
+                            ? 'Starting point of your journey.'
+                            : _shortHighlight(stops[i].description),
+                        travelToNext: i < legs.length
+                            ? '~${_estimateTrailDriveMinutes(legs[i])} min drive'
+                            : null,
+                        onTap: () => onStopTap(stops[i]),
                       ),
-                      action: SnackBarAction(
-                        label: 'View',
-                        onPressed: () => context.push(ItineraryRoutes.planRoute),
-                      ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.card_travel),
-                label: const Text('Add Trail to Itinerary'),
+                  ],
+                ),
               ),
             ),
-          ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, size: 14, color: Theme.of(context).colorScheme.outline),
-                const SizedBox(width: 6),
-                Text(
-                  'Suggested path only — not a navigable route',
-                  style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.outline),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    final itineraryController = ProviderScope.containerOf(context, listen: false)
+                        .read(itineraryPlannerControllerProvider);
+                    final added = controller.addTrailToItinerary(itineraryController);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          added == 0
+                              ? 'This trail is already in your itinerary'
+                              : 'Added $added stop${added == 1 ? '' : 's'} to your itinerary',
+                        ),
+                        action: SnackBarAction(
+                          label: 'View',
+                          onPressed: () => context.push(ItineraryRoutes.planRoute),
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.card_travel),
+                  label: const Text('Add Trail to Itinerary'),
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              color: colorScheme.surfaceContainerHighest,
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 14, color: colorScheme.outline),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Suggested path only — not a navigable route',
+                    style: TextStyle(fontSize: 11, color: colorScheme.outline),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _TrailStopRow extends StatelessWidget {
-  const _TrailStopRow({
-    required this.number,
+/// One trail stop in the timeline, matching the Day Trip screen's
+/// dot-and-line + card visual pattern (see day_trip_screen.dart's
+/// `_TimelineEntry`), so a themed trail and a planned itinerary read as the
+/// same kind of thing.
+class _TrailTimelineEntry extends StatelessWidget {
+  const _TrailTimelineEntry({
     required this.isAnchor,
-    required this.name,
-    required this.detail,
-    required this.highlight,
+    required this.isLast,
+    required this.time,
+    required this.title,
+    required this.meta,
+    required this.description,
+    required this.travelToNext,
     required this.onTap,
   });
 
-  final int number;
   final bool isAnchor;
-  final String name;
-  final String detail;
-  final String highlight;
+  final bool isLast;
+  final String time;
+  final String title;
+  final String meta;
+  final String description;
+  final String? travelToNext;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 26,
-              height: 26,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isAnchor ? AppTheme.primarySeed : Colors.transparent,
-                border: isAnchor ? null : Border.all(color: AppTheme.gemGold, width: 1.5),
-              ),
-              child: Text(
-                '$number',
-                style: TextStyle(
-                  color: isAnchor ? Colors.white : AppTheme.gemGold,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
+    final colorScheme = Theme.of(context).colorScheme;
+    final dotColor = isAnchor ? AppTheme.primarySeed : AppTheme.gemGold;
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 22,
+            child: Column(
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  margin: const EdgeInsets.only(top: 4),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isAnchor ? dotColor : Colors.white,
+                    border: Border.all(color: dotColor, width: 2),
+                  ),
                 ),
-              ),
+                if (!isLast)
+                  Expanded(
+                    child: Container(width: 2, color: colorScheme.outlineVariant),
+                  ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  const SizedBox(height: 2),
-                  Text(
-                    highlight.isEmpty ? detail : '$detail • $highlight',
-                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outline),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: onTap,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: colorScheme.outlineVariant),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                time,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              const Spacer(),
+                              BadgePill(badge: isAnchor ? StopBadge.selected : StopBadge.localGem),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            meta,
+                            style: TextStyle(fontSize: 11.5, color: colorScheme.onSurfaceVariant),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            description,
+                            style: TextStyle(fontSize: 12.5, color: colorScheme.onSurface),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
+                  if (travelToNext != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, left: 4),
+                      child: Row(
+                        children: [
+                          Icon(Icons.directions_car, size: 14, color: colorScheme.onSurfaceVariant),
+                          const SizedBox(width: 6),
+                          Text(
+                            travelToNext!,
+                            style: TextStyle(fontSize: 11.5, color: colorScheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, size: 18, color: Theme.of(context).colorScheme.outline),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

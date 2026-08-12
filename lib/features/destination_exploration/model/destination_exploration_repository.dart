@@ -142,6 +142,42 @@ class DestinationExplorationRepository {
     return candidates.take(maxStops).toList();
   }
 
+  /// Same-category destinations near an arbitrary [location] — the user's
+  /// current position, rather than another destination's — closest-first,
+  /// within [radiusKm] and capped at [maxStops]. Unlike [nearbyByCategory]
+  /// (which searches around another destination and excludes it by id),
+  /// every match here is a genuine candidate; the nearest one becomes the
+  /// trail's anchor at the call site.
+  Future<List<MapDestination>> nearbyByCategoryNearLocation({
+    required LatLng location,
+    required HiddenGemCategory category,
+    double radiusKm = clusterRadiusKm,
+    int maxStops = clusterMaxStops,
+  }) async {
+    final bufferDeg = radiusKm / 111.0;
+    final lat = location.latitude;
+    final lng = location.longitude;
+
+    final rows = await Supabase.instance.client
+        .from('destinations')
+        .select()
+        .gte('latitude', lat - bufferDeg)
+        .lte('latitude', lat + bufferDeg)
+        .gte('longitude', lng - bufferDeg)
+        .lte('longitude', lng + bufferDeg);
+
+    final candidates = rows
+        .map(mapRow)
+        .where((d) => d.category == category)
+        .where((d) => legDistanceKm(location, d.location) <= radiusKm)
+        .toList()
+      ..sort(
+        (a, b) => legDistanceKm(location, a.location).compareTo(legDistanceKm(location, b.location)),
+      );
+
+    return candidates.take(maxStops).toList();
+  }
+
   /// The closest destination (any category) to [point], searching an
   /// expanding radius so a sparse area doesn't require scanning the whole
   /// table. Returns null if nothing is found even at the widest radius.

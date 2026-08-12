@@ -151,6 +151,15 @@ class DestinationMapController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Builds a themed trail. Given an explicit [origin] (e.g. a destination
+  /// the user just tapped), clusters around it using its own category —
+  /// unchanged from before. With no origin (the map's "View Themed Trail"
+  /// action with nothing selected), the trail is built around the user's
+  /// *own* current location instead, filtered to whichever single category
+  /// they have selected in the category filter — "gather nearby
+  /// destinations sharing a category, near where I actually am" — rather
+  /// than picking an arbitrary nearest destination (regardless of category)
+  /// and clustering around that.
   Future<void> viewThemedCluster({MapDestination? origin}) async {
     if (isLoadingCluster) return;
 
@@ -159,10 +168,21 @@ class DestinationMapController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      MapDestination? anchor = origin;
+      if (origin != null) {
+        final candidates = await _repository.nearbyByCategory(origin: origin);
+        clusterAnchor = origin;
+        clusterStops = orderByNearestNeighbor(origin, candidates);
+        clusterMessage = clusterStops.isEmpty ? 'No themed cluster available nearby.' : null;
+      } else {
+        if (selectedCategories.length != 1) {
+          clusterAnchor = null;
+          clusterStops = const [];
+          clusterMessage = 'Select a single category filter to find a themed trail near you.';
+          isLoadingCluster = false;
+          notifyListeners();
+          return;
+        }
 
-      if (anchor == null) {
-        // Try to resolve anchor from current location
         final point = await _currentLocation();
         if (point == null) {
           clusterAnchor = null;
@@ -173,8 +193,12 @@ class DestinationMapController extends ChangeNotifier {
           return;
         }
         userLocation = point;
-        anchor = await _repository.nearestDestination(point);
-        if (anchor == null) {
+
+        final candidates = await _repository.nearbyByCategoryNearLocation(
+          location: point,
+          category: selectedCategories.first,
+        );
+        if (candidates.isEmpty) {
           clusterAnchor = null;
           clusterStops = const [];
           clusterMessage = 'No themed cluster available nearby.';
@@ -182,12 +206,12 @@ class DestinationMapController extends ChangeNotifier {
           notifyListeners();
           return;
         }
-      }
 
-      final candidates = await _repository.nearbyByCategory(origin: anchor);
-      clusterAnchor = anchor;
-      clusterStops = orderByNearestNeighbor(anchor, candidates);
-      clusterMessage = clusterStops.isEmpty ? 'No themed cluster available nearby.' : null;
+        final anchor = candidates.first; // nearest match to the user
+        clusterAnchor = anchor;
+        clusterStops = orderByNearestNeighbor(anchor, candidates.skip(1).toList());
+        clusterMessage = null;
+      }
     } catch (_) {
       clusterAnchor = null;
       clusterStops = const [];

@@ -33,6 +33,31 @@ void main() {
     });
   });
 
+  group('KeywordTaggingEngine.tagsFor negation handling', () {
+    test('does not tag a keyword immediately preceded by a negation cue', () {
+      expect(KeywordTaggingEngine.tagsFor('unable to use wheelchair'), isEmpty);
+      expect(KeywordTaggingEngine.tagsFor('no parking on site'), isEmpty);
+      expect(KeywordTaggingEngine.tagsFor("doesn't have stairs"), isEmpty);
+      expect(KeywordTaggingEngine.tagsFor('not wheelchair friendly'), isEmpty);
+    });
+
+    test('still tags a keyword mentioned without negation elsewhere in the review', () {
+      final tags = KeywordTaggingEngine.tagsFor(
+        'Unable to use wheelchair on the upper trail, but the lower path is wheelchair friendly',
+      );
+      expect(tags, ['wheelchair-friendly']);
+    });
+
+    test('a negation cue far outside the word window does not suppress the tag', () {
+      // "Not" here modifies "crowded", not "wheelchair" — 7 words separate
+      // them, past the 4-word negation window, so wheelchair still tags.
+      final tags = KeywordTaggingEngine.tagsFor(
+        'Not crowded at all on weekdays, and the wheelchair access was great',
+      );
+      expect(tags, contains('wheelchair-friendly'));
+    });
+  });
+
   group('difficultyBucketFor', () {
     test('boundary values', () {
       expect(difficultyBucketFor(2.0), DifficultyBucket.easy);

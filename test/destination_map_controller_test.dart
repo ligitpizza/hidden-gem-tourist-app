@@ -30,11 +30,11 @@ class _CompleterRepository extends DestinationExplorationRepository {
 class _ClusterFakeRepository extends DestinationExplorationRepository {
   _ClusterFakeRepository({
     this.nearbyResult = const [],
-    this.nearestResult,
+    this.nearbyLocationResult = const [],
     this.throwOnNearby = false,
   });
   final List<MapDestination> nearbyResult;
-  final MapDestination? nearestResult;
+  final List<MapDestination> nearbyLocationResult;
   final bool throwOnNearby;
 
   @override
@@ -51,7 +51,15 @@ class _ClusterFakeRepository extends DestinationExplorationRepository {
   }
 
   @override
-  Future<MapDestination?> nearestDestination(LatLng point) async => nearestResult;
+  Future<List<MapDestination>> nearbyByCategoryNearLocation({
+    required LatLng location,
+    required HiddenGemCategory category,
+    double radiusKm = DestinationExplorationRepository.clusterRadiusKm,
+    int maxStops = DestinationExplorationRepository.clusterMaxStops,
+  }) async {
+    if (throwOnNearby) throw Exception('network error');
+    return nearbyLocationResult;
+  }
 }
 
 const _nature = MapDestination(
@@ -208,16 +216,42 @@ void main() {
       expect(controller.clusterPolyline, [_anchor.location, _stop1.location]);
     });
 
-    test('viewThemedCluster with no origin resolves the anchor from location', () async {
+    test('viewThemedCluster with no origin builds the trail from the user\'s own location, '
+        'filtered to the single selected category', () async {
       final controller = DestinationMapController(
-        repository: _ClusterFakeRepository(nearbyResult: [_stop1], nearestResult: _anchor),
+        repository: _ClusterFakeRepository(nearbyLocationResult: [_anchor, _stop1]),
         currentLocation: () async => const LatLng(5.4, 100.3),
       );
+      controller.toggleCategory(HiddenGemCategory.nature);
 
       await controller.viewThemedCluster();
 
+      // The nearest of the returned candidates becomes the anchor; the rest
+      // become stops — not an arbitrary nearest-destination-of-any-category.
       expect(controller.clusterAnchor, _anchor);
       expect(controller.clusterStops, [_stop1]);
+      expect(controller.userLocation, const LatLng(5.4, 100.3));
+    });
+
+    test('sets a message when no single category filter is selected', () async {
+      final controller = DestinationMapController(
+        repository: _ClusterFakeRepository(nearbyLocationResult: [_anchor]),
+        currentLocation: () async => const LatLng(5.4, 100.3),
+      );
+      // Zero categories selected.
+
+      await controller.viewThemedCluster();
+
+      expect(controller.clusterMessage, 'Select a single category filter to find a themed trail near you.');
+      expect(controller.clusterAnchor, isNull);
+
+      // Also blocked with more than one category selected.
+      controller.toggleCategory(HiddenGemCategory.nature);
+      controller.toggleCategory(HiddenGemCategory.food);
+      await controller.viewThemedCluster();
+
+      expect(controller.clusterMessage, 'Select a single category filter to find a themed trail near you.');
+      expect(controller.clusterAnchor, isNull);
     });
 
     test('sets a message when location cannot be determined and no origin is given', () async {
@@ -225,6 +259,7 @@ void main() {
         repository: _ClusterFakeRepository(),
         currentLocation: () async => null,
       );
+      controller.toggleCategory(HiddenGemCategory.nature);
 
       await controller.viewThemedCluster();
 
@@ -234,9 +269,10 @@ void main() {
 
     test('sets "no cluster available" when location resolves but no destination found', () async {
       final controller = DestinationMapController(
-        repository: _ClusterFakeRepository(nearestResult: null),
+        repository: _ClusterFakeRepository(nearbyLocationResult: const []),
         currentLocation: () async => const LatLng(5.4, 100.3),
       );
+      controller.toggleCategory(HiddenGemCategory.nature);
 
       await controller.viewThemedCluster();
 
