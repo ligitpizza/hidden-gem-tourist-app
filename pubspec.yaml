@@ -52,7 +52,7 @@ dependencies:
   flutter_secure_storage: ^9.2.2 # encrypted storage for travel document vault
   shared_preferences: ^2.3.3     # persisted theme mode preference
   file_picker: ^11.0.2           # import travel documents from device storage
-  pdfrx: ^2.4.7                  # in-app PDF document viewer
+  pdfrx: ^2.0.0                  # in-app PDF document viewer (was ^2.4.7, which needs Flutter >=3.41.0; this machine has 3.38.8 — let pub pick the highest 2.x release actually compatible)
   open_filex: ^4.7.0             # delegate other file types to device apps
 
   # Maps & location (Module 2 interactive map, Module 6 check-in)
@@ -66,6 +66,7 @@ dependencies:
   # Export / share (Module 3 itinerary export & social share)
   pdf: ^3.11.1
   share_plus: ^10.1.4
+  gal: ^2.3.0                    # real "save to device gallery" (Android/iOS) — distinct from Share's share-sheet flow
 
   # Model/value utilities
   freezed_annotation: ^2.4.4

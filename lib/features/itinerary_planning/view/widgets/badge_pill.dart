@@ -15,6 +15,8 @@ class BadgePill extends StatelessWidget {
       case StopBadge.recommended:
       case StopBadge.localGem:
         return AppTheme.gemGoldSoft;
+      case StopBadge.mealBreak:
+        return colorScheme.surfaceContainerHighest;
     }
   }
 
@@ -25,6 +27,8 @@ class BadgePill extends StatelessWidget {
       case StopBadge.recommended:
       case StopBadge.localGem:
         return AppTheme.gemGold;
+      case StopBadge.mealBreak:
+        return colorScheme.onSurfaceVariant;
     }
   }
 

@@ -7,6 +7,7 @@ import '../../../shared/models/destination.dart';
 import '../../../shared/models/hidden_gem.dart';
 import '../../../shared/models/travel_mode.dart';
 import '../../../shared/services/hidden_gem_scoring.dart';
+import '../../../shared/services/place_cost_estimator.dart';
 import 'itinerary_plan.dart';
 import 'itinerary_stop.dart';
 import 'nominatim_geocoding_service.dart';
@@ -382,6 +383,29 @@ class ItineraryRepository {
     }
   }
 
+  /// `null` = no cap (the traveller filtered to *only* Food gems, i.e. they
+  /// explicitly want more food stops). Otherwise at most 2 auto-recommended
+  /// food gems across the whole trip — logically nobody wants a restaurant
+  /// on every leg.
+  int? _foodGemCapFor(Set<HiddenGemCategory> categories) {
+    if (categories.length == 1 && categories.single == HiddenGemCategory.food) return null;
+    return 2;
+  }
+
+  List<HiddenGem> _capFoodGems(List<HiddenGem> gems, {required int? cap, required int alreadyPicked}) {
+    if (cap == null) return gems;
+    var count = alreadyPicked;
+    final kept = <HiddenGem>[];
+    for (final gem in gems) {
+      if (gem.category == HiddenGemCategory.food) {
+        if (count >= cap) continue;
+        count++;
+      }
+      kept.add(gem);
+    }
+    return kept;
+  }
+
   ({double distanceKm, int vertexIndex}) _nearestVertex(LatLng point, List<LatLng> corridor) {
     var best = double.infinity;
     var bestIndex = 0;
@@ -406,6 +430,16 @@ class ItineraryRepository {
     final hopsA = <_Hop>[];
     final hopsB = <_Hop>[];
 
+    // Travellers don't want a restaurant-per-leg — cap how many
+    // system-*recommended* food gems can be threaded into each path across
+    // the whole trip (the traveller's own chosen destinations are never
+    // capped, only the auto-inserted hidden gems). Skipped entirely when
+    // "Food" is the traveller's sole selected gem category, signalling they
+    // specifically want more food stops.
+    final foodGemCap = _foodGemCapFor(gemCategories);
+    var foodCountA = 0;
+    var foodCountB = 0;
+
     for (var i = 0; i < destinations.length - 1; i++) {
       final start = destinations[i].location;
       final end = destinations[i + 1].location;
@@ -420,12 +454,17 @@ class ItineraryRepository {
         // Corridor search still works on the straight-line fallback path.
       }
 
-      final gemsA = await _findGemsAlongCorridor(corridorA, categories: gemCategories);
-      final gemsB = await _findGemsAlongCorridor(
+      var gemsA = await _findGemsAlongCorridor(corridorA, categories: gemCategories);
+      var gemsB = await _findGemsAlongCorridor(
         corridorB,
         categories: gemCategories,
         excludeIds: gemsA.map((g) => g.id).toSet(),
       );
+
+      gemsA = _capFoodGems(gemsA, cap: foodGemCap, alreadyPicked: foodCountA);
+      foodCountA += gemsA.where((g) => g.category == HiddenGemCategory.food).length;
+      gemsB = _capFoodGems(gemsB, cap: foodGemCap, alreadyPicked: foodCountB);
+      foodCountB += gemsB.where((g) => g.category == HiddenGemCategory.food).length;
 
       hopsA.add(await _buildHop(start, end, gemsA));
       hopsB.add(await _buildHop(start, end, gemsB));
@@ -436,12 +475,23 @@ class ItineraryRepository {
     // from the traveller's original stops and shared by both paths.
     final publicMetrics = await _realPublicMetrics(destinations);
 
+    // Category-based entrance/meal cost estimate — mode-independent (a
+    // museum ticket costs the same whether you drove or walked there), so
+    // it's computed once from the destinations and added on top of each
+    // path's own travel cost below. Gem costs differ per path since A/B
+    // thread through different gems.
+    final destinationsCostMyr = destinations.fold(
+      0.0,
+      (sum, d) => sum + PlaceCostEstimator.forDestinationCategory(d.category),
+    );
+
     final primaryPath = _assemblePath(
       id: 'A',
       label: 'Path A',
       isRecommended: true,
       hops: hopsA,
       publicOverride: publicMetrics,
+      destinationsCostMyr: destinationsCostMyr,
     );
     final alternatePath = _assemblePath(
       id: 'B',
@@ -449,14 +499,10 @@ class ItineraryRepository {
       isRecommended: false,
       hops: hopsB,
       publicOverride: publicMetrics,
+      destinationsCostMyr: destinationsCostMyr,
     );
 
-    final timelineResult = _buildTimeline(
-      destinations: destinations,
-      hops: hopsA,
-      durationOption: durationOption,
-      customDays: customDays,
-    );
+    final timelineResult = _buildTimeline(destinations: destinations, hops: hopsA);
 
     return ItineraryPlan(
       destinations: destinations,
@@ -556,12 +602,18 @@ class ItineraryRepository {
   /// metrics. "Public" transport uses [publicOverride] (a real Transitous
   /// itinerary) when available, falling back to a driving-distance-based
   /// heuristic when there's no transit coverage for this route.
+  ///
+  /// [destinationsCostMyr] (entrance fees/meals, mode-independent) is added
+  /// on top of each mode's travel cost, along with this path's own gems'
+  /// estimated cost — the "Estimated Cost" a traveller sees is travel +
+  /// activity cost combined, not just fuel/fare.
   RoutePath _assemblePath({
     required String id,
     required String label,
     required bool isRecommended,
     required List<_Hop> hops,
     RouteMetrics? publicOverride,
+    required double destinationsCostMyr,
   }) {
     final polyline = <LatLng>[];
     for (final hop in hops) {
@@ -573,29 +625,41 @@ class ItineraryRepository {
     final walkingDistanceKm = hops.fold(0.0, (sum, h) => sum + h.walkingDistanceKm);
     final walkingMinutes = hops.fold(0, (sum, h) => sum + h.walkingMinutes);
 
+    final gems = hops.expand((h) => h.gems).toList();
+    final gemsCostMyr = gems.fold(
+      0.0,
+      (sum, g) => sum + PlaceCostEstimator.forGemCategory(g.category),
+    );
+    final activityCostMyr = destinationsCostMyr + gemsCostMyr;
+    final publicBase = publicOverride ??
+        RouteMetrics(
+          distanceKm: drivingDistanceKm,
+          durationMinutes: (drivingDistanceKm / 22 * 60).round() + 12,
+          costMyr: 2 + drivingDistanceKm * 0.15,
+        );
+
     return RoutePath(
       id: id,
       label: label,
       isRecommended: isRecommended,
       polyline: polyline,
-      hiddenGems: hops.expand((h) => h.gems).toList(),
+      hiddenGems: gems,
       metricsByMode: {
         TravelMode.driving: RouteMetrics(
           distanceKm: drivingDistanceKm,
           durationMinutes: drivingMinutes,
-          costMyr: 3 + drivingDistanceKm * 0.6,
+          costMyr: 3 + drivingDistanceKm * 0.6 + activityCostMyr,
         ),
         TravelMode.walking: RouteMetrics(
           distanceKm: walkingDistanceKm,
           durationMinutes: walkingMinutes,
-          costMyr: 0,
+          costMyr: activityCostMyr,
         ),
-        TravelMode.public: publicOverride ??
-            RouteMetrics(
-              distanceKm: drivingDistanceKm,
-              durationMinutes: (drivingDistanceKm / 22 * 60).round() + 12,
-              costMyr: 2 + drivingDistanceKm * 0.15,
-            ),
+        TravelMode.public: RouteMetrics(
+          distanceKm: publicBase.distanceKm,
+          durationMinutes: publicBase.durationMinutes,
+          costMyr: publicBase.costMyr + activityCostMyr,
+        ),
       },
     );
   }
@@ -621,68 +685,199 @@ class ItineraryRepository {
     return LatLng(midLat - dLng * 0.4 * sign, midLng + dLat * 0.4 * sign);
   }
 
-  /// Walks the primary path's hops in order, interleaving each destination
-  /// with the real hidden-gem waypoints threaded into that leg, using each
-  /// segment's actual routed travel time. Returns the total minutes needed
-  /// so [generate] can flag whether the plan fits the traveller's budget.
+  // Category-based visit duration and "opening hours" placeholders — real
+  // per-place hours/durations aren't available (no paid Google Places data,
+  // same constraint noted throughout this module), so these are reasonable,
+  // clearly-invented stand-ins used only to keep the generated schedule
+  // realistic (a museum won't get scheduled at 8pm; a viewpoint won't eat a
+  // 90-minute block).
+  static const Map<DestinationCategory, int> _destinationVisitMinutes = {
+    DestinationCategory.attraction: 90,
+    DestinationCategory.heritageSite: 75,
+    DestinationCategory.museum: 90,
+    DestinationCategory.viewpoint: 30,
+    DestinationCategory.park: 75,
+    DestinationCategory.beach: 120,
+    DestinationCategory.waterfall: 60,
+    DestinationCategory.cafe: 45,
+    DestinationCategory.restaurant: 60,
+    DestinationCategory.craft: 60,
+    DestinationCategory.art: 60,
+    DestinationCategory.island: 180,
+    DestinationCategory.mountain: 150,
+    DestinationCategory.themePark: 240,
+    DestinationCategory.mall: 90,
+  };
+
+  static const Map<HiddenGemCategory, int> _gemVisitMinutes = {
+    HiddenGemCategory.food: 45,
+    HiddenGemCategory.culture: 40,
+    HiddenGemCategory.nature: 35,
+    HiddenGemCategory.viewpoint: 25,
+    HiddenGemCategory.craft: 40,
+  };
+
+  static const Map<DestinationCategory, (int open, int close)> _destinationHours = {
+    DestinationCategory.attraction: (8, 20),
+    DestinationCategory.heritageSite: (9, 17),
+    DestinationCategory.museum: (9, 17),
+    DestinationCategory.viewpoint: (6, 20),
+    DestinationCategory.park: (7, 19),
+    DestinationCategory.beach: (6, 20),
+    DestinationCategory.waterfall: (7, 18),
+    DestinationCategory.cafe: (8, 21),
+    DestinationCategory.restaurant: (11, 21),
+    DestinationCategory.craft: (9, 18),
+    DestinationCategory.art: (9, 18),
+    DestinationCategory.island: (7, 18),
+    DestinationCategory.mountain: (6, 17),
+    DestinationCategory.themePark: (9, 21),
+    DestinationCategory.mall: (10, 22),
+  };
+
+  static const Map<HiddenGemCategory, (int open, int close)> _gemHours = {
+    HiddenGemCategory.food: (11, 21),
+    HiddenGemCategory.culture: (9, 17),
+    HiddenGemCategory.nature: (7, 19),
+    HiddenGemCategory.viewpoint: (6, 20),
+    HiddenGemCategory.craft: (9, 18),
+  };
+
+  static const int _dayStartHour = 9;
+  static const int _dayEndHour = 21; // "9am to 9pm" touring window
+  static const int _lunchBreakMinutes = 60;
+  static const int _dinnerBreakMinutes = 60;
+
+  /// Flattens the primary path's hops into a single ordered sequence of
+  /// stops (destinations interleaved with the hidden gems threaded into
+  /// each leg), each carrying its own placeholder visit duration/opening
+  /// window and the real routed travel time from whatever precedes it.
+  /// [_scheduleItems] then packs this sequence across as many days as it
+  /// actually takes.
+  List<_PlanItem> _flattenPlanItems({
+    required List<Destination> destinations,
+    required List<_Hop> hops,
+  }) {
+    final items = <_PlanItem>[_PlanItem.forDestination(destinations.first, travelMinutesFromPrevious: 0, isFirst: true)];
+
+    for (var i = 0; i < hops.length; i++) {
+      final hop = hops[i];
+      for (var g = 0; g < hop.gems.length; g++) {
+        items.add(_PlanItem.forGem(hop.gems[g], travelMinutesFromPrevious: hop.driveSegmentMinutes[g]));
+      }
+      items.add(_PlanItem.forDestination(
+        destinations[i + 1],
+        travelMinutesFromPrevious: hop.driveSegmentMinutes.last,
+        isFirst: false,
+      ));
+    }
+    return items;
+  }
+
+  /// Packs the flattened stop sequence into real, scheduled days: each day
+  /// runs 9am–9pm, a stop that wouldn't fit (or that closes before it could
+  /// be visited) rolls to the next day instead, and a lunch/dinner break is
+  /// inserted once per day when the schedule crosses midday/evening —
+  /// unless the very next stop is itself a food stop, which serves as the
+  /// meal instead of adding a separate break.
+  ({List<ItineraryStop> stops, int totalMinutes}) _scheduleItems(List<_PlanItem> items) {
+    final stops = <ItineraryStop>[];
+    var dayIndex = 0;
+    var clock = DateTime(2000, 1, 1, _dayStartHour);
+    var hadLunch = false;
+    var hadDinner = false;
+
+    for (var idx = 0; idx < items.length; idx++) {
+      final item = items[idx];
+      var arrival = clock.add(Duration(minutes: item.travelMinutesFromPrevious));
+      var rolledToNewDay = false;
+
+      final currentDayEnd = DateTime(2000, 1, 1 + dayIndex, _dayEndHour);
+      final closeTime = DateTime(2000, 1, 1 + dayIndex, item.closeHour);
+      final wouldOverrunDay = arrival.add(Duration(minutes: item.visitMinutes)).isAfter(currentDayEnd);
+      final wouldMissClosing = arrival.isAfter(closeTime);
+      if (idx > 0 && (wouldOverrunDay || wouldMissClosing)) {
+        dayIndex++;
+        hadLunch = false;
+        hadDinner = false;
+        clock = DateTime(2000, 1, 1 + dayIndex, _dayStartHour);
+        arrival = clock;
+        rolledToNewDay = true;
+      }
+
+      final openTime = DateTime(2000, 1, 1 + dayIndex, item.openHour);
+      if (arrival.isBefore(openTime)) arrival = openTime;
+
+      if (!rolledToNewDay && stops.isNotEmpty) {
+        stops[stops.length - 1] =
+            stops.last.copyWith(travelToNext: '${item.travelMinutesFromPrevious} min drive');
+      }
+
+      if (!hadLunch && arrival.hour >= 12) {
+        if (item.isFood) {
+          hadLunch = true;
+        } else {
+          final breakStart =
+              arrival.hour >= 12 ? arrival : DateTime(2000, 1, 1 + dayIndex, 12);
+          stops.add(_breakStop(dayIndex, breakStart, 'Lunch Break'));
+          arrival = breakStart.add(const Duration(minutes: _lunchBreakMinutes));
+          hadLunch = true;
+        }
+      }
+      if (!hadDinner && arrival.hour >= 18) {
+        if (item.isFood) {
+          hadDinner = true;
+        } else {
+          stops.add(_breakStop(dayIndex, arrival, 'Dinner Break'));
+          arrival = arrival.add(const Duration(minutes: _dinnerBreakMinutes));
+          hadDinner = true;
+        }
+      }
+
+      stops.add(ItineraryStop(
+        time: _formatTime(arrival),
+        title: item.title,
+        description: item.description,
+        meta: item.meta,
+        badge: item.badge,
+        isMainDestination: item.isMainDestination,
+        imagePlaceholderCount: item.imagePlaceholderCount,
+        dayIndex: dayIndex,
+      ));
+
+      clock = arrival.add(Duration(minutes: item.visitMinutes));
+    }
+
+    // Expressed in the same "9-hour touring day" units as
+    // VisitDurationOption.totalMinutes, so estimatedMinutesNeeded vs.
+    // budgetMinutes reduces to a simple "days used <= days planned" check.
+    final daysUsed = dayIndex + 1;
+    return (stops: stops, totalMinutes: daysUsed * activeHoursPerDay * 60);
+  }
+
+  ItineraryStop _breakStop(int dayIndex, DateTime time, String title) {
+    return ItineraryStop(
+      time: _formatTime(time),
+      title: title,
+      description: 'Scheduled downtime to eat and recharge before the next stop.',
+      meta: _formatStayDuration(title == 'Lunch Break' ? _lunchBreakMinutes : _dinnerBreakMinutes),
+      badge: StopBadge.mealBreak,
+      isMainDestination: false,
+      dayIndex: dayIndex,
+    );
+  }
+
+  /// Builds the day-trip timeline from the primary path's hops.
+  /// [_scheduleItems] always schedules every stop, using as many days as it
+  /// actually takes — [ItineraryPlan.isFeasible] (compared against
+  /// `durationOption`/`customDays`, back in [generate]) is what tells the
+  /// traveller if that's more than they planned for.
   ({List<ItineraryStop> stops, int totalMinutes}) _buildTimeline({
     required List<Destination> destinations,
     required List<_Hop> hops,
-    required VisitDurationOption? durationOption,
-    int? customDays,
   }) {
-    final option = durationOption ?? VisitDurationOption.oneDay;
-    final totalBudgetMinutes = option.totalMinutes(customDays: customDays);
-    final stopCount = destinations.length + hops.fold(0, (sum, h) => sum + h.gems.length);
-    final stayMinutes = (totalBudgetMinutes / (stopCount * 1.3)).clamp(20, 180).round();
-    const gemVisitMinutes = 35;
-
-    final start = DateTime(2000, 1, 1, 9, 0);
-    var current = start;
-    final stops = <ItineraryStop>[];
-
-    for (var i = 0; i < destinations.length; i++) {
-      final destination = destinations[i];
-
-      stops.add(ItineraryStop(
-        time: _formatTime(current),
-        title: destination.name,
-        description: i == 0
-            ? 'Starting point of your journey.'
-            : 'A ${destination.category.label.toLowerCase()} stop on your route.',
-        meta: '${_formatStayDuration(stayMinutes)} • ${destination.category.label}',
-        badge: StopBadge.selected,
-        isMainDestination: true,
-        imagePlaceholderCount: destination.category == DestinationCategory.heritageSite ? 2 : 0,
-      ));
-      current = current.add(Duration(minutes: stayMinutes));
-
-      if (i == destinations.length - 1) break;
-      final hop = hops[i];
-
-      for (var g = 0; g < hop.gems.length; g++) {
-        final travelMinutes = hop.driveSegmentMinutes[g];
-        stops[stops.length - 1] = stops.last.copyWith(travelToNext: '$travelMinutes min drive');
-        current = current.add(Duration(minutes: travelMinutes));
-
-        final gem = hop.gems[g];
-        stops.add(ItineraryStop(
-          time: _formatTime(current),
-          title: gem.name,
-          description: gem.description,
-          meta: '${gem.category.label} • ${gem.popularity.label} popularity',
-          badge: StopBadge.localGem,
-          isMainDestination: false,
-        ));
-        current = current.add(const Duration(minutes: gemVisitMinutes));
-      }
-
-      final finalLegMinutes = hop.driveSegmentMinutes.last;
-      stops[stops.length - 1] = stops.last.copyWith(travelToNext: '$finalLegMinutes min drive');
-      current = current.add(Duration(minutes: finalLegMinutes));
-    }
-
-    return (stops: stops, totalMinutes: current.difference(start).inMinutes);
+    final items = _flattenPlanItems(destinations: destinations, hops: hops);
+    return _scheduleItems(items);
   }
 
   String _formatTime(DateTime dt) {
@@ -691,7 +886,7 @@ class ItineraryRepository {
     return '${hour12.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} $period';
   }
 
-  String _formatStayDuration(int minutes) {
+  static String _formatStayDuration(int minutes) {
     final hours = minutes / 60;
     if (hours < 1) return '$minutes min';
     if (hours == hours.roundToDouble()) return '${hours.round()} hr';
@@ -703,6 +898,82 @@ class _ScoredGem {
   final HiddenGem gem;
   final double score;
   const _ScoredGem({required this.gem, required this.score});
+}
+
+/// A destination or hidden gem awaiting scheduling — carries its own
+/// placeholder visit duration and "opening hours" (see the category maps on
+/// [ItineraryRepository]) plus the real routed travel time from whichever
+/// stop precedes it, so [ItineraryRepository._scheduleItems] can pack a
+/// sequence of these into actual days.
+class _PlanItem {
+  final String title;
+  final String description;
+  final String meta;
+  final StopBadge badge;
+  final bool isMainDestination;
+  final bool isFood;
+  final int visitMinutes;
+  final int openHour;
+  final int closeHour;
+  final int imagePlaceholderCount;
+  final int travelMinutesFromPrevious;
+
+  const _PlanItem({
+    required this.title,
+    required this.description,
+    required this.meta,
+    required this.badge,
+    required this.isMainDestination,
+    required this.isFood,
+    required this.visitMinutes,
+    required this.openHour,
+    required this.closeHour,
+    required this.imagePlaceholderCount,
+    required this.travelMinutesFromPrevious,
+  });
+
+  factory _PlanItem.forDestination(
+    Destination destination, {
+    required int travelMinutesFromPrevious,
+    required bool isFirst,
+  }) {
+    final visitMinutes = ItineraryRepository._destinationVisitMinutes[destination.category] ?? 60;
+    final hours = ItineraryRepository._destinationHours[destination.category] ?? (9, 18);
+    return _PlanItem(
+      title: destination.name,
+      description: isFirst
+          ? 'Starting point of your journey.'
+          : 'A ${destination.category.label.toLowerCase()} stop on your route.',
+      meta: '${ItineraryRepository._formatStayDuration(visitMinutes)} • ${destination.category.label}',
+      badge: StopBadge.selected,
+      isMainDestination: true,
+      isFood: destination.category == DestinationCategory.restaurant ||
+          destination.category == DestinationCategory.cafe,
+      visitMinutes: visitMinutes,
+      openHour: hours.$1,
+      closeHour: hours.$2,
+      imagePlaceholderCount: destination.category == DestinationCategory.heritageSite ? 2 : 0,
+      travelMinutesFromPrevious: travelMinutesFromPrevious,
+    );
+  }
+
+  factory _PlanItem.forGem(HiddenGem gem, {required int travelMinutesFromPrevious}) {
+    final visitMinutes = ItineraryRepository._gemVisitMinutes[gem.category] ?? 30;
+    final hours = ItineraryRepository._gemHours[gem.category] ?? (9, 18);
+    return _PlanItem(
+      title: gem.name,
+      description: gem.description,
+      meta: '${gem.category.label} • ${gem.popularity.label} popularity',
+      badge: StopBadge.localGem,
+      isMainDestination: false,
+      isFood: gem.category == HiddenGemCategory.food,
+      visitMinutes: visitMinutes,
+      openHour: hours.$1,
+      closeHour: hours.$2,
+      imagePlaceholderCount: 0,
+      travelMinutesFromPrevious: travelMinutesFromPrevious,
+    );
+  }
 }
 
 /// One leg of the routed path (between two consecutive user-selected

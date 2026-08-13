@@ -6,10 +6,12 @@ import 'package:collab/features/destination_exploration/model/comparison_destina
 import 'package:collab/features/destination_exploration/model/crowd_level.dart';
 import 'package:collab/features/destination_exploration/model/destination_exploration_repository.dart';
 import 'package:collab/features/destination_exploration/model/favourite_destinations_store.dart';
+import 'package:collab/features/itinerary_planning/controller/gem_category_preference_controller.dart';
 import 'package:collab/features/itinerary_planning/controller/itinerary_planner_controller.dart';
 import 'package:collab/features/itinerary_planning/model/itinerary_repository.dart';
 import 'package:collab/shared/models/destination.dart' as shared;
 import 'package:collab/shared/models/hidden_gem.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeComparisonRepository extends DestinationExplorationRepository {
   _FakeComparisonRepository(this.result);
@@ -177,11 +179,14 @@ void main() {
     });
 
     test('addBestPickToItinerary adds the Best Pick to the itinerary controller', () async {
+      SharedPreferences.setMockInitialValues({});
       final controller =
           ComparisonController(repository: _FakeComparisonRepository([_dest('a'), _dest('b', avgRating: 4.9)]));
       await controller.loadComparison(['a', 'b']);
-      final itineraryController =
-          ItineraryPlannerController(repository: _FakeItineraryRepository());
+      final itineraryController = ItineraryPlannerController(
+        repository: _FakeItineraryRepository(),
+        gemCategoryPreference: GemCategoryPreferenceController(),
+      );
 
       await controller.addBestPickToItinerary(itineraryController);
 

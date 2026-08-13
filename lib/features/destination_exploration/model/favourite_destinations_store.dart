@@ -3,9 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'comparison_destination.dart';
 
 /// In-memory holding pen for favourited destinations until a real
-/// persistence layer is agreed on for this module — same "no real
-/// persistence yet" stance as SavedItinerariesStore
-/// (lib/features/itinerary_planning/model/saved_itineraries_store.dart).
+/// persistence layer is agreed on for this module.
 ///
 /// A [ChangeNotifier] (rather than a plain singleton) so the Saved screen's
 /// favourites section can rebuild live via [ListenableBuilder] when

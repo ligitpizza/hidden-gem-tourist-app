@@ -19,6 +19,8 @@ import '../../gamification_journal/controller/journal_controller.dart';
 import '../../gamification_journal/controller/quiz_controller.dart';
 import '../../gamification_journal/model/journal_media_model.dart';
 import '../../gamification_journal/view/journal/journal_timeline_screen.dart';
+import '../../itinerary_planning/controller/gem_category_preference_controller.dart';
+import '../../itinerary_planning/view/widgets/gem_category_filter.dart';
 import 'widgets/profile_share_sheet.dart';
 
 /// The Tourist's showcase page — everything worth bragging about in one
@@ -421,6 +423,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     selected: {themeModeController.themeMode},
                     onSelectionChanged: (selection) =>
                         ref.read(themeModeControllerProvider).setThemeMode(selection.first),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // --- Itinerary planning preferences -----------------------
+                  Text(
+                    'INTERESTED HIDDEN GEM CATEGORIES',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: colors.onSurfaceVariant,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Used when planning a route — updates live, wherever you set it.',
+                    style: AppTypography.bodySm.copyWith(color: colors.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 10),
+                  GemCategoryFilter(
+                    selected: ref.watch(gemCategoryPreferenceControllerProvider).selected,
+                    onToggle: (category) =>
+                        ref.read(gemCategoryPreferenceControllerProvider).toggle(category),
                   ),
                   const SizedBox(height: 20),
                   OutlinedButton.icon(

@@ -4,13 +4,22 @@ import '../../destination_exploration/model/favourite_destinations_store.dart';
 import '../../destination_exploration/view/widgets/category_style.dart';
 import '../../itinerary_planning/model/saved_itineraries_store.dart';
 
-class SavedScreen extends StatelessWidget {
+class SavedScreen extends StatefulWidget {
   const SavedScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final saved = SavedItinerariesStore.instance.saved;
+  State<SavedScreen> createState() => _SavedScreenState();
+}
 
+class _SavedScreenState extends State<SavedScreen> {
+  @override
+  void initState() {
+    super.initState();
+    SavedItinerariesStore.instance.ensureLoaded();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Saved')),
       body: ListView(
@@ -55,23 +64,64 @@ class SavedScreen extends StatelessWidget {
           const SizedBox(height: 20),
           Text('Saved Itineraries', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 10),
-          if (saved.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('No saved itineraries yet — plan a trip and save it to see it here.'),
-            )
-          else
-            for (final plan in saved)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.map_outlined),
-                    title: Text(plan.destinations.map((d) => d.name).join(' → ')),
-                    subtitle: Text('${plan.timeline.length} stops'),
+          ListenableBuilder(
+            listenable: SavedItinerariesStore.instance,
+            builder: (context, _) {
+              final store = SavedItinerariesStore.instance;
+
+              if (store.isLoading && store.saved.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              if (store.error != null && store.saved.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(store.error!),
+                      const SizedBox(height: 8),
+                      OutlinedButton(
+                        onPressed: () => store.refresh(),
+                        child: const Text('Retry'),
+                      ),
+                    ],
                   ),
-                ),
-              ),
+                );
+              }
+
+              if (store.saved.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text('No saved itineraries yet — plan a trip and save it to see it here.'),
+                );
+              }
+
+              return Column(
+                children: [
+                  for (final saved in store.saved)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.map_outlined),
+                          title: Text(saved.plan.destinations.map((d) => d.name).join(' → ')),
+                          subtitle: Text('${saved.plan.timeline.length} stops'),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_outline),
+                            tooltip: 'Remove',
+                            onPressed: () => store.remove(saved.id),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
         ],
       ),
     );

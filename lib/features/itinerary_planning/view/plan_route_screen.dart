@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/models/destination.dart';
-import '../../../shared/models/hidden_gem.dart';
 import '../controller/itinerary_planner_controller.dart';
 import '../model/visit_duration_option.dart';
 import 'itinerary_routes.dart';
+import 'widgets/gem_category_filter.dart';
 import 'widgets/route_map_view.dart';
 
 class PlanRouteScreen extends ConsumerStatefulWidget {
@@ -99,7 +99,7 @@ class _PlanRouteScreenState extends ConsumerState<PlanRouteScreen> {
             const SizedBox(height: 24),
             const _SectionLabel('INTERESTED HIDDEN GEM CATEGORIES'),
             const SizedBox(height: 8),
-            _GemCategoryFilter(
+            GemCategoryFilter(
               selected: controller.selectedGemCategories,
               onToggle: (category) =>
                   ref.read(itineraryPlannerControllerProvider).toggleGemCategory(category),
@@ -351,41 +351,6 @@ class _DurationOptionCard extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _GemCategoryFilter extends StatelessWidget {
-  final Set<HiddenGemCategory> selected;
-  final ValueChanged<HiddenGemCategory> onToggle;
-
-  const _GemCategoryFilter({required this.selected, required this.onToggle});
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final category in HiddenGemCategory.values)
-          FilterChip(
-            label: Text(category.label),
-            selected: selected.contains(category),
-            onSelected: (_) => onToggle(category),
-            showCheckmark: false,
-            backgroundColor: colorScheme.surfaceContainerHighest.withAlpha(140),
-            selectedColor: colorScheme.primaryContainer,
-            labelStyle: TextStyle(
-              color: selected.contains(category) ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
-              fontWeight: FontWeight.w600,
-              fontSize: 12.5,
-            ),
-            side: BorderSide(
-              color: selected.contains(category) ? colorScheme.primary : colorScheme.outlineVariant,
-            ),
-          ),
-      ],
     );
   }
 }

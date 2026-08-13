@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/travel_mode.dart';
+import '../../../shared/services/image_export_service.dart';
 import '../controller/itinerary_planner_controller.dart';
 import '../model/route_path.dart';
 import 'itinerary_routes.dart';
@@ -76,12 +77,24 @@ class _RouteOptimizedScreenState extends ConsumerState<RouteOptimizedScreen> {
     setState(() => _isCapturing = false);
     if (bytes == null) return;
 
-    final file = XFile.fromData(bytes, name: 'itinerary.png', mimeType: 'image/png');
-    await Share.shareXFiles(
-      [file],
-      subject: 'Save your itinerary',
-      text: 'Save this image to your device.',
-    );
+    try {
+      final savedToGallery = await ImageExportService.downloadToGallery(bytes, fileName: 'itinerary');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            savedToGallery
+                ? 'Itinerary image saved to your gallery'
+                : 'Gallery saving isn\'t available on this device — use the share sheet to save it.',
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save the image — check gallery permission and try again')),
+      );
+    }
   }
 
   Future<void> _shareAsImage(ItineraryPlannerController controller) async {
@@ -201,6 +214,7 @@ class _RouteOptimizedScreenState extends ConsumerState<RouteOptimizedScreen> {
                           value: controller.selectedRoutePath!
                               .metricsFor(controller.selectedTravelMode)
                               .formattedCost,
+                          caption: 'Travel + estimated entrance/meal costs',
                           icon: Icons.account_balance_wallet_outlined,
                         ),
                         const SizedBox(height: 22),
@@ -492,14 +506,29 @@ class _ActionRow extends StatelessWidget {
       children: [
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: () {
-              controller.saveToAccount();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Itinerary saved to your account')),
-              );
-            },
-            icon: Icon(controller.isSaved ? Icons.bookmark : Icons.bookmark_border, size: 18),
-            label: Text(controller.isSaved ? 'Saved' : 'Save to Account'),
+            onPressed: controller.isSaving
+                ? null
+                : () async {
+                    await controller.saveToAccount();
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          controller.saveError ?? 'Itinerary saved to your account',
+                        ),
+                      ),
+                    );
+                  },
+            icon: controller.isSaving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(controller.isSaved ? Icons.bookmark : Icons.bookmark_border, size: 18),
+            label: Text(
+              controller.isSaving ? 'Saving…' : (controller.isSaved ? 'Saved' : 'Save to Account'),
+            ),
           ),
         ),
         const SizedBox(width: 10),

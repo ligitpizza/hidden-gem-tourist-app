@@ -2,9 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:share_plus/share_plus.dart';
 
 import '../../../shared/models/destination.dart';
 import '../../../shared/models/hidden_gem.dart';
@@ -15,16 +12,31 @@ import '../model/itinerary_stop.dart';
 import '../model/route_path.dart';
 import '../model/saved_itineraries_store.dart';
 import '../model/visit_duration_option.dart';
+import 'gem_category_preference_controller.dart';
 
 /// Business logic for Smart Itinerary Planning (Module 3), shared across the
 /// Plan Your Route / Route Optimized / Day Trip screens via
 /// [itineraryPlannerControllerProvider] so state survives navigation between
 /// them. Kept as a plain [ChangeNotifier] per the module's MVC convention.
 class ItineraryPlannerController extends ChangeNotifier {
-  ItineraryPlannerController({ItineraryRepository? repository})
-      : _repository = repository ?? ItineraryRepository();
+  ItineraryPlannerController({
+    ItineraryRepository? repository,
+    required GemCategoryPreferenceController gemCategoryPreference,
+  })  : _repository = repository ?? ItineraryRepository(),
+        _gemCategoryPreference = gemCategoryPreference {
+    // "Interested Hidden Gem Categories" is a single shared preference (also
+    // editable from Profile) — react to changes made there so the gem
+    // preview count on this screen stays live regardless of where the
+    // traveller last edited it.
+    _gemCategoryPreference.addListener(_onGemCategoryPreferenceChanged);
+  }
 
   final ItineraryRepository _repository;
+  final GemCategoryPreferenceController _gemCategoryPreference;
+
+  void _onGemCategoryPreferenceChanged() {
+    unawaited(_refreshGemPreview());
+  }
 
   String searchQuery = '';
   List<Destination> searchResults = const [];
@@ -37,7 +49,7 @@ class ItineraryPlannerController extends ChangeNotifier {
   VisitDurationOption selectedDurationOption = VisitDurationOption.oneDay;
   int customDays = 2;
 
-  final Set<HiddenGemCategory> selectedGemCategories = {};
+  Set<HiddenGemCategory> get selectedGemCategories => _gemCategoryPreference.selected;
 
   bool isGenerating = false;
   ItineraryPlan? plan;
@@ -45,6 +57,8 @@ class ItineraryPlannerController extends ChangeNotifier {
   TravelMode selectedTravelMode = TravelMode.driving;
   String selectedPathId = 'A';
   bool isSaved = false;
+  bool isSaving = false;
+  String? saveError;
 
   bool get canGenerate => selectedDestinations.length >= 2;
 
@@ -124,6 +138,7 @@ class ItineraryPlannerController extends ChangeNotifier {
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _gemCategoryPreference.removeListener(_onGemCategoryPreferenceChanged);
     super.dispose();
   }
 
@@ -158,11 +173,10 @@ class ItineraryPlannerController extends ChangeNotifier {
   }
 
   void toggleGemCategory(HiddenGemCategory category) {
-    if (!selectedGemCategories.remove(category)) {
-      selectedGemCategories.add(category);
-    }
-    notifyListeners();
-    unawaited(_refreshGemPreview());
+    // Delegates to the shared preference — its own listener notification
+    // (registered in the constructor) triggers the gem-preview refresh, so
+    // this stays in sync whether toggled here or from Profile.
+    _gemCategoryPreference.toggle(category);
   }
 
   Future<void> generateItinerary() async {
@@ -195,11 +209,19 @@ class ItineraryPlannerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void saveToAccount() {
+  Future<void> saveToAccount() async {
     final currentPlan = plan;
-    if (currentPlan == null) return;
-    SavedItinerariesStore.instance.save(currentPlan);
-    isSaved = true;
+    if (currentPlan == null || isSaving) return;
+    isSaving = true;
+    saveError = null;
+    notifyListeners();
+    try {
+      await SavedItinerariesStore.instance.save(currentPlan);
+      isSaved = true;
+    } catch (_) {
+      saveError = 'Could not save this itinerary. Check your connection and try again.';
+    }
+    isSaving = false;
     notifyListeners();
   }
 
@@ -223,55 +245,13 @@ class ItineraryPlannerController extends ChangeNotifier {
     }
     return buffer.toString();
   }
-
-  /// Renders the day-trip timeline as a simple PDF and opens the share sheet
-  /// so the traveller can save or send it on.
-  Future<void> exportTimelineAsPdf() async {
-    final currentPlan = plan;
-    if (currentPlan == null || currentPlan.timeline.isEmpty) return;
-
-    final document = pw.Document();
-    document.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        build: (context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text(
-                'Your Day Trip',
-                style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
-              ),
-              pw.SizedBox(height: 12),
-              pw.Text(currentPlan.destinations.map((d) => d.name).join(' -> ')),
-              pw.SizedBox(height: 16),
-              for (final stop in currentPlan.timeline) ...[
-                pw.Text(
-                  '${stop.time}  ${stop.title}',
-                  style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
-                ),
-                if (stop.meta != null) pw.Text(stop.meta!, style: const pw.TextStyle(fontSize: 10)),
-                pw.Text(stop.description, style: const pw.TextStyle(fontSize: 11)),
-                if (stop.travelToNext != null)
-                  pw.Text(stop.travelToNext!, style: const pw.TextStyle(fontSize: 10)),
-                pw.SizedBox(height: 10),
-              ],
-            ],
-          );
-        },
-      ),
-    );
-
-    final bytes = await document.save();
-    // In-memory XFile — works on every platform including web, unlike
-    // dart:io.File + path_provider's temp directory (no filesystem access
-    // exists on web, so that combination silently fails there).
-    final file = XFile.fromData(bytes, name: 'itinerary.pdf', mimeType: 'application/pdf');
-    await Share.shareXFiles([file], subject: 'Your Day Trip itinerary');
-  }
 }
 
 final itineraryPlannerControllerProvider =
     ChangeNotifierProvider<ItineraryPlannerController>((ref) {
-  return ItineraryPlannerController();
+  // `ref.read` (not `.watch`) — this provider must not rebuild (and lose
+  // in-progress planning state) just because the shared category
+  // preference changed; the controller listens to it directly instead.
+  final gemCategoryPreference = ref.read(gemCategoryPreferenceControllerProvider);
+  return ItineraryPlannerController(gemCategoryPreference: gemCategoryPreference);
 });

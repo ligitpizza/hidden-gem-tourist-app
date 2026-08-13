@@ -1,15 +1,67 @@
-import 'itinerary_plan.dart';
+import 'package:flutter/foundation.dart';
 
-/// In-memory holding pen for saved itineraries until a real persistence
-/// layer (Drift table / backend) is agreed on for this module.
-class SavedItinerariesStore {
-  SavedItinerariesStore._internal();
+import 'itinerary_plan.dart';
+import 'saved_itinerary.dart';
+import 'saved_itinerary_repository.dart';
+
+/// Live view over the traveller's saved itineraries, backed by Supabase
+/// (`saved_itineraries` table, user-scoped via RLS). A [ChangeNotifier]
+/// singleton so the Saved screen can rebuild via [ListenableBuilder] the
+/// moment something is saved from Route Optimized, without either screen
+/// owning the state.
+class SavedItinerariesStore extends ChangeNotifier {
+  SavedItinerariesStore._internal({SavedItineraryRepository? repository})
+      : _repository = repository ?? SavedItineraryRepository();
 
   static final SavedItinerariesStore instance = SavedItinerariesStore._internal();
 
-  final List<ItineraryPlan> _saved = [];
+  final SavedItineraryRepository _repository;
 
-  List<ItineraryPlan> get saved => List.unmodifiable(_saved);
+  List<SavedItinerary> _saved = [];
+  bool isLoading = false;
+  String? error;
+  bool _loadedOnce = false;
 
-  void save(ItineraryPlan plan) => _saved.add(plan);
+  List<SavedItinerary> get saved => List.unmodifiable(_saved);
+
+  /// Loads from Supabase the first time this is called; a no-op afterwards
+  /// unless [refresh] is called explicitly (e.g. pull-to-refresh).
+  Future<void> ensureLoaded() async {
+    if (_loadedOnce || isLoading) return;
+    await refresh();
+  }
+
+  Future<void> refresh() async {
+    isLoading = true;
+    error = null;
+    notifyListeners();
+    try {
+      _saved = await _repository.fetchAll();
+      _loadedOnce = true;
+    } catch (_) {
+      error = 'Could not load your saved itineraries. Check your connection and try again.';
+    }
+    isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> save(ItineraryPlan plan) async {
+    final saved = await _repository.save(plan);
+    _saved = [saved, ..._saved];
+    _loadedOnce = true;
+    notifyListeners();
+  }
+
+  Future<void> remove(String id) async {
+    final previous = _saved;
+    _saved = _saved.where((item) => item.id != id).toList();
+    notifyListeners();
+    try {
+      await _repository.delete(id);
+    } catch (_) {
+      _saved = previous; // rollback — the delete didn't actually go through
+      error = 'Could not remove this itinerary. Check your connection and try again.';
+      notifyListeners();
+    }
+  }
 }
