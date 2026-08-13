@@ -20,4 +20,5 @@ class ShellRoutes {
   static const journalEntries = '/journal/entries';
   static const journalQuizzes = '/journal/quizzes';
   static const journalHistory = '/journal/history';
+  static const journalFriends = '/journal/friends';
 }

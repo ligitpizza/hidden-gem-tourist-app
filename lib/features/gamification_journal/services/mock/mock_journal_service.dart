@@ -6,47 +6,80 @@ import '../../model/check_in_model.dart';
 import '../../model/journal_entry_model.dart';
 import '../../model/journal_media_model.dart';
 
-/// Phase 1 mock implementation of the digital travel journal.
-///
-/// createDraftFromCheckIn() stands in for the doc's "Automatically creates
-/// a journal draft upon check-in" behaviour, which in Phase 2 happens in
-/// the same Supabase transaction as the check-in itself. Journal entries
-/// themselves stay in-memory for now, but addMedia() below already uploads
-/// for real — media is the one piece of this module backed by real
-/// Supabase Storage rather than mock data.
+/// Journal entries are backed by the real `journal_entries` table (see
+/// supabase/migrations/20260813120000_journal_real_activity_and_friends.sql)
+/// — entry text/media/spending now survive an app restart instead of
+/// living only in memory. Tests bypass Supabase entirely by passing
+/// [seedEntries] — even an empty list — which switches this service to a
+/// plain in-memory store instead, same pattern as the other Journal mock
+/// services use for their own real-vs-test storage switch.
 class MockJournalService {
-  final List<JournalEntryModel> _entries = [];
+  MockJournalService({List<JournalEntryModel>? seedEntries})
+    // A defensive growable copy — callers (tests) may pass a `const []`,
+    // which this service then needs to append to.
+    : _entries = List.of(seedEntries ?? []),
+      _useMockStorage = seedEntries != null;
+
+  final List<JournalEntryModel> _entries;
+  final bool _useMockStorage;
   int _idCounter = 0;
 
   Future<JournalEntryModel> createDraftFromCheckIn(CheckInModel checkIn) async {
-    await Future.delayed(const Duration(milliseconds: 300));
+    if (_useMockStorage) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      final entry = JournalEntryModel(
+        id: 'j${(_idCounter++).toString().padLeft(4, '0')}',
+        userId: checkIn.userId,
+        checkInId: checkIn.id,
+        destinationId: checkIn.destinationId,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      _entries.add(entry);
+      return entry;
+    }
 
-    final entry = JournalEntryModel(
-      id: 'j${(_idCounter++).toString().padLeft(4, '0')}',
-      userId: checkIn.userId,
-      checkInId: checkIn.id,
-      destinationId: checkIn.destinationId,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-
-    _entries.add(entry);
-    return entry;
+    final row = await Supabase.instance.client
+        .from('journal_entries')
+        .insert({
+          'user_id': checkIn.userId,
+          'check_in_id': checkIn.id,
+          'destination_id': checkIn.destinationId,
+        })
+        .select()
+        .single();
+    return JournalEntryModel.fromJson(row);
   }
 
   Future<List<JournalEntryModel>> fetchEntries(String userId) async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    return _entries.where((e) => e.userId == userId).toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    if (_useMockStorage) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      return _entries.where((e) => e.userId == userId).toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    }
+    final rows = await Supabase.instance.client
+        .from('journal_entries')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: false);
+    return rows.map((r) => JournalEntryModel.fromJson(r)).toList();
   }
 
   Future<JournalEntryModel?> fetchEntryById(String entryId) async {
-    await Future.delayed(const Duration(milliseconds: 150));
-    try {
-      return _entries.firstWhere((e) => e.id == entryId);
-    } catch (_) {
-      return null;
+    if (_useMockStorage) {
+      await Future.delayed(const Duration(milliseconds: 150));
+      try {
+        return _entries.firstWhere((e) => e.id == entryId);
+      } catch (_) {
+        return null;
+      }
     }
+    final rows = await Supabase.instance.client
+        .from('journal_entries')
+        .select()
+        .eq('id', entryId)
+        .limit(1);
+    return rows.isEmpty ? null : JournalEntryModel.fromJson(rows.first);
   }
 
   int _mediaIdCounter = 0;
@@ -75,27 +108,25 @@ class MockJournalService {
   };
 
   /// Uploads the picked file to the `journal-media` Supabase Storage bucket
-  /// and attaches its public URL to the entry. The journal entry itself
-  /// stays in-memory (see class doc), but the media file this points to is
-  /// real.
+  /// and attaches its public URL to the entry.
   Future<JournalEntryModel> addMedia(
     String entryId, {
     required String localFilePath,
     required JournalMediaType type,
   }) async {
-    final index = _entries.indexWhere((e) => e.id == entryId);
-    if (index == -1) {
+    final current = await fetchEntryById(entryId);
+    if (current == null) {
       throw ArgumentError('Unknown journal entry: $entryId');
     }
 
-    // Entry/media ids are just in-memory counters that reset to 0 every
-    // app restart, but the Storage bucket they upload into is real and
-    // persists across restarts — a plain restart-scoped counter would
-    // reuse the exact same path ('j0000/m0000.jpg') a previous session
-    // already uploaded to, and Supabase rejects that as "already exists".
-    // Stamping the id with wall-clock time (plus the counter, in case two
-    // uploads land in the same microsecond) keeps every path unique
-    // regardless of how many times the app has restarted.
+    // Entry/media ids in mock mode are just in-memory counters that reset
+    // to 0 every app restart, but the Storage bucket they upload into is
+    // real and persists across restarts — a plain restart-scoped counter
+    // would reuse the exact same path ('j0000/m0000.jpg') a previous
+    // session already uploaded to, and Supabase rejects that as "already
+    // exists". Stamping the id with wall-clock time (plus the counter, in
+    // case two uploads land in the same microsecond) keeps every path
+    // unique regardless of how many times the app has restarted.
     final mediaId = 'm${DateTime.now().microsecondsSinceEpoch}${(_mediaIdCounter++).toString().padLeft(3, '0')}';
     final extension = localFilePath.contains('.')
         ? localFilePath.split('.').last.toLowerCase()
@@ -136,28 +167,24 @@ class MockJournalService {
 
     final newMedia = JournalMediaModel(id: mediaId, url: publicUrl, type: type);
 
-    final updated = _entries[index].copyWith(
-      media: [..._entries[index].media, newMedia],
+    final updated = current.copyWith(
+      media: [...current.media, newMedia],
       updatedAt: DateTime.now(),
     );
-    _entries[index] = updated;
-    return updated;
+    return _persist(updated);
   }
 
   Future<JournalEntryModel> removeMedia(String entryId, String mediaId) async {
-    await Future.delayed(const Duration(milliseconds: 200));
-
-    final index = _entries.indexWhere((e) => e.id == entryId);
-    if (index == -1) {
+    final current = await fetchEntryById(entryId);
+    if (current == null) {
       throw ArgumentError('Unknown journal entry: $entryId');
     }
 
-    final updated = _entries[index].copyWith(
-      media: _entries[index].media.where((m) => m.id != mediaId).toList(),
+    final updated = current.copyWith(
+      media: current.media.where((m) => m.id != mediaId).toList(),
       updatedAt: DateTime.now(),
     );
-    _entries[index] = updated;
-    return updated;
+    return _persist(updated);
   }
 
   Future<JournalEntryModel> updateEntry(
@@ -165,25 +192,48 @@ class MockJournalService {
     String? notes,
     Map<LocalSupportOption, double>? spendingByCategory,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 300));
-
-    final index = _entries.indexWhere((e) => e.id == entryId);
-    if (index == -1) {
+    final current = await fetchEntryById(entryId);
+    if (current == null) {
       throw ArgumentError('Unknown journal entry: $entryId');
     }
 
-    final updated = _entries[index].copyWith(
+    final updated = current.copyWith(
       notes: notes,
       spendingByCategory: spendingByCategory,
       updatedAt: DateTime.now(),
     );
+    return _persist(updated);
+  }
 
-    _entries[index] = updated;
-    return updated;
+  /// Writes a merged [JournalEntryModel] back to whichever store is active.
+  Future<JournalEntryModel> _persist(JournalEntryModel entry) async {
+    if (_useMockStorage) {
+      final index = _entries.indexWhere((e) => e.id == entry.id);
+      if (index != -1) _entries[index] = entry;
+      return entry;
+    }
+
+    final row = await Supabase.instance.client
+        .from('journal_entries')
+        .update({
+          'notes': entry.notes,
+          'media': entry.media.map((m) => m.toJson()).toList(),
+          'spending_by_category':
+              entry.spendingByCategory.map((key, value) => MapEntry(key.name, value)),
+          'updated_at': entry.updatedAt.toIso8601String(),
+        })
+        .eq('id', entry.id)
+        .select()
+        .single();
+    return JournalEntryModel.fromJson(row);
   }
 
   Future<void> deleteEntry(String entryId) async {
-    await Future.delayed(const Duration(milliseconds: 200));
-    _entries.removeWhere((e) => e.id == entryId);
+    if (_useMockStorage) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      _entries.removeWhere((e) => e.id == entryId);
+      return;
+    }
+    await Supabase.instance.client.from('journal_entries').delete().eq('id', entryId);
   }
 }

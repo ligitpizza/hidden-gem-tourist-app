@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../features/gamification_journal/controller/badge_controller.dart';
 import '../../features/gamification_journal/controller/checkin_controller.dart';
+import '../../features/gamification_journal/controller/friend_controller.dart';
 import '../../features/gamification_journal/controller/quiz_controller.dart';
 import '../router/shell_routes.dart';
 
@@ -52,6 +53,7 @@ const _morePushEntries = [
   _MorePushEntry(icon: Icons.emoji_events_outlined, label: 'Badges', path: ShellRoutes.journalBadges, indicatorKey: 'badges'),
   _MorePushEntry(icon: Icons.quiz_outlined, label: 'Quizzes', path: ShellRoutes.journalQuizzes, indicatorKey: 'quizzes'),
   _MorePushEntry(icon: Icons.history_outlined, label: 'Check-ins', path: ShellRoutes.journalHistory),
+  _MorePushEntry(icon: Icons.people_outline, label: 'Friends', path: ShellRoutes.journalFriends, indicatorKey: 'friends'),
 ];
 
 int _pendingQuizCount(BuildContext context) {
@@ -226,6 +228,9 @@ class _Indicator extends StatelessWidget {
         return hasUnviewed ? Badge(child: child) : child;
       case 'quizzes':
         final count = _pendingQuizCount(context);
+        return count > 0 ? Badge(label: Text('$count'), child: child) : child;
+      case 'friends':
+        final count = context.watch<FriendController>().pendingIncomingCount;
         return count > 0 ? Badge(label: Text('$count'), child: child) : child;
       default:
         return child;
@@ -460,8 +465,9 @@ class _NavItem extends StatelessWidget {
   final VoidCallback onTap;
 
   /// Shown only on the collapsed "More" button — a small dot summarizing
-  /// whether anything inside the menu needs attention (an unviewed badge
-  /// or a pending quiz), so a Tourist doesn't have to open it to find out.
+  /// whether anything inside the menu needs attention (an unviewed badge,
+  /// a pending quiz, or an incoming friend request), so a Tourist doesn't
+  /// have to open it to find out.
   final bool showIndicator;
 
   const _NavItem({
@@ -477,7 +483,9 @@ class _NavItem extends StatelessWidget {
     final color = selected ? colorScheme.onPrimary : colorScheme.onSurfaceVariant;
     final hasUnviewedBadges = showIndicator && context.watch<BadgeController>().hasUnviewedBadges;
     final pendingQuizzes = showIndicator ? _pendingQuizCount(context) : 0;
-    final showDot = hasUnviewedBadges || pendingQuizzes > 0;
+    final pendingFriendRequests =
+        showIndicator ? context.watch<FriendController>().pendingIncomingCount : 0;
+    final showDot = hasUnviewedBadges || pendingQuizzes > 0 || pendingFriendRequests > 0;
 
     return InkWell(
       onTap: onTap,

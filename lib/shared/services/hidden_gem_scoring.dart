@@ -53,6 +53,8 @@ class HiddenGemScoring {
       case 'park':
       case 'beach':
       case 'waterfall':
+      case 'island':
+      case 'mountain':
         return HiddenGemCategory.nature;
       case 'viewpoint':
         return HiddenGemCategory.viewpoint;
@@ -62,6 +64,8 @@ class HiddenGemScoring {
       case 'museum':
       case 'attraction':
       case 'art':
+      case 'theme_park':
+      case 'mall':
       default:
         return HiddenGemCategory.culture;
     }

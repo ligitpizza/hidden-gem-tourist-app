@@ -14,6 +14,7 @@ import 'core/theme/theme_mode_controller.dart';
 import 'features/gamification_journal/controller/badge_controller.dart';
 import 'features/gamification_journal/controller/checkin_controller.dart';
 import 'features/gamification_journal/controller/dashboard_controller.dart';
+import 'features/gamification_journal/controller/friend_controller.dart';
 import 'features/gamification_journal/controller/journal_controller.dart';
 import 'features/gamification_journal/controller/quiz_controller.dart';
 
@@ -56,6 +57,7 @@ class HiddenGemsApp extends ConsumerWidget {
         ChangeNotifierProvider(create: (_) => BadgeController(userId: journalUserId)),
         ChangeNotifierProvider(create: (_) => JournalController(userId: journalUserId)),
         ChangeNotifierProvider(create: (_) => QuizController(userId: journalUserId)),
+        ChangeNotifierProvider(create: (_) => FriendController(userId: journalUserId)),
         ChangeNotifierProvider(create: (_) => DashboardController()),
       ],
       child: MaterialApp.router(

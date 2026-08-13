@@ -22,6 +22,7 @@ import 'package:collab/features/gamification_journal/model/badge_model.dart';
 import 'package:collab/features/gamification_journal/model/destination_model.dart';
 import 'package:collab/features/gamification_journal/services/mock/mock_badge_service.dart';
 import 'package:collab/features/gamification_journal/services/mock/mock_checkin_service.dart';
+import 'package:collab/features/gamification_journal/services/mock/mock_journal_service.dart';
 import 'package:collab/features/gamification_journal/view/badges/badge_gallery_screen.dart';
 import 'package:collab/features/gamification_journal/view/dashboard/dashboard_screen.dart';
 import 'package:collab/features/gamification_journal/view/journal/journal_timeline_screen.dart';
@@ -43,7 +44,10 @@ final _testDestination = DestinationModel(
 
 CheckInController _seededCheckInController() => CheckInController(
       userId: 'test-user',
-      service: MockCheckInService(seedDestinations: [_testDestination]),
+      service: MockCheckInService(
+        seedDestinations: [_testDestination],
+        seedCheckIns: const [],
+      ),
     );
 
 /// Mirrors the "First Steps" badge from the real journal_badges seed data
@@ -61,7 +65,10 @@ final _testBadgeCatalogue = [
 
 BadgeController _seededBadgeController() => BadgeController(
       userId: 'test-user',
-      service: MockBadgeService(seedCatalogue: _testBadgeCatalogue),
+      service: MockBadgeService(
+        seedCatalogue: _testBadgeCatalogue,
+        seedUserBadges: const [],
+      ),
     );
 
 /// Real app_router.dart's _MainShell loads every controller once at app
@@ -109,7 +116,10 @@ void main() {
   ) async {
     final checkInController = _seededCheckInController();
     final badgeController = _seededBadgeController();
-    final journalController = JournalController(userId: 'test-user');
+    final journalController = JournalController(
+      userId: 'test-user',
+      service: MockJournalService(seedEntries: const []),
+    );
     final quizController = QuizController(userId: 'test-user');
 
     await tester.pumpWidget(
@@ -154,7 +164,10 @@ void main() {
 
   test('A check-in still creates a journal draft and unlocks the right badge', () async {
     final checkInController = _seededCheckInController();
-    final journalController = JournalController(userId: 'test-user');
+    final journalController = JournalController(
+      userId: 'test-user',
+      service: MockJournalService(seedEntries: const []),
+    );
     final badgeController = _seededBadgeController();
 
     await checkInController.loadDestinations();

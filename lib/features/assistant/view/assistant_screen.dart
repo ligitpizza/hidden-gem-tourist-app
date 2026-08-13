@@ -33,6 +33,14 @@ IconData _iconForCategory(DestinationCategory category) {
       return Icons.brush_outlined;
     case DestinationCategory.art:
       return Icons.palette_outlined;
+    case DestinationCategory.island:
+      return Icons.deck_outlined;
+    case DestinationCategory.mountain:
+      return Icons.terrain_outlined;
+    case DestinationCategory.themePark:
+      return Icons.attractions_outlined;
+    case DestinationCategory.mall:
+      return Icons.storefront_outlined;
   }
 }
 

@@ -14,6 +14,10 @@ enum DestinationCategory {
   restaurant,
   craft,
   art,
+  island,
+  mountain,
+  themePark,
+  mall,
 }
 
 extension DestinationCategoryX on DestinationCategory {
@@ -41,6 +45,14 @@ extension DestinationCategoryX on DestinationCategory {
         return 'Craft';
       case DestinationCategory.art:
         return 'Art';
+      case DestinationCategory.island:
+        return 'Island';
+      case DestinationCategory.mountain:
+        return 'Mountain';
+      case DestinationCategory.themePark:
+        return 'Theme Park';
+      case DestinationCategory.mall:
+        return 'Mall';
     }
   }
 
@@ -69,6 +81,14 @@ extension DestinationCategoryX on DestinationCategory {
         return 'craft';
       case DestinationCategory.art:
         return 'art';
+      case DestinationCategory.island:
+        return 'island';
+      case DestinationCategory.mountain:
+        return 'mountain';
+      case DestinationCategory.themePark:
+        return 'theme_park';
+      case DestinationCategory.mall:
+        return 'mall';
     }
   }
 }

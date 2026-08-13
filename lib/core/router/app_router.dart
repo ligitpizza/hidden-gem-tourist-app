@@ -17,10 +17,12 @@ import '../../features/auth/view/signup_screen.dart';
 import '../../features/explore/view/explore_screen.dart';
 import '../../features/gamification_journal/controller/badge_controller.dart';
 import '../../features/gamification_journal/controller/checkin_controller.dart';
+import '../../features/gamification_journal/controller/friend_controller.dart';
 import '../../features/gamification_journal/controller/journal_controller.dart';
 import '../../features/gamification_journal/controller/quiz_controller.dart';
 import '../../features/gamification_journal/view/badges/badge_gallery_screen.dart';
 import '../../features/gamification_journal/view/checkin/checkin_history_screen.dart';
+import '../../features/gamification_journal/view/friends/friends_list_screen.dart';
 import '../../features/gamification_journal/view/journal/journal_timeline_screen.dart';
 import '../../features/gamification_journal/view/quiz/quiz_list_screen.dart';
 import '../../features/itinerary_planning/view/day_trip_screen.dart';
@@ -47,6 +49,13 @@ import 'shell_routes.dart';
 /// check-in history) are pushed routes reached via the More menu instead
 /// of living on the tab itself.
 const _assistantTabIndex = 2;
+
+/// One Navigator key per shell branch, in the same order as the branches
+/// list below — lets _MainShell reach directly into a branch's own
+/// Navigator and pop it back to root when its tab is re-tapped, instead of
+/// relying only on goBranch's initialLocation flag (which wasn't reliably
+/// clearing a pushed destination-detail screen on the Map tab).
+final _branchNavigatorKeys = List.generate(7, (_) => GlobalKey<NavigatorState>());
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authRepository = AuthRepository();
@@ -113,6 +122,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             _MainShell(navigationShell: navigationShell),
         branches: [
           StatefulShellBranch(
+            navigatorKey: _branchNavigatorKeys[0],
             routes: [
               GoRoute(
                 path: ShellRoutes.map,
@@ -121,6 +131,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
           StatefulShellBranch(
+            navigatorKey: _branchNavigatorKeys[1],
             routes: [
               GoRoute(
                 path: ShellRoutes.explore,
@@ -129,6 +140,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
           StatefulShellBranch(
+            navigatorKey: _branchNavigatorKeys[2],
             routes: [
               GoRoute(
                 path: ShellRoutes.assistant,
@@ -137,6 +149,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
           StatefulShellBranch(
+            navigatorKey: _branchNavigatorKeys[3],
             routes: [
               GoRoute(
                 path: ShellRoutes.saved,
@@ -145,6 +158,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
           StatefulShellBranch(
+            navigatorKey: _branchNavigatorKeys[4],
             routes: [
               GoRoute(
                 path: ShellRoutes.travelPrep,
@@ -167,6 +181,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
           StatefulShellBranch(
+            navigatorKey: _branchNavigatorKeys[5],
             routes: [
               GoRoute(
                 path: ShellRoutes.journal,
@@ -184,11 +199,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     path: 'history',
                     builder: (context, state) => const CheckInHistoryScreen(),
                   ),
+                  GoRoute(
+                    path: 'friends',
+                    builder: (context, state) => const FriendsListScreen(),
+                  ),
                 ],
               ),
             ],
           ),
           StatefulShellBranch(
+            navigatorKey: _branchNavigatorKeys[6],
             routes: [
               GoRoute(
                 path: ShellRoutes.profile,
@@ -251,6 +271,7 @@ class _MainShellState extends State<_MainShell> {
     final badgeController = context.read<BadgeController>();
     final journalController = context.read<JournalController>();
     final quizController = context.read<QuizController>();
+    final friendController = context.read<FriendController>();
 
     await checkInController.loadDestinations();
     await checkInController.loadHistory();
@@ -258,6 +279,9 @@ class _MainShellState extends State<_MainShell> {
     await journalController.loadEntries();
     await quizController.loadDailyFact();
     await quizController.loadHistory();
+    // So the More menu's pending-request dot is already correct the first
+    // time it's visible, not just after the Tourist opens Friends once.
+    await friendController.loadFriends();
   }
 
   @override
@@ -273,10 +297,18 @@ class _MainShellState extends State<_MainShell> {
           : null,
       bottomNavigationBar: AppBottomNavBar(
         currentIndex: widget.navigationShell.currentIndex,
-        onTabSelected: (index) => widget.navigationShell.goBranch(
-          index,
-          initialLocation: index == widget.navigationShell.currentIndex,
-        ),
+        onTabSelected: (index) {
+          final reselectingCurrentTab = index == widget.navigationShell.currentIndex;
+          // Belt-and-braces: goBranch's initialLocation flag is supposed to
+          // reset a branch to its root on its own, but re-tapping Map while
+          // a destination detail screen was pushed on top of it wasn't
+          // reliably clearing that screen — so pop the branch's own
+          // Navigator directly first, then let goBranch do its normal work.
+          if (reselectingCurrentTab) {
+            _branchNavigatorKeys[index].currentState?.popUntil((route) => route.isFirst);
+          }
+          widget.navigationShell.goBranch(index, initialLocation: reselectingCurrentTab);
+        },
       ),
     );
   }
