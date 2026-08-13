@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../destination_exploration/model/favourite_destinations_store.dart';
 import '../../destination_exploration/view/widgets/category_style.dart';
 import '../../itinerary_planning/model/saved_itineraries_store.dart';
+import '../../itinerary_planning/view/widgets/saved_itinerary_tile.dart';
 
 class SavedScreen extends StatefulWidget {
   const SavedScreen({super.key});
@@ -102,22 +103,7 @@ class _SavedScreenState extends State<SavedScreen> {
 
               return Column(
                 children: [
-                  for (final saved in store.saved)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Card(
-                        child: ListTile(
-                          leading: const Icon(Icons.map_outlined),
-                          title: Text(saved.plan.destinations.map((d) => d.name).join(' → ')),
-                          subtitle: Text('${saved.plan.timeline.length} stops'),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline),
-                            tooltip: 'Remove',
-                            onPressed: () => store.remove(saved.id),
-                          ),
-                        ),
-                      ),
-                    ),
+                  for (final saved in store.saved) SavedItineraryTile(saved: saved),
                 ],
               );
             },

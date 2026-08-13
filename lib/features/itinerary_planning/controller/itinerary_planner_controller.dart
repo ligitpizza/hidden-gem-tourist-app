@@ -4,13 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/models/destination.dart';
-import '../../../shared/models/hidden_gem.dart';
 import '../../../shared/models/travel_mode.dart';
 import '../model/itinerary_plan.dart';
 import '../model/itinerary_repository.dart';
 import '../model/itinerary_stop.dart';
 import '../model/route_path.dart';
 import '../model/saved_itineraries_store.dart';
+import '../model/saved_itinerary.dart';
 import '../model/visit_duration_option.dart';
 import 'gem_category_preference_controller.dart';
 
@@ -49,7 +49,7 @@ class ItineraryPlannerController extends ChangeNotifier {
   VisitDurationOption selectedDurationOption = VisitDurationOption.oneDay;
   int customDays = 2;
 
-  Set<HiddenGemCategory> get selectedGemCategories => _gemCategoryPreference.selected;
+  Set<DestinationCategory> get selectedGemCategories => _gemCategoryPreference.selected;
 
   bool isGenerating = false;
   ItineraryPlan? plan;
@@ -59,6 +59,13 @@ class ItineraryPlannerController extends ChangeNotifier {
   bool isSaved = false;
   bool isSaving = false;
   String? saveError;
+
+  /// Set by [loadSavedItinerary] — while non-null, [saveToAccount] updates
+  /// that existing saved record in place instead of inserting a new one, so
+  /// an Edit → regenerate → Save cycle replaces the original rather than
+  /// duplicating it. Cleared when the traveller clears every destination
+  /// (the clearest signal they're starting a genuinely new itinerary).
+  String? _editingSavedItineraryId;
 
   bool get canGenerate => selectedDestinations.length >= 2;
 
@@ -153,6 +160,7 @@ class ItineraryPlannerController extends ChangeNotifier {
 
   void removeDestination(String id) {
     selectedDestinations.removeWhere((d) => d.id == id);
+    if (selectedDestinations.isEmpty) _editingSavedItineraryId = null;
     notifyListeners();
     unawaited(_refreshGemPreview());
   }
@@ -172,13 +180,6 @@ class ItineraryPlannerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleGemCategory(HiddenGemCategory category) {
-    // Delegates to the shared preference — its own listener notification
-    // (registered in the constructor) triggers the gem-preview refresh, so
-    // this stays in sync whether toggled here or from Profile.
-    _gemCategoryPreference.toggle(category);
-  }
-
   Future<void> generateItinerary() async {
     if (!canGenerate || isGenerating) return;
     isGenerating = true;
@@ -195,6 +196,24 @@ class ItineraryPlannerController extends ChangeNotifier {
     isSaved = false;
     isGenerating = false;
     notifyListeners();
+  }
+
+  /// Loads a previously-saved plan straight into the controller — no
+  /// regeneration, no network call — so Route Optimized/Day Trip can
+  /// display it as-is (View), or Plan Your Route can be reopened with its
+  /// destinations pre-filled, ready to change and regenerate (Edit).
+  void loadSavedItinerary(SavedItinerary saved) {
+    selectedDestinations
+      ..clear()
+      ..addAll(saved.plan.destinations);
+    plan = saved.plan;
+    selectedPathId = saved.plan.primaryPath.id;
+    selectedTravelMode = TravelMode.driving;
+    isSaved = true; // it came from the store, so it's already saved
+    saveError = null;
+    _editingSavedItineraryId = saved.id;
+    notifyListeners();
+    unawaited(_refreshGemPreview());
   }
 
   void selectPath(String id) {
@@ -216,7 +235,13 @@ class ItineraryPlannerController extends ChangeNotifier {
     saveError = null;
     notifyListeners();
     try {
-      await SavedItinerariesStore.instance.save(currentPlan);
+      final editingId = _editingSavedItineraryId;
+      final saved = editingId != null
+          ? await SavedItinerariesStore.instance.update(editingId, currentPlan)
+          : await SavedItinerariesStore.instance.save(currentPlan);
+      // Track the id either way — a second tap of "Save to Account" on the
+      // same plan (fresh or edited) should update it too, not duplicate it.
+      _editingSavedItineraryId = saved.id;
       isSaved = true;
     } catch (_) {
       saveError = 'Could not save this itinerary. Check your connection and try again.';

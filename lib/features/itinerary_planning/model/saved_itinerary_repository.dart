@@ -41,6 +41,17 @@ class SavedItineraryRepository {
     return _mapRow(row);
   }
 
+  Future<SavedItinerary> update(String id, ItineraryPlan plan) async {
+    final row = await _client
+        .from('saved_itineraries')
+        .update({'plan': ItineraryPlanCodec.toJson(plan)})
+        .eq('id', id)
+        .eq('user_id', _userId)
+        .select()
+        .single();
+    return _mapRow(row);
+  }
+
   Future<void> delete(String id) async {
     await _client.from('saved_itineraries').delete().eq('id', id).eq('user_id', _userId);
   }

@@ -45,11 +45,19 @@ class SavedItinerariesStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> save(ItineraryPlan plan) async {
+  Future<SavedItinerary> save(ItineraryPlan plan) async {
     final saved = await _repository.save(plan);
     _saved = [saved, ..._saved];
     _loadedOnce = true;
     notifyListeners();
+    return saved;
+  }
+
+  Future<SavedItinerary> update(String id, ItineraryPlan plan) async {
+    final updated = await _repository.update(id, plan);
+    _saved = [for (final item in _saved) if (item.id == id) updated else item];
+    notifyListeners();
+    return updated;
   }
 
   Future<void> remove(String id) async {

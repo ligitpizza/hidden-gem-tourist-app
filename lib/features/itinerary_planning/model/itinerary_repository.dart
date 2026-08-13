@@ -115,6 +115,7 @@ class ItineraryRepository {
           'A specialized guided walk through a conservation cave system home to rare endemic fauna.',
       location: LatLng(3.2390, 101.6832),
       category: HiddenGemCategory.culture,
+      specificCategory: DestinationCategory.attraction,
     ),
     const HiddenGem(
       id: 'hawker_center',
@@ -123,6 +124,7 @@ class ItineraryRepository {
           'Expert-curated stop for authentic Nasi Lemak and local coffee away from the tourist crowds.',
       location: LatLng(3.2100, 101.6800),
       category: HiddenGemCategory.food,
+      specificCategory: DestinationCategory.restaurant,
     ),
     const HiddenGem(
       id: 'mural_alley',
@@ -130,6 +132,7 @@ class ItineraryRepository {
       description: 'A restored heritage lane covered in murals depicting old Kuala Lumpur life.',
       location: LatLng(3.1443, 101.6978),
       category: HiddenGemCategory.culture,
+      specificCategory: DestinationCategory.heritageSite,
     ),
     const HiddenGem(
       id: 'rooftop_viewpoint',
@@ -137,6 +140,7 @@ class ItineraryRepository {
       description: 'A quiet rooftop with an unobstructed view of the KL skyline at golden hour.',
       location: LatLng(3.1440, 101.6890),
       category: HiddenGemCategory.viewpoint,
+      specificCategory: DestinationCategory.viewpoint,
     ),
     const HiddenGem(
       id: 'kopitiam_corner',
@@ -144,6 +148,7 @@ class ItineraryRepository {
       description: 'A decades-old coffee shop still roasting beans the traditional way.',
       location: LatLng(3.1447, 101.6949),
       category: HiddenGemCategory.food,
+      specificCategory: DestinationCategory.cafe,
     ),
     const HiddenGem(
       id: 'batik_workshop',
@@ -151,6 +156,7 @@ class ItineraryRepository {
       description: 'A small family-run studio offering hands-on batik painting sessions.',
       location: LatLng(3.1415, 101.6900),
       category: HiddenGemCategory.craft,
+      specificCategory: DestinationCategory.craft,
     ),
     const HiddenGem(
       id: 'jungle_trail',
@@ -158,6 +164,7 @@ class ItineraryRepository {
       description: 'A short rainforest boardwalk trail tucked right in the middle of the city.',
       location: LatLng(3.1495, 101.7040),
       category: HiddenGemCategory.nature,
+      specificCategory: DestinationCategory.park,
     ),
   ];
 
@@ -233,7 +240,7 @@ class ItineraryRepository {
   Future<List<HiddenGem>> gemsNearDestinations(
     List<Destination> destinations, {
     double radiusKm = 3,
-    Set<HiddenGemCategory> categories = const {},
+    Set<DestinationCategory> categories = const {},
   }) async {
     if (destinations.isEmpty) return const [];
 
@@ -275,7 +282,7 @@ class ItineraryRepository {
     required double maxLat,
     required double minLng,
     required double maxLng,
-    required Set<HiddenGemCategory> categories,
+    required Set<DestinationCategory> categories,
     Set<String> excludeIds = const {},
   }) async {
     // A single view join (place + its real review metrics) instead of a
@@ -297,8 +304,9 @@ class ItineraryRepository {
       final id = place['id'] as String;
       if (excludeIds.contains(id)) continue;
 
+      final specificCategory = destinationCategoryFromDb(place['category'] as String);
+      if (categories.isNotEmpty && !categories.contains(specificCategory)) continue;
       final category = HiddenGemScoring.categoryFromDb(place['category'] as String);
-      if (categories.isNotEmpty && !categories.contains(category)) continue;
 
       final avgRating = (place['avg_rating'] as num?)?.toDouble() ?? 0.0;
       final uniqueness = (place['uniqueness_score'] as num?)?.toDouble() ?? 0.0;
@@ -329,6 +337,7 @@ class ItineraryRepository {
                   'popularity — a strong hidden-gem match for this route.',
           location: location,
           category: category,
+          specificCategory: specificCategory,
           avgRating: avgRating,
           uniquenessScore: uniqueness,
           accessibilityScore: accessibility,
@@ -346,7 +355,7 @@ class ItineraryRepository {
   /// produces a sensible start-to-end visiting order.
   Future<List<HiddenGem>> _findGemsAlongCorridor(
     List<LatLng> corridor, {
-    required Set<HiddenGemCategory> categories,
+    required Set<DestinationCategory> categories,
     Set<String> excludeIds = const {},
   }) async {
     if (corridor.isEmpty) return const [];
@@ -383,21 +392,29 @@ class ItineraryRepository {
     }
   }
 
-  /// `null` = no cap (the traveller filtered to *only* Food gems, i.e. they
-  /// explicitly want more food stops). Otherwise at most 2 auto-recommended
-  /// food gems across the whole trip — logically nobody wants a restaurant
-  /// on every leg.
-  int? _foodGemCapFor(Set<HiddenGemCategory> categories) {
-    if (categories.length == 1 && categories.single == HiddenGemCategory.food) return null;
+  static const Set<DestinationCategory> _foodCategories = {
+    DestinationCategory.restaurant,
+    DestinationCategory.cafe,
+  };
+
+  /// `null` = no cap (the traveller filtered to *only* Restaurant/Cafe, i.e.
+  /// they explicitly want more food stops). Otherwise at most 2
+  /// auto-recommended food gems across the whole trip — logically nobody
+  /// wants a restaurant on every leg.
+  int? _foodGemCapFor(Set<DestinationCategory> categories) {
+    if (categories.isNotEmpty && categories.every(_foodCategories.contains)) return null;
     return 2;
   }
+
+  bool _isFoodGem(HiddenGem gem) =>
+      gem.specificCategory != null && _foodCategories.contains(gem.specificCategory);
 
   List<HiddenGem> _capFoodGems(List<HiddenGem> gems, {required int? cap, required int alreadyPicked}) {
     if (cap == null) return gems;
     var count = alreadyPicked;
     final kept = <HiddenGem>[];
     for (final gem in gems) {
-      if (gem.category == HiddenGemCategory.food) {
+      if (_isFoodGem(gem)) {
         if (count >= cap) continue;
         count++;
       }
@@ -423,7 +440,7 @@ class ItineraryRepository {
     required List<Destination> destinations,
     required VisitDurationOption? durationOption,
     int? customDays,
-    Set<HiddenGemCategory> gemCategories = const {},
+    Set<DestinationCategory> gemCategories = const {},
   }) async {
     assert(destinations.length >= 2, 'Need at least 2 destinations to generate a route.');
 
@@ -462,9 +479,9 @@ class ItineraryRepository {
       );
 
       gemsA = _capFoodGems(gemsA, cap: foodGemCap, alreadyPicked: foodCountA);
-      foodCountA += gemsA.where((g) => g.category == HiddenGemCategory.food).length;
+      foodCountA += gemsA.where(_isFoodGem).length;
       gemsB = _capFoodGems(gemsB, cap: foodGemCap, alreadyPicked: foodCountB);
-      foodCountB += gemsB.where((g) => g.category == HiddenGemCategory.food).length;
+      foodCountB += gemsB.where(_isFoodGem).length;
 
       hopsA.add(await _buildHop(start, end, gemsA));
       hopsB.add(await _buildHop(start, end, gemsB));
@@ -628,7 +645,7 @@ class ItineraryRepository {
     final gems = hops.expand((h) => h.gems).toList();
     final gemsCostMyr = gems.fold(
       0.0,
-      (sum, g) => sum + PlaceCostEstimator.forGemCategory(g.category),
+      (sum, g) => sum + PlaceCostEstimator.forDestinationCategory(g.specificCategory ?? DestinationCategory.attraction),
     );
     final activityCostMyr = destinationsCostMyr + gemsCostMyr;
     final publicBase = publicOverride ??
@@ -709,14 +726,6 @@ class ItineraryRepository {
     DestinationCategory.mall: 90,
   };
 
-  static const Map<HiddenGemCategory, int> _gemVisitMinutes = {
-    HiddenGemCategory.food: 45,
-    HiddenGemCategory.culture: 40,
-    HiddenGemCategory.nature: 35,
-    HiddenGemCategory.viewpoint: 25,
-    HiddenGemCategory.craft: 40,
-  };
-
   static const Map<DestinationCategory, (int open, int close)> _destinationHours = {
     DestinationCategory.attraction: (8, 20),
     DestinationCategory.heritageSite: (9, 17),
@@ -733,14 +742,6 @@ class ItineraryRepository {
     DestinationCategory.mountain: (6, 17),
     DestinationCategory.themePark: (9, 21),
     DestinationCategory.mall: (10, 22),
-  };
-
-  static const Map<HiddenGemCategory, (int open, int close)> _gemHours = {
-    HiddenGemCategory.food: (11, 21),
-    HiddenGemCategory.culture: (9, 17),
-    HiddenGemCategory.nature: (7, 19),
-    HiddenGemCategory.viewpoint: (6, 20),
-    HiddenGemCategory.craft: (9, 18),
   };
 
   static const int _dayStartHour = 9;
@@ -958,15 +959,20 @@ class _PlanItem {
   }
 
   factory _PlanItem.forGem(HiddenGem gem, {required int travelMinutesFromPrevious}) {
-    final visitMinutes = ItineraryRepository._gemVisitMinutes[gem.category] ?? 30;
-    final hours = ItineraryRepository._gemHours[gem.category] ?? (9, 18);
+    // Gems built by this repository always carry a specificCategory (see
+    // _scoredPlacesInBounds/_gemCatalogue) — the fallback only guards
+    // against a HiddenGem constructed elsewhere ever reaching here.
+    final specificCategory = gem.specificCategory ?? DestinationCategory.attraction;
+    final visitMinutes = ItineraryRepository._destinationVisitMinutes[specificCategory] ?? 30;
+    final hours = ItineraryRepository._destinationHours[specificCategory] ?? (9, 18);
     return _PlanItem(
       title: gem.name,
       description: gem.description,
-      meta: '${gem.category.label} • ${gem.popularity.label} popularity',
+      meta: '${specificCategory.label} • ${gem.popularity.label} popularity',
       badge: StopBadge.localGem,
       isMainDestination: false,
-      isFood: gem.category == HiddenGemCategory.food,
+      isFood: specificCategory == DestinationCategory.restaurant ||
+          specificCategory == DestinationCategory.cafe,
       visitMinutes: visitMinutes,
       openHour: hours.$1,
       closeHour: hours.$2,

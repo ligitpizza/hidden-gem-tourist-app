@@ -20,7 +20,9 @@ import '../../gamification_journal/controller/quiz_controller.dart';
 import '../../gamification_journal/model/journal_media_model.dart';
 import '../../gamification_journal/view/journal/journal_timeline_screen.dart';
 import '../../itinerary_planning/controller/gem_category_preference_controller.dart';
+import '../../itinerary_planning/model/saved_itineraries_store.dart';
 import '../../itinerary_planning/view/widgets/gem_category_filter.dart';
+import '../../itinerary_planning/view/widgets/saved_itinerary_tile.dart';
 import 'widgets/profile_share_sheet.dart';
 
 /// The Tourist's showcase page — everything worth bragging about in one
@@ -57,6 +59,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _checkInController.addListener(_refresh);
     _badgeController.addListener(_refresh);
     _journalController.addListener(_refresh);
+    SavedItinerariesStore.instance.ensureLoaded();
 
     // The app shell (_MainShell in app_router.dart) owns the module's
     // one-time initial data load at app start, so this just needs an
@@ -427,8 +430,48 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   const SizedBox(height: 24),
 
                   // --- Itinerary planning preferences -----------------------
+                  // Collapsed by default (empty until the traveller opens it) —
+                  // editing lives here only; Plan Your Route just displays
+                  // whatever's selected, live.
+                  Builder(builder: (context) {
+                    final gemPrefs = ref.watch(gemCategoryPreferenceControllerProvider);
+                    return Theme(
+                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: const EdgeInsets.only(top: 8, bottom: 4),
+                        title: Text(
+                          'INTERESTED HIDDEN GEM CATEGORIES',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: colors.onSurfaceVariant,
+                            letterSpacing: 0.6,
+                          ),
+                        ),
+                        subtitle: Text(
+                          gemPrefs.selected.isEmpty
+                              ? 'Tap to add your interests — updates live in Plan Your Route.'
+                              : '${gemPrefs.selected.length} selected — tap to edit.',
+                          style: AppTypography.bodySm.copyWith(color: colors.onSurfaceVariant),
+                        ),
+                        children: [
+                          GemCategoryFilter(
+                            selected: gemPrefs.selected,
+                            onToggle: (category) =>
+                                ref.read(gemCategoryPreferenceControllerProvider).toggle(category),
+                            onToggleGroup: (group) =>
+                                ref.read(gemCategoryPreferenceControllerProvider).toggleGroup(group),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 24),
+
+                  // --- Saved itineraries (duplicated from the Saved tab) -----
                   Text(
-                    'INTERESTED HIDDEN GEM CATEGORIES',
+                    'SAVED ITINERARIES',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -436,16 +479,39 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       letterSpacing: 0.6,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Used when planning a route — updates live, wherever you set it.',
-                    style: AppTypography.bodySm.copyWith(color: colors.onSurfaceVariant),
-                  ),
                   const SizedBox(height: 10),
-                  GemCategoryFilter(
-                    selected: ref.watch(gemCategoryPreferenceControllerProvider).selected,
-                    onToggle: (category) =>
-                        ref.read(gemCategoryPreferenceControllerProvider).toggle(category),
+                  ListenableBuilder(
+                    listenable: SavedItinerariesStore.instance,
+                    builder: (context, _) {
+                      final store = SavedItinerariesStore.instance;
+                      if (store.isLoading && store.saved.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      if (store.error != null && store.saved.isEmpty) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(store.error!, style: AppTypography.bodySm.copyWith(color: colors.onSurfaceVariant)),
+                            const SizedBox(height: 8),
+                            OutlinedButton(onPressed: store.refresh, child: const Text('Retry')),
+                          ],
+                        );
+                      }
+                      if (store.saved.isEmpty) {
+                        return Text(
+                          'No saved itineraries yet — plan a trip and save it to see it here.',
+                          style: AppTypography.bodySm.copyWith(color: colors.onSurfaceVariant),
+                        );
+                      }
+                      return Column(
+                        children: [
+                          for (final saved in store.saved) SavedItineraryTile(saved: saved),
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 20),
                   OutlinedButton.icon(

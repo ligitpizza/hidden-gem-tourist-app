@@ -6,8 +6,8 @@ import '../../../shared/models/destination.dart';
 import '../controller/itinerary_planner_controller.dart';
 import '../model/visit_duration_option.dart';
 import 'itinerary_routes.dart';
-import 'widgets/gem_category_filter.dart';
 import 'widgets/route_map_view.dart';
+import 'widgets/selected_gem_categories_view.dart';
 
 class PlanRouteScreen extends ConsumerStatefulWidget {
   const PlanRouteScreen({super.key});
@@ -99,11 +99,7 @@ class _PlanRouteScreenState extends ConsumerState<PlanRouteScreen> {
             const SizedBox(height: 24),
             const _SectionLabel('INTERESTED HIDDEN GEM CATEGORIES'),
             const SizedBox(height: 8),
-            GemCategoryFilter(
-              selected: controller.selectedGemCategories,
-              onToggle: (category) =>
-                  ref.read(itineraryPlannerControllerProvider).toggleGemCategory(category),
-            ),
+            SelectedGemCategoriesView(selected: controller.selectedGemCategories),
             const SizedBox(height: 24),
             _AllocateDurationCard(
               allocate: controller.allocateDuration,

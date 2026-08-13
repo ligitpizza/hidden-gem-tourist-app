@@ -30,7 +30,7 @@ class _FakeItineraryRepository extends ItineraryRepository {
   Future<List<HiddenGem>> gemsNearDestinations(
     List<shared.Destination> destinations, {
     double radiusKm = 3,
-    Set<HiddenGemCategory> categories = const {},
+    Set<shared.DestinationCategory> categories = const {},
   }) async =>
       const [];
 }

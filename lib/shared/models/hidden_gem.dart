@@ -1,5 +1,7 @@
 import 'package:latlong2/latlong.dart';
 
+import 'destination.dart';
+
 /// Why a hidden gem is worth surfacing to the traveller.
 enum HiddenGemCategory { food, culture, nature, viewpoint, craft }
 
@@ -67,6 +69,14 @@ class HiddenGem {
   final double accessibilityScore;
   final GemPopularity popularity;
 
+  /// The specific place type this gem was sourced from (e.g. Museum,
+  /// Waterfall), where known — [category] is a coarser 5-bucket grouping of
+  /// this used for scoring/display elsewhere; this field lets Smart
+  /// Itinerary Planning filter/label gems at full granularity without
+  /// changing what other modules read from [category]. Null wherever a
+  /// caller doesn't have (or need) the specific type.
+  final DestinationCategory? specificCategory;
+
   const HiddenGem({
     required this.id,
     required this.name,
@@ -77,5 +87,6 @@ class HiddenGem {
     this.uniquenessScore = 0,
     this.accessibilityScore = 0,
     this.popularity = GemPopularity.medium,
+    this.specificCategory,
   });
 }

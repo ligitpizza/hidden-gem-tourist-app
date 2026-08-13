@@ -70,6 +70,7 @@ class ItineraryPlanCodec {
         'description': gem.description,
         'location': _latLngToJson(gem.location),
         'category': gem.category.name,
+        'specificCategory': gem.specificCategory?.name,
         'avgRating': gem.avgRating,
         'uniquenessScore': gem.uniquenessScore,
         'accessibilityScore': gem.accessibilityScore,
@@ -82,6 +83,9 @@ class ItineraryPlanCodec {
         description: json['description'] as String,
         location: _latLngFromJson((json['location'] as Map).cast<String, dynamic>()),
         category: HiddenGemCategory.values.byName(json['category'] as String),
+        specificCategory: json['specificCategory'] == null
+            ? null
+            : DestinationCategory.values.byName(json['specificCategory'] as String),
         avgRating: (json['avgRating'] as num).toDouble(),
         uniquenessScore: (json['uniquenessScore'] as num).toDouble(),
         accessibilityScore: (json['accessibilityScore'] as num).toDouble(),

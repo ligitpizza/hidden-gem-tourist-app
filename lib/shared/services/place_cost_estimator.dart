@@ -1,5 +1,4 @@
 import '../models/destination.dart';
-import '../models/hidden_gem.dart';
 
 /// Rough, category-based MYR cost per visit — a stand-in for real
 /// entrance-fee/menu-price data, which isn't available without a paid API
@@ -41,23 +40,6 @@ class PlaceCostEstimator {
         return 10; // trail/permit fee
       case DestinationCategory.mall:
         return 0; // free entry — spending there is discretionary, not a visit cost
-    }
-  }
-
-  /// [HiddenGemCategory] is coarser (used for gems threaded into a route),
-  /// so each case blends the destination-category costs it maps from.
-  static double forGemCategory(HiddenGemCategory category) {
-    switch (category) {
-      case HiddenGemCategory.food:
-        return 20; // restaurant/cafe blend
-      case HiddenGemCategory.craft:
-        return 20;
-      case HiddenGemCategory.culture:
-        return 8; // heritage/museum/attraction/art blend
-      case HiddenGemCategory.viewpoint:
-        return 3;
-      case HiddenGemCategory.nature:
-        return 3; // park/beach/waterfall blend
     }
   }
 }
