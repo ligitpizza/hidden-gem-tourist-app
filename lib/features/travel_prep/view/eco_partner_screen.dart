@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../controller/eco_partner_controller.dart';
 import '../model/eco_partner.dart';
+import 'eco_partner_detail_screen.dart';
 
 class EcoPartnersScreen extends StatefulWidget {
   const EcoPartnersScreen({super.key});
@@ -340,94 +340,13 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
     await _controller.selectRadius(value.radius, fallbackQuery: _search.text);
   }
 
-  void _details(EcoPartner p) => showModalBottomSheet(
-    context: context,
-    showDragHandle: true,
-    isScrollControlled: true,
-    builder: (_) => SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(p.name, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 5),
-            Text('${p.subtype} · ${p.distanceKm.toStringAsFixed(1)} km away'),
-            const SizedBox(height: 12),
-            Text(
-              p.sustainabilityLabel,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF0B684B),
-              ),
-            ),
-            Text(p.evidence),
-            if (p.address.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text(p.address),
-            ],
-            if (p.routeNames.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text('Routes: ${p.routeNames.join(', ')}'),
-            ],
-            if (p.chargerDetails?.isNotEmpty == true) ...[
-              const SizedBox(height: 10),
-              Text(p.chargerDetails!),
-            ],
-            const SizedBox(height: 14),
-            Text(
-              'Source: ${p.sourceName} · Updated ${p.lastUpdated.day}/${p.lastUpdated.month}/${p.lastUpdated.year}',
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              children: [
-                if (p.sourceUrl.isNotEmpty)
-                  OutlinedButton.icon(
-                    onPressed: () => _open(p.sourceUrl),
-                    icon: const Icon(Icons.open_in_new),
-                    label: const Text('View source'),
-                  ),
-                if (p.imageSourceUrl?.isNotEmpty == true)
-                  OutlinedButton.icon(
-                    onPressed: () => _open(p.imageSourceUrl!),
-                    icon: const Icon(Icons.photo_camera_outlined),
-                    label: const Text('View Mapillary image'),
-                  ),
-                if (p.website?.isNotEmpty == true)
-                  OutlinedButton(
-                    onPressed: () => _open(p.website!),
-                    child: const Text('Website'),
-                  ),
-                if (p.category == EcoPartnerCategory.dining)
-                  OutlinedButton(
-                    onPressed: () => _happyCow(p),
-                    child: const Text('Search on HappyCow ↗'),
-                  ),
-              ],
-            ),
-          ],
-        ),
+  void _details(EcoPartner partner) => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => EcoPartnerDetailScreen(
+        partner: partner,
+        destinationLabel: _controller.result?.destination.label ?? '',
       ),
     ),
-  );
-
-  Future<void> _open(String value) async {
-    final uri = Uri.tryParse(value);
-    if (uri == null ||
-        !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open this link.')),
-        );
-    }
-  }
-
-  void _happyCow(EcoPartner p) => _open(
-    Uri.https('www.happycow.net', '/searchmap', {
-      'location': '${p.name}, ${_controller.result?.destination.label ?? ''}',
-    }).toString(),
   );
 }
 

@@ -8,6 +8,9 @@ import 'package:open_filex/open_filex.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/router/shell_routes.dart';
+import '../../../shared/models/destination.dart';
+import '../controller/packing_checklist_controller.dart';
+import '../model/packing_checklist.dart';
 import '../model/travel_document.dart';
 import '../model/travel_document_repository.dart';
 import '../model/vault_pin_service.dart';
@@ -102,7 +105,9 @@ class TravelPrepDashboardScreen extends StatelessWidget {
             onTap: () => context.push(ShellRoutes.documentVault),
             secondaryButton: 'Emergency Contacts',
             onSecondaryTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const EmergencyContactsScreen()),
+              MaterialPageRoute<void>(
+                builder: (_) => const EmergencyContactsScreen(),
+              ),
             ),
           ),
         ],
@@ -180,9 +185,22 @@ class _DashboardCard extends StatelessWidget {
             else
               Row(
                 children: [
-                  Expanded(child: ElevatedButton(onPressed: onTap, child: Text(button))),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: onTap,
+                      child: Text(button),
+                    ),
+                  ),
                   const SizedBox(width: 8),
-                  Expanded(child: OutlinedButton(onPressed: onSecondaryTap, child: Text(secondaryButton!, textAlign: TextAlign.center))),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: onSecondaryTap,
+                      child: Text(
+                        secondaryButton!,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
                 ],
               ),
           ],
@@ -200,300 +218,397 @@ class ReadyToWanderScreen extends StatefulWidget {
 }
 
 class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
-  final List<_ChecklistCategory> categories = [
-    _ChecklistCategory(
-      'Tech & Gear',
-      'Adapters, cameras, power bank',
-      7,
-      8,
-      Icons.devices_outlined,
-    ),
-    _ChecklistCategory(
-      'Clothing',
-      'Outfits, outerwear, footwear',
-      19,
-      22,
-      Icons.checkroom_outlined,
-    ),
-    _ChecklistCategory(
-      'Documents',
-      'Passport, tickets and bookings',
-      5,
-      6,
-      Icons.description_outlined,
-    ),
-    _ChecklistCategory(
-      'Personal Belongings',
-      'Sunscreen, toiletries and cash',
-      8,
-      10,
-      Icons.backpack_outlined,
-    ),
-  ];
+  final _controller = PackingChecklistController();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_refresh);
+    _controller.load();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_refresh);
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final packed = categories.fold<int>(0, (sum, item) => sum + item.packed);
-    final total = categories.fold<int>(0, (sum, item) => sum + item.total);
-    final score = ((packed / total) * 100).round();
+    final score = _controller.readinessScore;
     return Scaffold(
       appBar: const _TravelAssistantAppBar(),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-        children: [
-          Text(
-            'Ready to Wander',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF003B2B),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Your preparation for Penang Hidden Gems is nearly complete.',
-            style: Theme.of(context).textTheme.bodyLarge,
-          ),
-          const SizedBox(height: 18),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  const Text(
-                    'READINESS SCORE',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.5,
-                      color: Color(0xFF8A6800),
-                    ),
+      body: _controller.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+              children: [
+                Text(
+                  'Ready to Wander',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF003B2B),
                   ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: 200,
-                    height: 200,
-                    child: Stack(
-                      alignment: Alignment.center,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Recommendations for ${_controller.tripLabel}',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                if (_controller.destinationCategories.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _controller.destinationCategories
+                        .map(
+                          (category) => Chip(
+                            avatar: const Icon(Icons.place_outlined, size: 16),
+                            label: Text(category.label),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
                       children: [
-                        SizedBox.expand(
-                          child: CircularProgressIndicator(
-                            value: score / 100,
-                            strokeWidth: 4,
-                            backgroundColor: Colors.black12,
-                            color: const Color(0xFF2DBD60),
+                        const Text(
+                          'READINESS SCORE',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.5,
+                            color: Color(0xFF8A6800),
                           ),
                         ),
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: 200,
+                          height: 200,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              SizedBox.expand(
+                                child: CircularProgressIndicator(
+                                  value: score / 100,
+                                  strokeWidth: 4,
+                                  backgroundColor: Colors.black12,
+                                  color: const Color(0xFF2DBD60),
+                                ),
+                              ),
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '$score%',
+                                    style: const TextStyle(
+                                      fontSize: 52,
+                                      color: Color(0xFF003B2B),
+                                    ),
+                                  ),
+                                  Text(
+                                    _controller.readinessStatus,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      letterSpacing: .5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        const Divider(),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
-                            Text(
-                              '$score%',
-                              style: const TextStyle(
-                                fontSize: 52,
-                                color: Color(0xFF003B2B),
+                            Expanded(
+                              child: _ReadinessMetric(
+                                Icons.wb_sunny_outlined,
+                                'Weather',
+                                '${_controller.weatherScore}%',
+                                _controller.weatherDetail,
                               ),
                             ),
-                            const Text(
-                              'OPTIMAL STATUS',
-                              style: TextStyle(fontSize: 11, letterSpacing: .5),
+                            Expanded(
+                              child: _ReadinessMetric(
+                                Icons.medical_services_outlined,
+                                'Health',
+                                '${_controller.healthScore}%',
+                                _controller.healthDetail,
+                              ),
+                            ),
+                            Expanded(
+                              child: _ReadinessMetric(
+                                Icons.directions_bus_outlined,
+                                'Transit',
+                                '${_controller.transitScore}%',
+                                _controller.transitDetail,
+                              ),
                             ),
                           ],
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 18),
-                  const Divider(),
-                  const SizedBox(height: 10),
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _ReadinessMetric(
-                        Icons.wb_sunny_outlined,
-                        'Weather',
-                        '92%',
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Text(
+                      'Packing Checklist',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
-                      _ReadinessMetric(
-                        Icons.medical_services_outlined,
-                        'Health',
-                        '78%',
-                      ),
-                      _ReadinessMetric(
-                        Icons.directions_bus_outlined,
-                        'Transit',
-                        '85%',
-                      ),
-                    ],
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${_controller.packedItems}/${_controller.totalItems} packed',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+                const Text(
+                  'Recommended',
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF003B2B),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 8),
+                for (final section in _controller.sections)
+                  _ChecklistCard(
+                    section: section,
+                    packedIds: _controller.packedIds,
+                    onChanged: _controller.toggleItem,
+                  ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(
+                      'Customized Checklist',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF003B2B),
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: _addCustomItem,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Item'),
+                    ),
+                  ],
+                ),
+                if (_controller.customItems.isEmpty)
+                  OutlinedButton.icon(
+                    onPressed: _addCustomItem,
+                    icon: const Icon(Icons.add_circle_outline),
+                    label: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Text('Create Custom Item'),
+                    ),
+                  )
+                else
+                  _ChecklistCard(
+                    section: PackingChecklistSection(
+                      name: 'Personal Items',
+                      items: _controller.customItems,
+                    ),
+                    packedIds: _controller.packedIds,
+                    onChanged: _controller.toggleItem,
+                    onDelete: _controller.deleteCustomItem,
+                  ),
+              ],
             ),
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Text(
-                'Packing Checklist',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: _addItem,
-                icon: const Icon(Icons.add),
-                label: const Text('Add Item'),
-              ),
-            ],
-          ),
-          const Text(
-            'Recommended',
-            style: TextStyle(
-              fontSize: 19,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF003B2B),
-            ),
-          ),
-          const SizedBox(height: 8),
-          for (final category in categories)
-            _ChecklistCard(
-              category: category,
-              onChanged: (value) =>
-                  setState(() => category.packed = value.round()),
-            ),
-        ],
-      ),
     );
   }
 
-  void _addItem() {
-    setState(
-      () => categories.add(
-        _ChecklistCategory(
-          'Custom Item',
-          'Tap progress to mark packed',
-          0,
-          1,
-          Icons.add_box_outlined,
+  Future<void> _addCustomItem() async {
+    final name = TextEditingController();
+    final note = TextEditingController();
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Add custom packing item'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: name,
+              autofocus: true,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Item name',
+                hintText: 'e.g. Contact lenses',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: note,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Note (optional)',
+                hintText: 'Why you need this item',
+              ),
+            ),
+          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (name.text.trim().isEmpty) return;
+              Navigator.pop(dialogContext, true);
+            },
+            child: const Text('Add'),
+          ),
+        ],
       ),
     );
+    if (submitted == true) {
+      await _controller.addCustomItem(name.text, note.text);
+    }
+    name.dispose();
+    note.dispose();
   }
 }
 
 class _ReadinessMetric extends StatelessWidget {
-  const _ReadinessMetric(this.icon, this.label, this.value);
+  const _ReadinessMetric(this.icon, this.label, this.value, this.detail);
   final IconData icon;
   final String label;
   final String value;
+  final String detail;
   @override
   Widget build(BuildContext context) => Column(
     children: [
       Icon(icon),
       Text(label),
       Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+      Text(
+        detail,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: Theme.of(
+          context,
+        ).textTheme.labelSmall?.copyWith(color: Colors.black54, fontSize: 9),
+      ),
     ],
   );
 }
 
-class _ChecklistCategory {
-  _ChecklistCategory(
-    this.name,
-    this.subtitle,
-    this.packed,
-    this.total,
-    this.icon,
-  );
-  final String name;
-  final String subtitle;
-  int packed;
-  final int total;
-  final IconData icon;
-}
-
 class _ChecklistCard extends StatelessWidget {
-  const _ChecklistCard({required this.category, required this.onChanged});
-  final _ChecklistCategory category;
-  final ValueChanged<double> onChanged;
+  const _ChecklistCard({
+    required this.section,
+    required this.packedIds,
+    required this.onChanged,
+    this.onDelete,
+  });
+  final PackingChecklistSection section;
+  final Set<String> packedIds;
+  final Future<void> Function(String id, bool packed) onChanged;
+  final Future<void> Function(String id)? onDelete;
+
+  int get packed =>
+      section.items.where((item) => packedIds.contains(item.id)).length;
+
+  IconData get icon => switch (section.name) {
+    'Documents' => Icons.description_outlined,
+    'Clothing' => Icons.checkroom_outlined,
+    'Tech & Gear' => Icons.devices_outlined,
+    'Beach Essentials' => Icons.beach_access_outlined,
+    'Outdoor Adventure' => Icons.hiking_outlined,
+    'Cultural Visits' => Icons.account_balance_outlined,
+    'Health & Personal Care' => Icons.health_and_safety_outlined,
+    'Weather Essentials' => Icons.wb_sunny_outlined,
+    _ => Icons.backpack_outlined,
+  };
+
   @override
   Widget build(BuildContext context) => Card(
+    key: ValueKey('packing_section_${section.name}'),
     margin: const EdgeInsets.only(bottom: 12),
-    child: InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: () => onChanged(
-        category.packed == category.total ? 0 : category.packed + 1,
+    child: ExpansionTile(
+      key: PageStorageKey<String>('packing_section_${section.name}'),
+      shape: const RoundedRectangleBorder(side: BorderSide.none),
+      collapsedShape: const RoundedRectangleBorder(side: BorderSide.none),
+      tilePadding: const EdgeInsets.fromLTRB(18, 8, 14, 8),
+      childrenPadding: const EdgeInsets.only(bottom: 8),
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: const Color(0xFFE8ECE9),
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Icon(icon, color: const Color(0xFF0B4B38)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE8ECE9),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Icon(category.icon, color: const Color(0xFF0B4B38)),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        category.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF164C3B),
-                        ),
-                      ),
-                      Text(
-                        category.subtitle,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-                Text('${category.packed}/${category.total}'),
-              ],
-            ),
-            const SizedBox(height: 14),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: category.packed / category.total,
-                minHeight: 5,
-                color: const Color(0xFF0C4A37),
-                backgroundColor: const Color(0xFFE2E2DF),
-              ),
-            ),
-            const SizedBox(height: 13),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    category.packed == category.total
-                        ? 'Complete'
-                        : category.packed == 0
-                        ? 'Next: ${category.subtitle.split(',').first}'
-                        : '${category.total - category.packed} items remaining',
-                  ),
-                ),
-                const Icon(Icons.chevron_right, size: 20),
-              ],
-            ),
-          ],
+      title: Text(
+        section.name,
+        style: const TextStyle(
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF164C3B),
         ),
       ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 7),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: section.items.isEmpty ? 0 : packed / section.items.length,
+            minHeight: 5,
+            color: const Color(0xFF0C4A37),
+            backgroundColor: const Color(0xFFE2E2DF),
+          ),
+        ),
+      ),
+      trailing: Text('$packed/${section.items.length}'),
+      children: section.items
+          .map(
+            (item) => ListTile(
+              key: ValueKey('packing_item_${item.id}'),
+              leading: Checkbox(
+                value: packedIds.contains(item.id),
+                onChanged: (value) => onChanged(item.id, value ?? false),
+                semanticLabel: 'Mark ${item.name} as packed',
+              ),
+              title: Text(item.name),
+              subtitle: Text(item.reason),
+              onTap: () => onChanged(item.id, !packedIds.contains(item.id)),
+              trailing: onDelete == null
+                  ? null
+                  : IconButton(
+                      tooltip: 'Delete custom item',
+                      onPressed: () => onDelete!(item.id),
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+              dense: true,
+            ),
+          )
+          .toList(),
     ),
   );
 }
 
 // ignore: unused_element
 class _LegacyEcoPartnersScreen extends StatefulWidget {
-  const _LegacyEcoPartnersScreen({super.key});
+  const _LegacyEcoPartnersScreen();
   @override
   State<_LegacyEcoPartnersScreen> createState() => _EcoPartnersScreenState();
 }
@@ -1314,13 +1429,20 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
                 Card(
                   color: const Color(0xFFE8F3EE),
                   child: ListTile(
-                    leading: const Icon(Icons.contact_emergency_outlined, color: Color(0xFF07513C)),
+                    leading: const Icon(
+                      Icons.contact_emergency_outlined,
+                      color: Color(0xFF07513C),
+                    ),
                     title: const Text('Emergency Contacts'),
-                    subtitle: const Text('Manage contacts and lock-screen calling access'),
+                    subtitle: const Text(
+                      'Manage contacts and lock-screen calling access',
+                    ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
-                        builder: (_) => const EmergencyContactsScreen(initiallyUnlocked: true),
+                        builder: (_) => const EmergencyContactsScreen(
+                          initiallyUnlocked: true,
+                        ),
                       ),
                     ),
                   ),
