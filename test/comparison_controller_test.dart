@@ -5,6 +5,7 @@ import 'package:collab/features/destination_exploration/controller/comparison_co
 import 'package:collab/features/destination_exploration/model/comparison_destination.dart';
 import 'package:collab/features/destination_exploration/model/crowd_level.dart';
 import 'package:collab/features/destination_exploration/model/destination_exploration_repository.dart';
+import 'package:collab/features/destination_exploration/model/favourite_destination_repository.dart';
 import 'package:collab/features/destination_exploration/model/favourite_destinations_store.dart';
 import 'package:collab/features/itinerary_planning/controller/gem_category_preference_controller.dart';
 import 'package:collab/features/itinerary_planning/controller/itinerary_planner_controller.dart';
@@ -33,6 +34,14 @@ class _FakeItineraryRepository extends ItineraryRepository {
     Set<shared.DestinationCategory> categories = const {},
   }) async =>
       const [];
+}
+
+// saveToFavourites() goes through the FavouriteDestinationsStore singleton,
+// which otherwise hits real Supabase (uninitialized in a plain unit test) —
+// same hazard as _FakeItineraryRepository above.
+class _FakeFavouriteRepository extends FavouriteDestinationRepository {
+  @override
+  Future<void> add(String destinationId) async {}
 }
 
 ComparisonDestination _dest(
@@ -194,11 +203,16 @@ void main() {
     });
 
     test('saveToFavourites works on any compared destination, not just Best Pick', () async {
+      final previousInstance = FavouriteDestinationsStore.instance;
+      FavouriteDestinationsStore.instance =
+          FavouriteDestinationsStore(repository: _FakeFavouriteRepository());
+      addTearDown(() => FavouriteDestinationsStore.instance = previousInstance);
+
       final controller =
           ComparisonController(repository: _FakeComparisonRepository([_dest('a'), _dest('b', avgRating: 4.9)]));
       await controller.loadComparison(['a', 'b']);
 
-      controller.saveToFavourites(controller.destinations.first); // 'a', not the Best Pick
+      await controller.saveToFavourites(controller.destinations.first); // 'a', not the Best Pick
 
       expect(FavouriteDestinationsStore.instance.favourites.map((d) => d.id), contains('a'));
     });

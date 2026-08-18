@@ -706,10 +706,14 @@ class _BestPickView extends StatelessWidget {
                     return OutlinedButton.icon(
                       onPressed: alreadySaved
                           ? null
-                          : () {
-                              controller.saveToFavourites(pick);
+                          : () async {
+                              await controller.saveToFavourites(pick);
+                              if (!context.mounted) return;
+                              final error = FavouriteDestinationsStore.instance.error;
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('${pick.name} saved to favourites')),
+                                SnackBar(
+                                  content: Text(error ?? '${pick.name} saved to favourites'),
+                                ),
                               );
                             },
                       icon: Icon(alreadySaved ? Icons.favorite : Icons.favorite_border),
