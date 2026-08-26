@@ -212,8 +212,9 @@ class EcoPartnerRepository {
     int score(EcoPartner p) {
       if (p.gstcVerified) return 100;
       if (p.veganClassification == 'Vegan') return 90;
-      if (const ['MRT', 'LRT', 'Monorail', 'KTM'].contains(p.subtype))
+      if (const ['MRT', 'LRT', 'Monorail', 'KTM'].contains(p.subtype)) {
         return 85;
+      }
       if (p.subtype == 'EV charging') return 80;
       if (p.veganClassification == 'Vegetarian') return 75;
       if (p.subtype == 'Bus') return 70;
@@ -773,7 +774,7 @@ nwr$scope["amenity"="charging_station"];
       id: 'osm:$type:$id',
       name: '${tags['name'] ?? 'Unnamed ${tags['amenity'] ?? 'dining venue'}'}',
       category: EcoPartnerCategory.dining,
-      subtype: '${tags['amenity'] == 'cafe' ? 'Cafe' : 'Restaurant'}',
+      subtype: tags['amenity'] == 'cafe' ? 'Cafe' : 'Restaurant',
       latitude: lat,
       longitude: lon,
       address: _osmAddress(tags),
@@ -831,6 +832,7 @@ String _osmAddress(Map<String, dynamic> tags) => [
   tags['addr:housenumber'],
   tags['addr:street'],
   tags['addr:city'],
+  tags['addr:state'],
 ].where((e) => e != null && '$e'.isNotEmpty).join(', ');
 String _preferredMode(List<String> modes) {
   for (final mode in const ['MRT', 'LRT', 'Monorail', 'KTM', 'Rail', 'Bus']) {

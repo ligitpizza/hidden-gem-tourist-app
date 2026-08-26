@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../itinerary_planning/model/osrm_routing_service.dart';
+import '../../itinerary_planning/model/transitous_routing_service.dart';
+import '../../itinerary_planning/view/widgets/route_map_view.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../model/eco_partner.dart';
 
@@ -82,13 +87,24 @@ class EcoPartnerDetailScreen extends StatelessWidget {
             ],
           ),
         ),
-        if (partner.address.isNotEmpty)
-          _section(
-            context,
-            title: 'Location',
-            icon: Icons.location_on_outlined,
-            child: Text(partner.address),
+        _section(
+          context,
+          title: 'Location & directions',
+          icon: Icons.location_on_outlined,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                partner.address.isEmpty
+                    ? 'Location available on the map'
+                    : partner.address,
+              ),
+              const SizedBox(height: 12),
+              const SizedBox(height: 12),
+              _EcoPartnerRouteGuide(partner: partner),
+            ],
           ),
+        ),
         if (partner.routeNames.isNotEmpty)
           _section(
             context,
@@ -163,7 +179,7 @@ class EcoPartnerDetailScreen extends StatelessWidget {
           ? Image.network(
               partner.imageUrl!,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _heroFallback(context),
+              errorBuilder: (_, _, _) => _heroFallback(context),
             )
           : _heroFallback(context),
     ),
@@ -238,6 +254,295 @@ class EcoPartnerDetailScreen extends StatelessWidget {
 
   static String _date(DateTime value) =>
       '${value.day}/${value.month}/${value.year}';
+}
+
+enum _RouteMode { walking, publicTransit, evCar }
+
+class _EcoPartnerRouteGuide extends StatefulWidget {
+  const _EcoPartnerRouteGuide({required this.partner});
+
+  final EcoPartner partner;
+
+  @override
+  State<_EcoPartnerRouteGuide> createState() => _EcoPartnerRouteGuideState();
+}
+
+class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
+  final _routingService = OsrmRoutingService();
+  final _transitService = TransitousRoutingService();
+  _RouteMode _mode = _RouteMode.walking;
+  LatLng? _origin;
+  OsrmRoute? _route;
+  TransitRoute? _transitRoute;
+  String? _error;
+  bool _loading = false;
+
+  Future<void> _loadRoute() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _route = null;
+      _transitRoute = null;
+    });
+
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied) {
+        throw const OsrmException('Location permission is required.');
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw const OsrmException(
+          'Location permission is disabled. Enable it in device settings.',
+        );
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+      final origin = LatLng(position.latitude, position.longitude);
+      final destination = LatLng(
+        widget.partner.latitude,
+        widget.partner.longitude,
+      );
+      final waypoints = [origin, destination];
+      OsrmRoute? route;
+      TransitRoute? transitRoute;
+      switch (_mode) {
+        case _RouteMode.walking:
+          route = await _routingService.walkingRoute(waypoints);
+          break;
+        case _RouteMode.evCar:
+          route = (await _routingService.drivingRoute(waypoints)).first;
+          break;
+        case _RouteMode.publicTransit:
+          transitRoute = await _transitService.plan(origin, destination);
+          if (transitRoute == null) {
+            throw const OsrmException(
+              'No public-transit itinerary is available for this journey.',
+            );
+          }
+          break;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _origin = origin;
+        _route = route;
+        _transitRoute = transitRoute;
+      });
+    } on OsrmException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'Could not calculate a route. Please retry.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _changeMode(_RouteMode mode) async {
+    if (_mode == mode) return;
+    setState(() => _mode = mode);
+    if (_route != null || _transitRoute != null) await _loadRoute();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final route = _route;
+    final transitRoute = _transitRoute;
+    final origin = _origin;
+    final destination = LatLng(
+      widget.partner.latitude,
+      widget.partner.longitude,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          children: [
+            ChoiceChip(
+              avatar: const Icon(Icons.directions_walk, size: 18),
+              label: const Text('Walking'),
+              selected: _mode == _RouteMode.walking,
+              onSelected: _loading
+                  ? null
+                  : (_) => _changeMode(_RouteMode.walking),
+            ),
+            ChoiceChip(
+              avatar: const Icon(Icons.directions_transit, size: 18),
+              label: const Text('Public transit'),
+              selected: _mode == _RouteMode.publicTransit,
+              onSelected: _loading
+                  ? null
+                  : (_) => _changeMode(_RouteMode.publicTransit),
+            ),
+            ChoiceChip(
+              avatar: const Icon(Icons.electric_car_outlined, size: 18),
+              label: const Text('EV car'),
+              selected: _mode == _RouteMode.evCar,
+              onSelected: _loading
+                  ? null
+                  : (_) => _changeMode(_RouteMode.evCar),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (route == null && transitRoute == null)
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _loading ? null : _loadRoute,
+              icon: _loading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.route_outlined),
+              label: Text(_loading ? 'Calculating route...' : 'Show route'),
+            ),
+          )
+        else ...[
+          RouteMapView(
+            height: 260,
+            interactive: true,
+            borderRadius: const BorderRadius.all(Radius.circular(14)),
+            markers: [
+              MapMarkerSpec(
+                point: origin!,
+                color: const Color(0xFF1976D2),
+                icon: Icons.my_location,
+              ),
+              if (transitRoute != null)
+                for (final leg in transitRoute.legs.where(
+                  (leg) => leg.mode != 'WALK',
+                )) ...[
+                  MapMarkerSpec(
+                    point: leg.from,
+                    color: const Color(0xFF8A6800),
+                    icon: Icons.directions_transit,
+                  ),
+                  MapMarkerSpec(
+                    point: leg.to,
+                    color: const Color(0xFF8A6800),
+                    icon: Icons.directions_transit,
+                  ),
+                ],
+              MapMarkerSpec(
+                point: destination,
+                color: const Color(0xFF087653),
+                icon: Icons.location_on,
+              ),
+            ],
+            polylines: [
+              MapPolylineSpec(
+                points: route?.polyline ?? transitRoute!.polyline,
+                color: const Color(0xFF087653),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Icon(Icons.straighten, size: 18),
+              const SizedBox(width: 5),
+              Text(
+                '${(route?.distanceKm ?? transitRoute!.distanceKm).toStringAsFixed(1)} km',
+              ),
+              const SizedBox(width: 18),
+              const Icon(Icons.schedule, size: 18),
+              const SizedBox(width: 5),
+              Text(
+                _durationLabel(
+                  route?.durationMinutes ?? transitRoute!.durationMinutes,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Refresh route',
+                onPressed: _loading ? null : _loadRoute,
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
+          ),
+          if (transitRoute != null)
+            for (final leg in transitRoute.legs)
+              _JourneyStep(
+                icon: _transitIcon(leg.mode),
+                title: leg.mode == 'WALK'
+                    ? 'Walk to ${leg.toName}'
+                    : '${leg.agencyName ?? _modeLabel(leg.mode)}${leg.routeName == null ? '' : ' ${leg.routeName}'}',
+                subtitle: leg.mode == 'WALK'
+                    ? '${leg.durationMinutes} min'
+                    : '${leg.fromName} → ${leg.toName}${leg.headsign == null ? '' : '\nTowards ${leg.headsign}'}',
+              ),
+        ],
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _error!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
+        const SizedBox(height: 4),
+        Text(
+          _mode == _RouteMode.publicTransit
+              ? 'Transit itinerary from Transitous and Malaysian GTFS feeds.'
+              : 'Map and route data from OpenStreetMap and OSRM.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+
+  static String _durationLabel(int minutes) {
+    if (minutes < 60) return '$minutes min';
+    final hours = minutes ~/ 60;
+    final remaining = minutes % 60;
+    return remaining == 0 ? '$hours hr' : '$hours hr $remaining min';
+  }
+
+  static IconData _transitIcon(String mode) => switch (mode) {
+    'BUS' => Icons.directions_bus_outlined,
+    'RAIL' || 'TRAIN' || 'SUBWAY' || 'TRAM' => Icons.train_outlined,
+    _ => Icons.directions_walk,
+  };
+
+  static String _modeLabel(String mode) => switch (mode) {
+    'BUS' => 'Bus',
+    'RAIL' || 'TRAIN' => 'Rail',
+    'SUBWAY' => 'MRT/LRT',
+    'TRAM' => 'Tram',
+    _ => mode,
+  };
+}
+
+class _JourneyStep extends StatelessWidget {
+  const _JourneyStep({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    contentPadding: EdgeInsets.zero,
+    dense: true,
+    leading: Icon(icon, color: const Color(0xFF087653)),
+    title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+    subtitle: Text(subtitle),
+  );
 }
 
 class _Pill extends StatelessWidget {
