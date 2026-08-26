@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../shared/widgets/app_header.dart';
 import '../controller/eco_partner_controller.dart';
 import '../model/eco_partner.dart';
 import 'eco_partner_detail_screen.dart';
@@ -59,7 +60,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
   Widget build(BuildContext context) {
     final shown = _controller.visiblePartners;
     return Scaffold(
-      appBar: AppBar(title: const Text('Travel Assistant')),
+      appBar: const AppHeader.pushed(title: 'Eco Partners'),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

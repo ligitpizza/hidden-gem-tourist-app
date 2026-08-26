@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../shared/widgets/app_header.dart';
 import '../model/eco_partner.dart';
 
 class EcoPartnerDetailScreen extends StatelessWidget {
@@ -15,7 +16,7 @@ class EcoPartnerDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Partner Details')),
+    appBar: const AppHeader.pushed(title: 'Partner Details'),
     body: ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [

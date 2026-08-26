@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
+import '../../../shared/widgets/app_header.dart';
 import '../model/travel_document.dart';
 
 class TravelDocumentViewerScreen extends StatelessWidget {
@@ -13,7 +14,7 @@ class TravelDocumentViewerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(document.displayName)),
+      appBar: AppHeader.pushed(title: document.displayName),
       body: document.isPdf
           ? PdfViewer.file(document.storedPath)
           : Center(

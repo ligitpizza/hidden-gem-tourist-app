@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../shared/widgets/app_header.dart';
 import '../controller/emergency_contact_controller.dart';
 import '../model/emergency_contact.dart';
 
@@ -49,8 +50,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
   Widget build(BuildContext context) {
     final visible = _controller.visibleContacts;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Emergency Contacts'),
+      appBar: AppHeader.pushed(
+        title: 'Emergency Contacts',
         actions: [
           if (_controller.isUnlocked)
             IconButton(
