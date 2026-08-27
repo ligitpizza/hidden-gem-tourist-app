@@ -13,6 +13,7 @@ import '../model/itinerary_stop.dart';
 import 'widgets/badge_pill.dart';
 import 'widgets/day_grouping.dart';
 import 'widgets/route_map_view.dart';
+import 'widgets/shareable_timeline_list.dart';
 
 class DayTripScreen extends ConsumerStatefulWidget {
   const DayTripScreen({super.key});
@@ -445,32 +446,7 @@ class _ShareableDayTripCard extends StatelessWidget {
             // --- Timeline (matches "Your Day Trip" page below the map) -------
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final day in groupStopsByDay(plan.timeline)) ...[
-                    if (day.showHeader) ...[
-                      if (day.dayIndex > 0) const SizedBox(height: 12),
-                      Text(
-                        'DAY ${day.dayIndex + 1}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.primarySeed,
-                          letterSpacing: 0.6,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                    for (var i = 0; i < day.stops.length; i++)
-                      _ShareableTimelineRow(
-                        stop: day.stops[i],
-                        isLast: i == day.stops.length - 1,
-                      ),
-                  ],
-                ],
-              ),
+              child: ShareableTimelineList(timeline: plan.timeline),
             ),
           ],
         ),
@@ -502,69 +478,3 @@ class _HeaderStat extends StatelessWidget {
   }
 }
 
-/// A simplified, non-interactive rendering of a timeline stop for the
-/// exported image — same information as [_TimelineEntry] on the live page,
-/// without the map-marker travel icon row (kept compact for the export).
-class _ShareableTimelineRow extends StatelessWidget {
-  final ItineraryStop stop;
-  final bool isLast;
-  const _ShareableTimelineRow({required this.stop, required this.isLast});
-
-  @override
-  Widget build(BuildContext context) {
-    final dotColor = stop.isMainDestination ? AppTheme.primarySeed : AppTheme.gemGold;
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: isLast ? 0 : 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            margin: const EdgeInsets.only(top: 4),
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: stop.isMainDestination ? dotColor : Colors.white,
-              border: Border.all(color: dotColor, width: 2),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      stop.time,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black54,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        stop.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ],
-                ),
-                if (stop.meta != null)
-                  Text(
-                    stop.meta!,
-                    style: const TextStyle(fontSize: 11, color: Colors.black54),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
