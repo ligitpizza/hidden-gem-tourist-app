@@ -9,7 +9,6 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart' hide Provider;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../features/assistant/view/assistant_screen.dart';
 import '../../features/auth/model/auth_repository.dart';
 import '../../features/auth/view/auth_routes.dart';
 import '../../features/auth/view/login_screen.dart';
@@ -25,19 +24,23 @@ import '../../features/gamification_journal/view/checkin/checkin_history_screen.
 import '../../features/gamification_journal/view/friends/friends_list_screen.dart';
 import '../../features/gamification_journal/view/journal/journal_timeline_screen.dart';
 import '../../features/gamification_journal/view/quiz/quiz_list_screen.dart';
+import '../../features/hidden_gem_recommendation/model/hidden_gem_feed_item.dart';
+import '../../features/hidden_gem_recommendation/model/preference_onboarding_gate.dart';
+import '../../features/hidden_gem_recommendation/view/discovery_feed_screen.dart';
+import '../../features/hidden_gem_recommendation/view/hidden_gem_list_screen.dart';
+import '../../features/hidden_gem_recommendation/view/hidden_gem_recommendation_routes.dart';
+import '../../features/hidden_gem_recommendation/view/preference_setup_screen.dart';
+import '../../features/hidden_gem_recommendation/view/score_detail_screen.dart';
+import '../../features/hidden_gem_recommendation/view/travel_pulse_screen.dart';
+import '../../features/hidden_gem_recommendation/view/trending_screen.dart';
 import '../../features/itinerary_planning/view/day_trip_screen.dart';
 import '../../features/itinerary_planning/view/itinerary_routes.dart';
 import '../../features/itinerary_planning/view/plan_route_screen.dart';
 import '../../features/itinerary_planning/view/route_optimized_screen.dart';
-import '../../features/assistant/model/assistant_feed_item.dart';
 import '../../features/destination_exploration/view/comparison_routes.dart';
 import '../../features/destination_exploration/view/comparison_screen.dart';
 import '../../features/destination_exploration/view/destination_map_screen.dart';
 import '../../features/profile/view/profile_screen.dart';
-import '../../features/recommendations/view/recommendations_routes.dart';
-import '../../features/recommendations/view/score_detail_screen.dart';
-import '../../features/recommendations/view/travel_pulse_screen.dart';
-import '../../features/recommendations/view/travel_style_screen.dart';
 import '../../features/saved/view/saved_screen.dart';
 import '../../features/travel_prep/view/travel_prep_screens.dart';
 import '../widgets/app_bottom_nav_bar.dart';
@@ -59,13 +62,26 @@ final _branchNavigatorKeys = List.generate(7, (_) => GlobalKey<NavigatorState>()
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authRepository = AuthRepository();
+  // read, not watch: this Provider must build the GoRouter exactly once
+  // for the app's lifetime — the gate's own notifyListeners (merged into
+  // refreshListenable below) is what makes redirect() re-run, not a
+  // Riverpod rebuild recreating the whole router.
+  final onboardingGate = ref.read(preferenceOnboardingGateProvider);
 
   return GoRouter(
     initialLocation: ShellRoutes.assistant,
     // Auth-gates the whole app: signed-out users are bounced to /login;
     // signed-in users land on the Assistant tab if they try to visit
-    // /login or /signup.
-    refreshListenable: GoRouterRefreshStream(authRepository.authStateChanges),
+    // /login or /signup. Signed-in tourists with no saved travel
+    // preference profile yet are further bounced to the mandatory
+    // Define Your Travel Style screen (Module 1) before reaching the
+    // shell — mirrors the "Preference Selection And Preference Update"
+    // activity diagram's "Display Preference Selection Screen (Mandatory
+    // on first launch)".
+    refreshListenable: Listenable.merge([
+      GoRouterRefreshStream(authRepository.authStateChanges),
+      onboardingGate,
+    ]),
     redirect: (context, state) {
       final loggedIn = authRepository.isLoggedIn;
       final onAuthScreen =
@@ -74,6 +90,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       if (!loggedIn && !onAuthScreen) return AuthRoutes.login;
       if (loggedIn && onAuthScreen) return ShellRoutes.assistant;
+
+      if (loggedIn) {
+        // Fire-and-forget: go_router's redirect must answer synchronously,
+        // so this kicks off the (cached-after-first-check) Supabase read
+        // and the merged Listenable above re-runs redirect once it
+        // resolves and calls notifyListeners.
+        unawaited(onboardingGate.refresh());
+        final onSetupScreen =
+            state.matchedLocation == HiddenGemRecommendationRoutes.preferenceSetup;
+        if (onboardingGate.needsSetup && !onSetupScreen) {
+          return HiddenGemRecommendationRoutes.preferenceSetup;
+        }
+      }
       return null;
     },
     routes: [
@@ -100,17 +129,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const DayTripScreen(),
       ),
       GoRoute(
-        path: RecommendationsRoutes.travelStyle,
-        builder: (context, state) => const TravelStyleScreen(),
+        path: HiddenGemRecommendationRoutes.preferenceSetup,
+        builder: (context, state) => const PreferenceSetupScreen(mandatory: true),
       ),
       GoRoute(
-        path: RecommendationsRoutes.travelPulse,
+        path: HiddenGemRecommendationRoutes.travelStyle,
+        builder: (context, state) => const PreferenceSetupScreen(),
+      ),
+      GoRoute(
+        path: HiddenGemRecommendationRoutes.travelPulse,
         builder: (context, state) => const TravelPulseScreen(),
       ),
       GoRoute(
-        path: RecommendationsRoutes.scoreDetail,
+        path: HiddenGemRecommendationRoutes.trending,
+        builder: (context, state) => const TrendingScreen(),
+      ),
+      GoRoute(
+        path: HiddenGemRecommendationRoutes.topMatchesList,
+        builder: (context, state) => HiddenGemListScreen(
+          title: 'Your Top Matches',
+          items: state.extra as List<HiddenGemFeedItem>,
+        ),
+      ),
+      GoRoute(
+        path: HiddenGemRecommendationRoutes.scoreDetail,
         builder: (context, state) =>
-            ScoreDetailScreen(item: state.extra as AssistantFeedItem),
+            ScoreDetailScreen(item: state.extra as HiddenGemFeedItem),
       ),
       GoRoute(
         path: ComparisonRoutes.compare,
@@ -144,7 +188,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: ShellRoutes.assistant,
-                builder: (context, state) => const AssistantScreen(),
+                builder: (context, state) => const DiscoveryFeedScreen(),
               ),
             ],
           ),

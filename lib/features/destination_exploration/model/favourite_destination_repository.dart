@@ -13,6 +13,16 @@ import 'destination_exploration_repository.dart';
 /// copy of the destination's fields — [fetchAll] resolves the full
 /// [ComparisonDestination] rows via the existing [DestinationExplorationRepository.fetchForComparison]
 /// rather than duplicating that mapping here.
+///
+/// NOTE for Module 1 (Hidden Gem Recommendations): a `save` interaction
+/// hook used to live in [add] here, logging every favourite as a
+/// preference-learning signal. It was removed — `destination_id` here
+/// references `public.destinations` (this module's own dataset), which is
+/// a separate table from `public.places` (Module 1's Penang dataset that
+/// `user_interactions.place_id` has a foreign key to), so every insert was
+/// silently failing on a foreign-key violation. Reinstating that signal
+/// needs the two datasets reconciled first (a shared id, or migrating one
+/// dataset onto the other) — not something to patch around here.
 class FavouriteDestinationRepository {
   FavouriteDestinationRepository({
     SupabaseClient? client,
