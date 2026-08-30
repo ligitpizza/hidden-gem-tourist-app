@@ -13,6 +13,16 @@ import '../../features/auth/model/auth_repository.dart';
 import '../../features/auth/view/auth_routes.dart';
 import '../../features/auth/view/login_screen.dart';
 import '../../features/auth/view/signup_screen.dart';
+import '../../features/culture_community/view/culture_community_home_screen.dart';
+import '../../features/culture_community/view/culture_community_routes.dart';
+import '../../features/culture_community/view/cultural_events_home_screen.dart';
+import '../../features/culture_community/view/cultural_events_map_screen.dart';
+import '../../features/culture_community/model/cultural_event.dart';
+import '../../features/culture_community/view/cultural_event_detail_screen.dart';
+import '../../features/culture_community/view/traditional_food_home_screen.dart';
+import '../../features/culture_community/model/traditional_food.dart';
+import '../../features/culture_community/view/traditional_food_detail_screen.dart';
+import '../../features/culture_community/view/traditional_food_nearby_screen.dart';
 import '../../features/explore/view/explore_screen.dart';
 import '../../features/gamification_journal/controller/badge_controller.dart';
 import '../../features/gamification_journal/controller/checkin_controller.dart';
@@ -58,7 +68,7 @@ const _assistantTabIndex = 2;
 /// Navigator and pop it back to root when its tab is re-tapped, instead of
 /// relying only on goBranch's initialLocation flag (which wasn't reliably
 /// clearing a pushed destination-detail screen on the Map tab).
-final _branchNavigatorKeys = List.generate(7, (_) => GlobalKey<NavigatorState>());
+final _branchNavigatorKeys = List.generate(8, (_) => GlobalKey<NavigatorState>());
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authRepository = AuthRepository();
@@ -260,6 +270,66 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
+          // Local Culture & Community
+          StatefulShellBranch(
+            navigatorKey: _branchNavigatorKeys[7],
+            routes: [
+              GoRoute(
+                path: ShellRoutes.culture,
+                builder: (context, state) => const CultureCommunityHomeScreen(),
+            routes: [
+              GoRoute(
+                path: CultureCommunityRoutes.eventsSegment,
+                builder: (context, state) => const CulturalEventsHomeScreen(),
+              ),
+
+              GoRoute(
+                path: CultureCommunityRoutes.foodSegment,
+                builder: (context, state) => const TraditionalFoodHomeScreen(),
+              ),
+
+              GoRoute(
+                path: CultureCommunityRoutes.eventMapSegment,
+                builder: (context, state) => const CulturalEventsMapScreen(),
+              ),
+
+              GoRoute(
+                path: CultureCommunityRoutes.eventDetailSegment,
+                builder: (context, state) {
+                  final event = state.extra as CulturalEvent;
+                  return CulturalEventDetailScreen(
+                    event: event,
+                  );
+                  },
+              ),
+              GoRoute(
+                path:
+                CultureCommunityRoutes
+                    .foodDetailSegment,
+                builder: (context, state) {
+                  final food =
+                  state.extra as TraditionalFood;
+
+                  return TraditionalFoodDetailScreen(
+                    food: food,
+                  );
+                },
+              ),
+              GoRoute(
+                path: CultureCommunityRoutes.foodNearbySegment,
+                builder: (context, state) {
+                  final food =
+                  state.extra as TraditionalFood;
+
+                  return TraditionalFoodNearbyScreen(
+                    food: food,
+                  );
+                },
+              ),
+  ],
+  ),
+  ],
+  ),
         ],
       ),
     ],
