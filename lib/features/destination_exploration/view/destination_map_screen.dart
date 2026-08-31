@@ -179,6 +179,11 @@ class _MapBodyState extends State<_MapBody> {
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
+      // Lets the sheet grow past its old fixed-fraction height cap when a
+      // description is long, instead of clipping content — paired with
+      // the SingleChildScrollView inside DestinationPopupSheet so it
+      // scrolls once it hits the screen height.
+      isScrollControlled: true,
       builder: (_) => DestinationPopupSheet(destination: destination),
     ).whenComplete(controller.clearSelection);
   }

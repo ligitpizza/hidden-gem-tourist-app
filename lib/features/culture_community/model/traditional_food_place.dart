@@ -1,62 +1,96 @@
 class TraditionalFoodPlace {
   const TraditionalFoodPlace({
-    required this.placeId,
+    required this.id,
     required this.name,
     required this.category,
     required this.state,
     required this.city,
+    required this.address,
     required this.latitude,
     required this.longitude,
     required this.halalStatus,
     required this.description,
+    required this.verificationSource,
+    required this.verificationUrl,
+    required this.verifiedAt,
+    required this.mappingNotes,
   });
 
-  final String placeId;
-
+  final String id;
   final String name;
-
   final String category;
 
   final String state;
-
   final String? city;
+  final String? address;
 
   final double latitude;
-
   final double longitude;
 
-  /// Possible values:
-  /// certified
-  /// muslim_friendly
-  /// non_halal
-  /// unknown
   final String halalStatus;
 
   final String? description;
 
-  factory TraditionalFoodPlace.fromMaps({
-    required Map<String, dynamic> linkRow,
-    required Map<String, dynamic> placeRow,
-  }) {
+  final String? verificationSource;
+  final String? verificationUrl;
+  final DateTime? verifiedAt;
+
+  final String? mappingNotes;
+
+  factory TraditionalFoodPlace.fromJoinRow(
+      Map<String, dynamic> row,
+      ) {
+    final location = (row['food_locations'] as Map)
+        .cast<String, dynamic>();
+
     return TraditionalFoodPlace(
-      placeId: placeRow['id'] as String,
-      name:
-      (placeRow['name'] as String?) ??
-          'Unknown Place',
+      id: location['id'] as String,
+      name: location['name'] as String,
       category:
-      (placeRow['category'] as String?) ?? '',
+      (location['category'] as String?) ??
+          'restaurant',
       state:
-      (placeRow['state'] as String?) ?? '',
-      city: placeRow['city'] as String?,
+      (location['state'] as String?) ?? '',
+      city: location['city'] as String?,
+      address: location['address'] as String?,
       latitude:
-      (placeRow['latitude'] as num).toDouble(),
+      (location['latitude'] as num).toDouble(),
       longitude:
-      (placeRow['longitude'] as num).toDouble(),
+      (location['longitude'] as num).toDouble(),
       halalStatus:
-      (linkRow['halal_status'] as String?) ??
+      (location['halal_status'] as String?) ??
           'unknown',
       description:
-      placeRow['description'] as String?,
+      location['description'] as String?,
+      verificationSource:
+      (row['verification_source'] as String?) ??
+          location['verification_source'] as String?,
+      verificationUrl:
+      (row['verification_url'] as String?) ??
+          location['verification_url'] as String?,
+      verifiedAt:
+      _parseDate(
+        row['verified_at'] ??
+            location['verified_at'],
+      ),
+      mappingNotes:
+      row['notes'] as String?,
+    );
+  }
+
+  static DateTime? _parseDate(
+      dynamic value,
+      ) {
+    if (value == null) {
+      return null;
+    }
+
+    if (value is DateTime) {
+      return value;
+    }
+
+    return DateTime.tryParse(
+      value.toString(),
     );
   }
 }

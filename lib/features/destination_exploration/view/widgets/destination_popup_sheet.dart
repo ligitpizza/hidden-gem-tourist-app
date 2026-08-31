@@ -54,65 +54,94 @@ class DestinationPopupSheet extends StatelessWidget {
     );
   }
 
+  Widget _buildImage(BuildContext context) {
+    if (destination.imageUrls.isEmpty) {
+      return Container(
+        height: 120,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade300,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: Icon(Icons.image_not_supported_outlined, size: 32, color: Colors.grey),
+        ),
+      );
+    }
+
+    // A single image previously sat in a horizontally-scrolling list sized
+    // to its own 160px tile, leaving a large blank gap on the right since
+    // nothing else was there to scroll to — stretch it to fill the width
+    // instead. Multiple images keep the horizontal strip, where that
+    // fixed tile width is what makes scrolling between them make sense.
+    if (destination.imageUrls.length == 1) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          destination.imageUrls.first,
+          width: double.infinity,
+          height: 120,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 120,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: destination.imageUrls.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) => ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.network(
+            destination.imageUrls[index],
+            width: 160,
+            height: 120,
+            fit: BoxFit.cover,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(categoryIcon(destination.category), color: categoryColor(destination.category)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(destination.name, style: Theme.of(context).textTheme.titleLarge),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          GestureDetector(
-            onTap: () => _openDetail(context),
-            child: destination.imageUrls.isEmpty
-                ? Container(
-                    height: 120,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.image_not_supported_outlined, size: 32, color: Colors.grey),
-                    ),
-                  )
-                : SizedBox(
-                    height: 120,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: destination.imageUrls.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
-                      itemBuilder: (context, index) => ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          destination.imageUrls[index],
-                          width: 160,
-                          height: 120,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                  ),
-          ),
-          const SizedBox(height: 12),
-          Text(destination.description),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: () => _openDetail(context),
-            icon: const Icon(Icons.info_outline),
-            label: const Text('View Details'),
-          ),
-        ],
+    // Wrapped in a scroll view (paired with isScrollControlled: true on the
+    // showModalBottomSheet call) so a long description grows the sheet up
+    // to the screen height and then scrolls, instead of overflowing past
+    // the bottom of a fixed-height sheet.
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(categoryIcon(destination.category), color: categoryColor(destination.category)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(destination.name, style: Theme.of(context).textTheme.titleLarge),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () => _openDetail(context),
+              child: _buildImage(context),
+            ),
+            const SizedBox(height: 12),
+            Text(destination.description),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: () => _openDetail(context),
+              icon: const Icon(Icons.info_outline),
+              label: const Text('View Details'),
+            ),
+          ],
+        ),
       ),
     );
   }

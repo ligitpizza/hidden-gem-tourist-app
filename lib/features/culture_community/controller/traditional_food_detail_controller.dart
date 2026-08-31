@@ -10,21 +10,29 @@ class TraditionalFoodDetailController
     required this.foodId,
     CultureCommunityRepository? repository,
   }) : _repository =
-      repository ?? CultureCommunityRepository() {
+      repository ??
+          CultureCommunityRepository() {
     load();
   }
 
   final String foodId;
+
   final CultureCommunityRepository _repository;
 
   bool isLoading = false;
 
   bool isFavourite = false;
+
   bool isSavingFavourite = false;
 
-  List<TraditionalFoodPlace> places = const [];
+  List<TraditionalFoodPlace> places =
+  const [];
 
   String? errorMessage;
+
+  // =========================================================
+  // LOAD
+  // =========================================================
 
   Future<void> load() async {
     isLoading = true;
@@ -32,18 +40,19 @@ class TraditionalFoodDetailController
 
     notifyListeners();
 
-    // ========================================================
-    // LOAD PLACES SEPARATELY
-    // ========================================================
+    // ---------------------------------------------------------
+    // FOOD LOCATIONS
+    // ---------------------------------------------------------
 
     try {
       places =
-      await _repository.fetchTraditionalFoodPlaces(
+      await _repository
+          .fetchTraditionalFoodPlaces(
         foodId,
       );
     } catch (error, stackTrace) {
       debugPrint(
-        'Traditional food place loading error: $error',
+        'Food location loading error: $error',
       );
 
       debugPrintStack(
@@ -53,24 +62,23 @@ class TraditionalFoodDetailController
       places = const [];
 
       errorMessage =
-      'Could not load restaurant locations.';
+      'Could not load food locations.';
     }
 
-    // ========================================================
-    // LOAD FAVORITE SEPARATELY
-    //
-    // A favorite failure should NOT stop restaurant loading.
-    // ========================================================
+    // ---------------------------------------------------------
+    // FAVOURITE
+    // ---------------------------------------------------------
 
     if (_repository.isSignedIn) {
       try {
         isFavourite =
-        await _repository.isTraditionalFoodFavourite(
+        await _repository
+            .isTraditionalFoodFavourite(
           foodId,
         );
       } catch (error, stackTrace) {
         debugPrint(
-          'Traditional food favorite loading error: $error',
+          'Traditional food favourite loading error: $error',
         );
 
         debugPrintStack(
@@ -88,6 +96,10 @@ class TraditionalFoodDetailController
     notifyListeners();
   }
 
+  // =========================================================
+  // TOGGLE FAVOURITE
+  // =========================================================
+
   Future<bool> toggleFavourite() async {
     if (isSavingFavourite) {
       return false;
@@ -95,7 +107,7 @@ class TraditionalFoodDetailController
 
     if (!_repository.isSignedIn) {
       errorMessage =
-      'Please sign in to save food to Favorites.';
+      'Please sign in to save this traditional food.';
 
       notifyListeners();
 
@@ -127,7 +139,7 @@ class TraditionalFoodDetailController
       return true;
     } catch (error, stackTrace) {
       debugPrint(
-        'Traditional food favorite update error: $error',
+        'Traditional food favourite update error: $error',
       );
 
       debugPrintStack(
@@ -135,7 +147,7 @@ class TraditionalFoodDetailController
       );
 
       errorMessage =
-      'Could not update your Favorite.';
+      'Could not update Favorite.';
 
       return false;
     } finally {

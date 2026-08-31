@@ -15,15 +15,14 @@ class CultureCommunityRepository {
       _clientOverride ?? Supabase.instance.client;
 
   // =========================================================
-  // AUTHENTICATION
+  // AUTH
   // =========================================================
 
   bool get isSignedIn =>
       _client.auth.currentUser != null;
 
   String _requireUserId() {
-    final user =
-        _client.auth.currentUser;
+    final user = _client.auth.currentUser;
 
     if (user == null) {
       throw StateError(
@@ -38,14 +37,21 @@ class CultureCommunityRepository {
   // CULTURAL EVENTS
   // =========================================================
 
-  Future<List<CulturalEvent>>
-  fetchCulturalEvents() async {
+  Future<List<CulturalEvent>> fetchCulturalEvents() async {
+    final now = DateTime.now()
+        .toUtc()
+        .toIso8601String();
+
     final rows = await _client
         .from('cultural_events')
         .select()
         .eq(
       'is_active',
       true,
+    )
+        .gte(
+      'end_at',
+      now,
     )
         .order(
       'start_at',
@@ -97,16 +103,11 @@ class CultureCommunityRepository {
   Future<bool> isCulturalEventFavourite(
       String eventId,
       ) async {
-    final userId =
-    _requireUserId();
+    final userId = _requireUserId();
 
     final result = await _client
-        .from(
-      'cultural_event_favourites',
-    )
-        .select(
-      'event_id',
-    )
+        .from('cultural_event_favourites')
+        .select('event_id')
         .eq(
       'user_id',
       userId,
@@ -123,34 +124,26 @@ class CultureCommunityRepository {
   Future<void> addCulturalEventFavourite(
       String eventId,
       ) async {
-    final userId =
-    _requireUserId();
+    final userId = _requireUserId();
 
     await _client
-        .from(
-      'cultural_event_favourites',
-    )
+        .from('cultural_event_favourites')
         .upsert(
       {
         'user_id': userId,
         'event_id': eventId,
       },
-      onConflict:
-      'user_id,event_id',
+      onConflict: 'user_id,event_id',
     );
   }
 
-  Future<void>
-  removeCulturalEventFavourite(
+  Future<void> removeCulturalEventFavourite(
       String eventId,
       ) async {
-    final userId =
-    _requireUserId();
+    final userId = _requireUserId();
 
     await _client
-        .from(
-      'cultural_event_favourites',
-    )
+        .from('cultural_event_favourites')
         .delete()
         .eq(
       'user_id',
@@ -166,20 +159,16 @@ class CultureCommunityRepository {
   // CULTURAL EVENT ITINERARY
   // =========================================================
 
-  Future<bool>
-  isCulturalEventInItinerary(
+  Future<bool> isCulturalEventInItinerary(
       String eventId,
       ) async {
-    final userId =
-    _requireUserId();
+    final userId = _requireUserId();
 
     final result = await _client
         .from(
       'cultural_event_itinerary_items',
     )
-        .select(
-      'event_id',
-    )
+        .select('event_id')
         .eq(
       'user_id',
       userId,
@@ -193,13 +182,11 @@ class CultureCommunityRepository {
     return result != null;
   }
 
-  Future<void>
-  addCulturalEventToItinerary({
+  Future<void> addCulturalEventToItinerary({
     required String eventId,
     required DateTime plannedAt,
   }) async {
-    final userId =
-    _requireUserId();
+    final userId = _requireUserId();
 
     await _client
         .from(
@@ -212,8 +199,7 @@ class CultureCommunityRepository {
         'planned_at':
         plannedAt.toIso8601String(),
       },
-      onConflict:
-      'user_id,event_id',
+      onConflict: 'user_id,event_id',
     );
   }
 
@@ -221,8 +207,7 @@ class CultureCommunityRepository {
   removeCulturalEventFromItinerary(
       String eventId,
       ) async {
-    final userId =
-    _requireUserId();
+    final userId = _requireUserId();
 
     await _client
         .from(
@@ -243,20 +228,16 @@ class CultureCommunityRepository {
   // TRADITIONAL FOOD FAVOURITES
   // =========================================================
 
-  Future<bool>
-  isTraditionalFoodFavourite(
+  Future<bool> isTraditionalFoodFavourite(
       String foodId,
       ) async {
-    final userId =
-    _requireUserId();
+    final userId = _requireUserId();
 
     final result = await _client
         .from(
       'traditional_food_favourites',
     )
-        .select(
-      'food_id',
-    )
+        .select('food_id')
         .eq(
       'user_id',
       userId,
@@ -270,12 +251,10 @@ class CultureCommunityRepository {
     return result != null;
   }
 
-  Future<void>
-  addTraditionalFoodFavourite(
+  Future<void> addTraditionalFoodFavourite(
       String foodId,
       ) async {
-    final userId =
-    _requireUserId();
+    final userId = _requireUserId();
 
     await _client
         .from(
@@ -286,8 +265,7 @@ class CultureCommunityRepository {
         'user_id': userId,
         'food_id': foodId,
       },
-      onConflict:
-      'user_id,food_id',
+      onConflict: 'user_id,food_id',
     );
   }
 
@@ -295,8 +273,7 @@ class CultureCommunityRepository {
   removeTraditionalFoodFavourite(
       String foodId,
       ) async {
-    final userId =
-    _requireUserId();
+    final userId = _requireUserId();
 
     await _client
         .from(
@@ -314,136 +291,74 @@ class CultureCommunityRepository {
   }
 
   // =========================================================
-  // TRADITIONAL FOOD LOCATIONS
+  // FOOD LOCATIONS
+  //
+  // traditional_foods
+  //      ↓
+  // traditional_food_location_foods
+  //      ↓
+  // food_locations
   // =========================================================
 
   Future<List<TraditionalFoodPlace>>
   fetchTraditionalFoodPlaces(
       String foodId,
       ) async {
-    // ---------------------------------------------------------
-    // STEP 1:
-    // Get links from traditional_food_places.
-    // ---------------------------------------------------------
-
-    final linkRows = await _client
+    final rows = await _client
         .from(
-      'traditional_food_places',
+      'traditional_food_location_foods',
     )
         .select(
-      'place_id, halal_status',
+      '''
+          notes,
+          verification_source,
+          verification_url,
+          verified_at,
+          food_locations!inner(
+            id,
+            name,
+            category,
+            state,
+            city,
+            address,
+            latitude,
+            longitude,
+            halal_status,
+            description,
+            verification_source,
+            verification_url,
+            verified_at,
+            is_active
+          )
+          ''',
     )
         .eq(
       'food_id',
       foodId,
+    )
+        .eq(
+      'food_locations.is_active',
+      true,
     );
 
-    final links = (linkRows as List)
-        .map(
-          (row) => (row as Map)
-          .cast<String, dynamic>(),
-    )
-        .toList();
-
-    // No restaurant linked to this food.
-    if (links.isEmpty) {
-      return const [];
-    }
-
-    // ---------------------------------------------------------
-    // STEP 2:
-    // Get place IDs.
-    // ---------------------------------------------------------
-
-    final placeIds = links
+    final places = (rows as List)
         .map(
           (row) =>
-      row['place_id'] as String,
+          TraditionalFoodPlace.fromJoinRow(
+            (row as Map)
+                .cast<String, dynamic>(),
+          ),
     )
         .toList();
 
-    // ---------------------------------------------------------
-    // STEP 3:
-    // Fetch actual records from team's existing places table.
-    //
-    // IMPORTANT:
-    // Your real columns are latitude + longitude.
-    // ---------------------------------------------------------
-
-    final placeRows = await _client
-        .from(
-      'places',
-    )
-        .select(
-      '''
-          id,
-          name,
-          category,
-          state,
-          city,
-          latitude,
-          longitude,
-          description
-          ''',
-    )
-        .inFilter(
-      'id',
-      placeIds,
+    places.sort(
+          (a, b) => a.name
+          .toLowerCase()
+          .compareTo(
+        b.name.toLowerCase(),
+      ),
     );
 
-    final places = (placeRows as List)
-        .map(
-          (row) => (row as Map)
-          .cast<String, dynamic>(),
-    )
-        .toList();
-
-    // ---------------------------------------------------------
-    // STEP 4:
-    // Merge traditional_food_places with places.
-    // ---------------------------------------------------------
-
-    final result =
-    <TraditionalFoodPlace>[];
-
-    for (final link in links) {
-      final placeId =
-      link['place_id'] as String;
-
-      Map<String, dynamic>?
-      matchingPlace;
-
-      for (final place in places) {
-        if (place['id'] ==
-            placeId) {
-          matchingPlace =
-              place;
-
-          break;
-        }
-      }
-
-      if (matchingPlace == null) {
-        continue;
-      }
-
-      // We cannot place a marker if coordinates are missing.
-      if (matchingPlace['latitude'] ==
-          null ||
-          matchingPlace['longitude'] ==
-              null) {
-        continue;
-      }
-
-      result.add(
-        TraditionalFoodPlace.fromMaps(
-          linkRow: link,
-          placeRow:
-          matchingPlace,
-        ),
-      );
-    }
-
-    return result;
+    return places;
   }
 }
