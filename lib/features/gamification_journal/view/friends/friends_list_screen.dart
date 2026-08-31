@@ -49,8 +49,9 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
     final badgesById = {for (final b in badgeController.allBadges) b.id: b};
     final destinationsById = {for (final d in checkInController.destinations) d.id: d};
 
-    final hasAnything =
-        friendController.friends.isNotEmpty || friendController.incomingRequests.isNotEmpty;
+    final hasAnything = friendController.friends.isNotEmpty ||
+        friendController.incomingRequests.isNotEmpty ||
+        friendController.outgoingRequests.isNotEmpty;
 
     return Scaffold(
       appBar: AppHeader.pushed(
@@ -77,6 +78,13 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                       const SizedBox(height: 8),
                       for (final request in friendController.incomingRequests)
                         _RequestTile(request: request),
+                      const SizedBox(height: 20),
+                    ],
+                    if (friendController.outgoingRequests.isNotEmpty) ...[
+                      Text('Requests sent', style: AppTypography.headlineSm),
+                      const SizedBox(height: 8),
+                      for (final request in friendController.outgoingRequests)
+                        _OutgoingRequestTile(request: request),
                       const SizedBox(height: 20),
                     ],
                     if (friendController.friends.isNotEmpty) ...[
@@ -148,6 +156,60 @@ class _RequestTile extends StatelessWidget {
               IconButton(
                 icon: Icon(Icons.cancel_outlined, color: colors.error),
                 tooltip: 'Decline',
+                onPressed: () => _runFriendAction(
+                  context,
+                  () => context.read<FriendController>().declineRequest(request.friendshipId),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A request this user sent that's still waiting on the other person —
+/// previously only visible by re-searching their name and reopening their
+/// preview; shown here directly with a way to cancel it.
+class _OutgoingRequestTile extends StatelessWidget {
+  const _OutgoingRequestTile({required this.request});
+
+  final FriendRequestEntry request;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => FriendProfilePreviewScreen(profile: request.profile)),
+        ),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: colors.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              _Avatar(name: request.profile.fullName),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  request.profile.fullName.isEmpty ? 'Someone' : request.profile.fullName,
+                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
+              Text('Pending', style: AppTypography.labelSm.copyWith(color: colors.onSurfaceVariant)),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: Icon(Icons.close, size: 18, color: colors.onSurfaceVariant),
+                tooltip: 'Cancel request',
                 onPressed: () => _runFriendAction(
                   context,
                   () => context.read<FriendController>().declineRequest(request.friendshipId),

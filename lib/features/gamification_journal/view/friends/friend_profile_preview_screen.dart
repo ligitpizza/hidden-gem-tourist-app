@@ -79,7 +79,7 @@ class _FriendProfilePreviewScreenState extends State<FriendProfilePreviewScreen>
 
     final destinationsById = {for (final d in checkInController.destinations) d.id: d};
     final relationship = friendController.relationshipWith(widget.profile.id);
-    final name = widget.profile.fullName.isEmpty ? 'Tourist' : widget.profile.fullName;
+    final name = widget.profile.fullName.isEmpty ? 'Someone' : widget.profile.fullName;
 
     final statesExplored = _checkIns
         .map((c) => destinationsById[c.destinationId]?.state)
@@ -209,6 +209,11 @@ class _RelationshipActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = AppColors.of(context);
     final controller = context.read<FriendController>();
+
+    // Viewing your own profile through some path other than search (which
+    // already excludes you) — nothing to add/remove, so show nothing
+    // rather than an "Add Friend" button pointed at yourself.
+    if (profileId == currentUserId) return const SizedBox.shrink();
 
     if (relationship == null) {
       return SizedBox(

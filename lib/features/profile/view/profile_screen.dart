@@ -188,7 +188,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         color: colors.primary,
         child: dashboardController.status == DashboardStatus.loading && stats.totalCheckIns == 0
             ? const Center(child: CircularProgressIndicator())
-            : ListView(
+            : dashboardController.status == DashboardStatus.error && stats.totalCheckIns == 0
+                ? _DashboardErrorState(
+                    message: dashboardController.errorMessage ?? 'Could not load your stats.',
+                    onRetry: _refresh,
+                  )
+                : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
                   // --- Identity ---------------------------------------------
@@ -522,6 +527,34 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ],
               ),
       ),
+    );
+  }
+}
+
+class _DashboardErrorState extends StatelessWidget {
+  const _DashboardErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return ListView(
+      // Still a ListView (not a bare Center) so RefreshIndicator's
+      // pull-to-refresh keeps working from this state too.
+      padding: const EdgeInsets.symmetric(vertical: 120, horizontal: 32),
+      children: [
+        Icon(Icons.cloud_off_outlined, size: 48, color: colors.onSurfaceVariant),
+        const SizedBox(height: 12),
+        Text('Could not load your stats', style: AppTypography.headlineSm, textAlign: TextAlign.center),
+        const SizedBox(height: 6),
+        Text(message, style: AppTypography.bodySm, textAlign: TextAlign.center),
+        const SizedBox(height: 16),
+        Center(
+          child: OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
+        ),
+      ],
     );
   }
 }
