@@ -1,5 +1,85 @@
 enum EcoPartnerCategory { stay, dining, transport }
 
+enum EcoPartnerAreaMode { nearby, statewide }
+
+enum EcoPartnerSearchScopeType { nearby, state, nationwide }
+
+class EcoGeoBounds {
+  const EcoGeoBounds({
+    required this.south,
+    required this.north,
+    required this.west,
+    required this.east,
+  });
+
+  final double south;
+  final double north;
+  final double west;
+  final double east;
+
+  double get centerLatitude => (south + north) / 2;
+  double get centerLongitude => (west + east) / 2;
+}
+
+class EcoPartnerSearchScope {
+  const EcoPartnerSearchScope._({
+    required this.type,
+    this.radiusKm,
+    this.state,
+    this.bounds,
+  });
+
+  const EcoPartnerSearchScope.nearby(double radiusKm)
+    : this._(type: EcoPartnerSearchScopeType.nearby, radiusKm: radiusKm);
+
+  const EcoPartnerSearchScope.state(String state, {EcoGeoBounds? bounds})
+    : this._(
+        type: EcoPartnerSearchScopeType.state,
+        state: state,
+        bounds: bounds,
+      );
+
+  const EcoPartnerSearchScope.nationwide()
+    : this._(type: EcoPartnerSearchScopeType.nationwide);
+
+  final EcoPartnerSearchScopeType type;
+  final double? radiusKm;
+  final String? state;
+  final EcoGeoBounds? bounds;
+
+  EcoPartnerSearchScope withBounds(EcoGeoBounds value) =>
+      EcoPartnerSearchScope.state(state!, bounds: value);
+
+  String get cacheKey => switch (type) {
+    EcoPartnerSearchScopeType.nearby => 'nearby:${radiusKm!.round()}',
+    EcoPartnerSearchScopeType.state => 'state:${state!.toLowerCase()}',
+    EcoPartnerSearchScopeType.nationwide => 'malaysia',
+  };
+}
+
+class EcoTransitRouteInfo {
+  const EcoTransitRouteInfo({
+    required this.mode,
+    this.shortName,
+    this.longName,
+  });
+
+  final String mode;
+  final String? shortName;
+  final String? longName;
+
+  String get displayLabel {
+    final short = shortName?.trim() ?? '';
+    final long = longName?.trim() ?? '';
+    if (long.isNotEmpty && short.isNotEmpty && long != short) {
+      return '$long ($short)';
+    }
+    if (long.isNotEmpty) return long;
+    if (short.isNotEmpty) return '$mode route $short';
+    return '$mode route';
+  }
+}
+
 class EcoPartner {
   const EcoPartner({
     required this.id,
@@ -21,7 +101,7 @@ class EcoPartner {
     this.imageSourceName,
     this.imageSourceUrl,
     this.imageCapturedAt,
-    this.routeNames = const [],
+    this.transitRoutes = const [],
     this.veganClassification,
     this.chargerDetails,
     this.gstcVerified = false,
@@ -46,7 +126,7 @@ class EcoPartner {
   final String? imageSourceName;
   final String? imageSourceUrl;
   final DateTime? imageCapturedAt;
-  final List<String> routeNames;
+  final List<EcoTransitRouteInfo> transitRoutes;
   final String? veganClassification;
   final String? chargerDetails;
   final bool gstcVerified;
@@ -71,7 +151,7 @@ class EcoPartner {
     imageSourceName: imageSourceName,
     imageSourceUrl: imageSourceUrl,
     imageCapturedAt: imageCapturedAt,
-    routeNames: routeNames,
+    transitRoutes: transitRoutes,
     veganClassification: veganClassification,
     chargerDetails: chargerDetails,
     gstcVerified: gstcVerified,
@@ -102,7 +182,7 @@ class EcoPartner {
     imageSourceName: imageSourceName,
     imageSourceUrl: imageSourceUrl,
     imageCapturedAt: capturedAt,
-    routeNames: routeNames,
+    transitRoutes: transitRoutes,
     veganClassification: veganClassification,
     chargerDetails: chargerDetails,
     gstcVerified: gstcVerified,

@@ -3,11 +3,12 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../itinerary_planning/model/osrm_routing_service.dart';
 import '../../itinerary_planning/model/transitous_routing_service.dart';
 import '../../itinerary_planning/view/widgets/route_map_view.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../model/eco_partner.dart';
+import '../model/eco_partner_routing_service.dart';
+import '../model/saved_eco_partners_store.dart';
 
 class EcoPartnerDetailScreen extends StatelessWidget {
   const EcoPartnerDetailScreen({
@@ -61,6 +62,8 @@ class EcoPartnerDetailScreen extends StatelessWidget {
               _Pill(partner.priceBand!, Icons.payments_outlined),
           ],
         ),
+        const SizedBox(height: 12),
+        _SaveEcoPartnerButton(partner: partner),
         const SizedBox(height: 22),
         _section(
           context,
@@ -105,19 +108,6 @@ class EcoPartnerDetailScreen extends StatelessWidget {
             ],
           ),
         ),
-        if (partner.routeNames.isNotEmpty)
-          _section(
-            context,
-            title: 'Available routes',
-            icon: Icons.route_outlined,
-            child: Wrap(
-              spacing: 7,
-              runSpacing: 7,
-              children: partner.routeNames
-                  .map((route) => Chip(label: Text(route)))
-                  .toList(),
-            ),
-          ),
         if (partner.chargerDetails?.isNotEmpty == true)
           _section(
             context,
@@ -256,6 +246,63 @@ class EcoPartnerDetailScreen extends StatelessWidget {
       '${value.day}/${value.month}/${value.year}';
 }
 
+class _SaveEcoPartnerButton extends StatefulWidget {
+  const _SaveEcoPartnerButton({required this.partner});
+
+  final EcoPartner partner;
+
+  @override
+  State<_SaveEcoPartnerButton> createState() => _SaveEcoPartnerButtonState();
+}
+
+class _SaveEcoPartnerButtonState extends State<_SaveEcoPartnerButton> {
+  @override
+  void initState() {
+    super.initState();
+    SavedEcoPartnersStore.instance.ensureLoaded();
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: SavedEcoPartnersStore.instance,
+    builder: (context, _) {
+      final store = SavedEcoPartnersStore.instance;
+      final saved = store.isSaved(widget.partner.id);
+      final busy = store.isBusy(widget.partner.id);
+      return SizedBox(
+        width: double.infinity,
+        child: saved
+            ? OutlinedButton.icon(
+                onPressed: busy ? null : _toggle,
+                icon: const Icon(Icons.bookmark),
+                label: const Text('Saved for packing'),
+              )
+            : FilledButton.tonalIcon(
+                onPressed: busy ? null : _toggle,
+                icon: const Icon(Icons.bookmark_add_outlined),
+                label: const Text('Save Eco Partner'),
+              ),
+      );
+    },
+  );
+
+  Future<void> _toggle() async {
+    final saved = await SavedEcoPartnersStore.instance.toggle(widget.partner);
+    if (!mounted) return;
+    final error = SavedEcoPartnersStore.instance.error;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          error ??
+              (saved
+                  ? 'Saved for your profile and packing checklist.'
+                  : 'Removed from saved Eco Partners.'),
+        ),
+      ),
+    );
+  }
+}
+
 enum _RouteMode { walking, publicTransit, evCar }
 
 class _EcoPartnerRouteGuide extends StatefulWidget {
@@ -268,11 +315,11 @@ class _EcoPartnerRouteGuide extends StatefulWidget {
 }
 
 class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
-  final _routingService = OsrmRoutingService();
+  final _routingService = EcoPartnerRoutingService();
   final _transitService = TransitousRoutingService();
   _RouteMode _mode = _RouteMode.walking;
   LatLng? _origin;
-  OsrmRoute? _route;
+  EcoPartnerRoute? _route;
   TransitRoute? _transitRoute;
   String? _error;
   bool _loading = false;
@@ -291,10 +338,12 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.denied) {
-        throw const OsrmException('Location permission is required.');
+        throw const EcoPartnerRouteException(
+          'Location permission is required.',
+        );
       }
       if (permission == LocationPermission.deniedForever) {
-        throw const OsrmException(
+        throw const EcoPartnerRouteException(
           'Location permission is disabled. Enable it in device settings.',
         );
       }
@@ -310,19 +359,19 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
         widget.partner.longitude,
       );
       final waypoints = [origin, destination];
-      OsrmRoute? route;
+      EcoPartnerRoute? route;
       TransitRoute? transitRoute;
       switch (_mode) {
         case _RouteMode.walking:
           route = await _routingService.walkingRoute(waypoints);
           break;
         case _RouteMode.evCar:
-          route = (await _routingService.drivingRoute(waypoints)).first;
+          route = await _routingService.drivingRoute(waypoints);
           break;
         case _RouteMode.publicTransit:
           transitRoute = await _transitService.plan(origin, destination);
           if (transitRoute == null) {
-            throw const OsrmException(
+            throw const EcoPartnerRouteException(
               'No public-transit itinerary is available for this journey.',
             );
           }
@@ -335,7 +384,7 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
         _route = route;
         _transitRoute = transitRoute;
       });
-    } on OsrmException catch (error) {
+    } on EcoPartnerRouteException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
     } catch (_) {
@@ -349,7 +398,14 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
   Future<void> _changeMode(_RouteMode mode) async {
     if (_mode == mode) return;
     setState(() => _mode = mode);
-    if (_route != null || _transitRoute != null) await _loadRoute();
+    if (_route != null || _transitRoute != null || _error != null) {
+      await _loadRoute();
+    }
+  }
+
+  Future<void> _planTransitRoute() async {
+    setState(() => _mode = _RouteMode.publicTransit);
+    await _loadRoute();
   }
 
   @override
@@ -394,6 +450,35 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
             ),
           ],
         ),
+        if (widget.partner.transitRoutes.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Transit routes serving this stop',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Tap a route to plan a public-transit journey here.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: widget.partner.transitRoutes
+                .map(
+                  (route) => ActionChip(
+                    avatar: const Icon(Icons.directions_bus_outlined, size: 17),
+                    label: Text(route.displayLabel),
+                    tooltip: 'Plan a journey to this stop',
+                    onPressed: _loading ? null : _planTransitRoute,
+                  ),
+                )
+                .toList(),
+          ),
+        ],
         const SizedBox(height: 10),
         if (route == null && transitRoute == null)
           SizedBox(

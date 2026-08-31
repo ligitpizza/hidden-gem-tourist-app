@@ -8,23 +8,23 @@ import '../../itinerary_planning/model/nominatim_geocoding_service.dart';
 import 'eco_partner.dart';
 
 abstract interface class EcoHotelSource {
-  Future<List<EcoPartner>> nearby(
+  Future<List<EcoPartner>> search(
     EcoDestination destination, {
-    double? radiusKm,
+    required EcoPartnerSearchScope scope,
   });
 }
 
 abstract interface class EcoMapSource {
-  Future<List<EcoPartner>> nearby(
+  Future<List<EcoPartner>> search(
     EcoDestination destination, {
-    double? radiusKm,
+    required EcoPartnerSearchScope scope,
   });
 }
 
 abstract interface class EcoTransitSource {
-  Future<List<EcoPartner>> nearby(
+  Future<List<EcoPartner>> search(
     EcoDestination destination, {
-    double? radiusKm,
+    required EcoPartnerSearchScope scope,
   });
 }
 
@@ -32,31 +32,107 @@ abstract interface class EcoPartnerImageSource {
   Future<List<EcoPartner>> enrich(List<EcoPartner> partners);
 }
 
-class EcoPartnerRepository {
+abstract interface class EcoStateBoundsResolver {
+  Future<EcoGeoBounds?> resolve(String state);
+}
+
+class NominatimEcoStateBoundsResolver implements EcoStateBoundsResolver {
+  NominatimEcoStateBoundsResolver({Dio? dio})
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              connectTimeout: const Duration(seconds: 8),
+              receiveTimeout: const Duration(seconds: 8),
+              headers: const {
+                'User-Agent': 'HiddenGemTouristAppFYP/1.0 (eco partner search)',
+              },
+            ),
+          );
+
+  final Dio _dio;
+
+  @override
+  Future<EcoGeoBounds?> resolve(String state) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        'https://nominatim.openstreetmap.org/search',
+        queryParameters: {
+          'q': '$state, Malaysia',
+          'format': 'jsonv2',
+          'limit': 1,
+          'countrycodes': 'my',
+        },
+      );
+      final data = response.data;
+      if (data is! List || data.isEmpty) return null;
+      final raw = (data.first as Map<String, dynamic>)['boundingbox'];
+      if (raw is! List || raw.length < 4) return null;
+      final south = double.tryParse('${raw[0]}');
+      final north = double.tryParse('${raw[1]}');
+      final west = double.tryParse('${raw[2]}');
+      final east = double.tryParse('${raw[3]}');
+      if (south == null || north == null || west == null || east == null) {
+        return null;
+      }
+      return EcoGeoBounds(south: south, north: north, west: west, east: east);
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+abstract interface class EcoPartnerRepositoryContract {
+  Future<EcoPartnerSearchResult> searchDestination(
+    String query, {
+    bool refresh = false,
+    EcoPartnerSearchScope scope = const EcoPartnerSearchScope.nearby(10),
+    bool includeImages = true,
+  });
+
+  Future<EcoPartnerSearchResult> searchCoordinates(
+    EcoDestination destination, {
+    bool refresh = false,
+    EcoPartnerSearchScope scope = const EcoPartnerSearchScope.nearby(10),
+    bool includeImages = true,
+  });
+
+  Future<EcoPartnerSearchResult> enrichResult(
+    EcoPartnerSearchResult value, {
+    EcoPartnerSearchScope scope = const EcoPartnerSearchScope.nearby(10),
+  });
+}
+
+class EcoPartnerRepository implements EcoPartnerRepositoryContract {
   EcoPartnerRepository({
     EcoHotelSource? hotels,
     EcoMapSource? map,
     EcoTransitSource? transit,
     EcoPartnerImageSource? images,
     NominatimGeocodingService? geocoder,
+    EcoStateBoundsResolver? stateBoundsResolver,
   }) : _hotels = hotels ?? SupabaseEcoHotelSource(),
        _map = map ?? OverpassEcoSource(),
        _transit = transit ?? SupabaseGtfsSource(),
        _images = images ?? MapillaryPartnerImageSource(),
-       _geocoder = geocoder ?? NominatimGeocodingService();
+       _geocoder = geocoder ?? NominatimGeocodingService(),
+       _stateBoundsResolver =
+           stateBoundsResolver ?? NominatimEcoStateBoundsResolver();
 
   final EcoHotelSource _hotels;
   final EcoMapSource _map;
   final EcoTransitSource _transit;
   final EcoPartnerImageSource _images;
   final NominatimGeocodingService _geocoder;
+  final EcoStateBoundsResolver _stateBoundsResolver;
   final Map<String, ({DateTime at, EcoPartnerSearchResult value})> _cache = {};
   static const geocodingTimeout = Duration(seconds: 8);
 
+  @override
   Future<EcoPartnerSearchResult> searchDestination(
     String query, {
     bool refresh = false,
-    double? radiusKm = 10,
+    EcoPartnerSearchScope scope = const EcoPartnerSearchScope.nearby(10),
     bool includeImages = true,
   }) async {
     final clean = query.trim();
@@ -73,7 +149,7 @@ class EcoPartnerRepository {
         first.location.longitude,
       ),
       refresh: refresh,
-      radiusKm: radiusKm,
+      scope: scope,
       includeImages: includeImages,
     );
     final partners = [...result.partners]
@@ -107,14 +183,16 @@ class EcoPartnerRepository {
     );
   }
 
+  @override
   Future<EcoPartnerSearchResult> searchCoordinates(
     EcoDestination destination, {
     bool refresh = false,
-    double? radiusKm = 10,
+    EcoPartnerSearchScope scope = const EcoPartnerSearchScope.nearby(10),
     bool includeImages = true,
   }) async {
+    final resolvedScope = await _resolveScope(scope);
     final key =
-        '${destination.latitude.toStringAsFixed(3)}:${destination.longitude.toStringAsFixed(3)}:${radiusKm ?? 'my'}';
+        '${destination.latitude.toStringAsFixed(3)}:${destination.longitude.toStringAsFixed(3)}:${resolvedScope.cacheKey}';
     final cached = _cache[key];
     if (!refresh &&
         cached != null &&
@@ -123,7 +201,7 @@ class EcoPartnerRepository {
           cached.value.partners.every((partner) => partner.imageUrl != null)) {
         return cached.value;
       }
-      return enrichResult(cached.value, radiusKm: radiusKm);
+      return enrichResult(cached.value, scope: resolvedScope);
     }
 
     final warnings = <String>[];
@@ -146,17 +224,17 @@ class EcoPartnerRepository {
     final groups = await Future.wait([
       protect(
         'GSTC hotel data',
-        _hotels.nearby(destination, radiusKm: radiusKm),
+        _hotels.search(destination, scope: resolvedScope),
         timeout: const Duration(seconds: 7),
       ),
       protect(
         'OpenStreetMap dining and EV data',
-        _map.nearby(destination, radiusKm: radiusKm),
+        _map.search(destination, scope: resolvedScope),
         timeout: const Duration(seconds: 7),
       ),
       protect(
         'Public transport data',
-        _transit.nearby(destination, radiusKm: radiusKm),
+        _transit.search(destination, scope: resolvedScope),
         timeout: const Duration(seconds: 7),
       ),
     ]);
@@ -173,7 +251,11 @@ class EcoPartnerRepository {
                 ),
               ),
             )
-            .where((e) => radiusKm == null || e.distanceKm <= radiusKm)
+            .where(
+              (partner) =>
+                  resolvedScope.type != EcoPartnerSearchScopeType.nearby ||
+                  partner.distanceKm <= resolvedScope.radiusKm!,
+            )
             .toList()
           ..sort(_rank);
     final baseResult = EcoPartnerSearchResult(
@@ -183,12 +265,13 @@ class EcoPartnerRepository {
     );
     _cache[key] = (at: DateTime.now(), value: baseResult);
     if (!includeImages) return baseResult;
-    return enrichResult(baseResult, radiusKm: radiusKm);
+    return enrichResult(baseResult, scope: resolvedScope);
   }
 
+  @override
   Future<EcoPartnerSearchResult> enrichResult(
     EcoPartnerSearchResult value, {
-    double? radiusKm = 10,
+    EcoPartnerSearchScope scope = const EcoPartnerSearchScope.nearby(10),
   }) async {
     try {
       final partners = await _images
@@ -200,12 +283,27 @@ class EcoPartnerRepository {
         warnings: value.warnings,
       );
       final key =
-          '${value.destination.latitude.toStringAsFixed(3)}:${value.destination.longitude.toStringAsFixed(3)}:${radiusKm ?? 'my'}';
+          '${value.destination.latitude.toStringAsFixed(3)}:${value.destination.longitude.toStringAsFixed(3)}:${scope.cacheKey}';
       _cache[key] = (at: DateTime.now(), value: enriched);
       return enriched;
     } catch (_) {
       return value;
     }
+  }
+
+  Future<EcoPartnerSearchScope> _resolveScope(
+    EcoPartnerSearchScope scope,
+  ) async {
+    if (scope.type != EcoPartnerSearchScopeType.state || scope.bounds != null) {
+      return scope;
+    }
+    final bounds = await _stateBoundsResolver.resolve(scope.state!);
+    if (bounds == null) {
+      throw EcoSearchException(
+        'Could not load the search area for ${scope.state}. Please retry.',
+      );
+    }
+    return scope.withBounds(bounds);
   }
 
   static int _rank(EcoPartner a, EcoPartner b) {
@@ -341,24 +439,27 @@ class SupabaseEcoHotelSource implements EcoHotelSource {
   final SupabaseClient _client;
 
   @override
-  Future<List<EcoPartner>> nearby(EcoDestination d, {double? radiusKm}) async {
+  Future<List<EcoPartner>> search(
+    EcoDestination d, {
+    required EcoPartnerSearchScope scope,
+  }) async {
     dynamic rows;
     try {
-      if (radiusKm == null) {
+      if (scope.type == EcoPartnerSearchScopeType.nationwide) {
         rows = await _client
             .from('eco_hotels')
             .select()
             .limit(500)
             .timeout(const Duration(seconds: 6));
       } else {
-        final box = _box(d.latitude, d.longitude, radiusKm);
+        final bounds = _boundsFor(d, scope);
         rows = await _client
             .from('eco_hotels')
             .select()
-            .gte('latitude', box.$1)
-            .lte('latitude', box.$2)
-            .gte('longitude', box.$3)
-            .lte('longitude', box.$4)
+            .gte('latitude', bounds.south)
+            .lte('latitude', bounds.north)
+            .gte('longitude', bounds.west)
+            .lte('longitude', bounds.east)
             .timeout(const Duration(seconds: 6));
       }
     } on PostgrestException catch (error) {
@@ -422,25 +523,28 @@ class SupabaseGtfsSource implements EcoTransitSource {
     : _client = client ?? Supabase.instance.client;
   final SupabaseClient _client;
   @override
-  Future<List<EcoPartner>> nearby(EcoDestination d, {double? radiusKm}) async {
+  Future<List<EcoPartner>> search(
+    EcoDestination d, {
+    required EcoPartnerSearchScope scope,
+  }) async {
     dynamic rows;
     try {
-      if (radiusKm == null) {
+      if (scope.type == EcoPartnerSearchScopeType.nationwide) {
         rows = await _client
             .from('gtfs_stops')
             .select('*, gtfs_stop_routes(gtfs_routes(*))')
             .limit(500)
             .timeout(const Duration(seconds: 6));
       } else {
-        final box = _box(d.latitude, d.longitude, radiusKm);
+        final bounds = _boundsFor(d, scope);
         rows = await _client
             .from('gtfs_stops')
             .select('*, gtfs_stop_routes(gtfs_routes(*))')
-            .gte('latitude', box.$1)
-            .lte('latitude', box.$2)
-            .gte('longitude', box.$3)
-            .lte('longitude', box.$4)
-            .limit(200)
+            .gte('latitude', bounds.south)
+            .lte('latitude', bounds.north)
+            .gte('longitude', bounds.west)
+            .lte('longitude', bounds.east)
+            .limit(scope.type == EcoPartnerSearchScopeType.state ? 500 : 200)
             .timeout(const Duration(seconds: 6));
       }
     } on PostgrestException catch (error) {
@@ -458,11 +562,20 @@ class SupabaseGtfsSource implements EcoTransitSource {
           .map((j) => (j as Map<String, dynamic>)['gtfs_routes'])
           .whereType<Map<String, dynamic>>()
           .toList();
-      final names = routes
-          .map((r) => '${r['short_name'] ?? r['long_name'] ?? ''}'.trim())
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .toList();
+      final transitRoutes = <String, EcoTransitRouteInfo>{};
+      for (final route in routes) {
+        final shortName = _text(route['short_name']);
+        final longName = _text(route['long_name']);
+        final mode = _text(route['mode']) ?? 'Bus';
+        if (shortName == null && longName == null) continue;
+        final info = EcoTransitRouteInfo(
+          shortName: shortName,
+          longName: longName,
+          mode: mode,
+        );
+        transitRoutes['$mode|$shortName|$longName'] = info;
+      }
+      final routeInfo = transitRoutes.values.toList();
       final modes = routes.map((r) => '${r['mode'] ?? 'Bus'}').toList();
       final mode = _preferredMode(modes);
       return EcoPartner(
@@ -474,15 +587,15 @@ class SupabaseGtfsSource implements EcoTransitSource {
         longitude: _number(row['longitude']),
         address: '${row['address'] ?? ''}',
         sustainabilityLabel: '$mode public transport',
-        evidence: names.isEmpty
+        evidence: routeInfo.isEmpty
             ? 'Official GTFS stop'
-            : 'Routes: ${names.join(', ')}',
+            : 'Routes: ${routeInfo.map((route) => route.displayLabel).join(', ')}',
         sourceName: '${row['source_name'] ?? 'Official Malaysia GTFS'}',
         sourceUrl:
             '${row['source_url'] ?? 'https://developer.data.gov.my/realtime-api/gtfs-static'}',
         lastUpdated:
             DateTime.tryParse('${row['updated_at'] ?? ''}') ?? DateTime.now(),
-        routeNames: names,
+        transitRoutes: routeInfo,
       );
     }).toList();
   }
@@ -502,26 +615,34 @@ class OverpassEcoSource implements EcoMapSource {
           );
   final Dio _dio;
   @override
-  Future<List<EcoPartner>> nearby(EcoDestination d, {double? radiusKm}) async {
+  Future<List<EcoPartner>> search(
+    EcoDestination d, {
+    required EcoPartnerSearchScope scope,
+  }) async {
     try {
       // This bounded search is consistently faster than public Overpass
       // mirrors. Official public transport is loaded by SupabaseGtfsSource.
-      return await _nominatimFallback(d, radiusKm);
+      return await _nominatimFallback(d, scope);
     } catch (_) {
       // Fall through to Overpass only when Nominatim itself is unavailable.
     }
+    final radiusKm = scope.radiusKm;
     final around = ((radiusKm ?? 150) * 1000).round();
-    final area = radiusKm == null
+    final area = scope.type == EcoPartnerSearchScopeType.nationwide
         ? 'area["ISO3166-1"="MY"][admin_level=2]->.searchArea;'
         : '';
-    final scope = radiusKm == null
-        ? '(area.searchArea)'
-        : '(around:$around,${d.latitude},${d.longitude})';
+    final queryScope = switch (scope.type) {
+      EcoPartnerSearchScopeType.nationwide => '(area.searchArea)',
+      EcoPartnerSearchScopeType.nearby =>
+        '(around:$around,${d.latitude},${d.longitude})',
+      EcoPartnerSearchScopeType.state =>
+        '(${scope.bounds!.south},${scope.bounds!.west},${scope.bounds!.north},${scope.bounds!.east})',
+    };
     final query =
         '''[out:json][timeout:8];$area(
-nwr$scope["amenity"~"restaurant|cafe"]["diet:vegan"];
-nwr$scope["amenity"~"restaurant|cafe"]["diet:vegetarian"];
-nwr$scope["amenity"="charging_station"];
+nwr$queryScope["amenity"~"restaurant|cafe"]["diet:vegan"];
+nwr$queryScope["amenity"~"restaurant|cafe"]["diet:vegetarian"];
+nwr$queryScope["amenity"="charging_station"];
 );out center tags 150;''';
     try {
       final rows = await _request(query, 0);
@@ -536,12 +657,13 @@ nwr$scope["amenity"="charging_station"];
 
   Future<List<EcoPartner>> _nominatimFallback(
     EcoDestination d,
-    double? radiusKm,
+    EcoPartnerSearchScope scope,
   ) async {
-    final box = radiusKm == null
-        ? (0.8, 7.5, 99.6, 119.3)
-        : _box(d.latitude, d.longitude, radiusKm);
-    final viewbox = '${box.$3},${box.$2},${box.$4},${box.$1}';
+    final bounds = scope.type == EcoPartnerSearchScopeType.nationwide
+        ? const EcoGeoBounds(south: 0.8, north: 7.5, west: 99.6, east: 119.3)
+        : _boundsFor(d, scope);
+    final viewbox =
+        '${bounds.west},${bounds.north},${bounds.east},${bounds.south}';
     final results = <EcoPartner>[];
     const queries = [
       'charging station',
@@ -553,7 +675,9 @@ nwr$scope["amenity"="charging_station"];
       final response = await _dio.get<dynamic>(
         'https://nominatim.openstreetmap.org/search',
         queryParameters: {
-          'q': query,
+          'q': scope.type == EcoPartnerSearchScopeType.state
+              ? '$query, ${scope.state}, Malaysia'
+              : query,
           'format': 'jsonv2',
           'countrycodes': 'my',
           'bounded': 1,
@@ -762,9 +886,13 @@ nwr$scope["amenity"="charging_station"];
         sourceUrl: 'https://www.openstreetmap.org/$type/$id',
         lastUpdated: updated,
         imageUrl: _osmImageUrl(tags),
-        routeNames: '${tags['route_ref'] ?? tags['ref'] ?? ''}'
+        transitRoutes: '${tags['route_ref'] ?? tags['ref'] ?? ''}'
             .split(';')
             .where((value) => value.trim().isNotEmpty)
+            .map(
+              (value) =>
+                  EcoTransitRouteInfo(mode: subtype, shortName: value.trim()),
+            )
             .toList(),
       );
     }
@@ -799,18 +927,40 @@ nwr$scope["amenity"="charging_station"];
   }
 }
 
-(double, double, double, double) _box(double lat, double lon, double radiusKm) {
+EcoGeoBounds _boundsFor(
+  EcoDestination destination,
+  EcoPartnerSearchScope scope,
+) {
+  if (scope.type == EcoPartnerSearchScopeType.state) return scope.bounds!;
+  return _radiusBounds(
+    destination.latitude,
+    destination.longitude,
+    scope.radiusKm!,
+  );
+}
+
+EcoGeoBounds _radiusBounds(double lat, double lon, double radiusKm) {
   final latDelta = radiusKm / 111.0;
   final lonDelta =
       radiusKm /
       (111.0 * math.cos(lat * math.pi / 180).abs().clamp(.1, 1)).toDouble();
-  return (lat - latDelta, lat + latDelta, lon - lonDelta, lon + lonDelta);
+  return EcoGeoBounds(
+    south: lat - latDelta,
+    north: lat + latDelta,
+    west: lon - lonDelta,
+    east: lon + lonDelta,
+  );
 }
 
 double _number(dynamic value) =>
     value is num ? value.toDouble() : double.parse('$value');
 double? _nullableNumber(dynamic value) =>
     value == null ? null : double.tryParse('$value');
+String? _text(dynamic value) {
+  final text = '${value ?? ''}'.trim();
+  return text.isEmpty ? null : text;
+}
+
 String? _osmImageUrl(Map<String, dynamic> tags) {
   final direct = '${tags['image'] ?? ''}'.trim();
   final directUri = Uri.tryParse(direct);

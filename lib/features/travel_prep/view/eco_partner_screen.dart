@@ -8,27 +8,30 @@ import '../model/eco_partner.dart';
 import 'eco_partner_detail_screen.dart';
 
 class EcoPartnersScreen extends StatefulWidget {
-  const EcoPartnersScreen({super.key});
+  const EcoPartnersScreen({super.key, this.controller});
+
+  final EcoPartnerController? controller;
+
   @override
   State<EcoPartnersScreen> createState() => _EcoPartnersScreenState();
 }
 
 class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
-  final _controller = EcoPartnerController();
+  late final EcoPartnerController _controller;
+  late final bool _ownsController;
   final _search = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _ownsController = widget.controller == null;
+    _controller = widget.controller ?? EcoPartnerController();
     _controller.addListener(_refresh);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadNearby());
   }
 
   Future<void> _loadNearby() async {
-    if (await _controller.useCurrentLocation(silentPermissionDenial: true) &&
-        mounted) {
-      _search.text = 'Current location';
-    }
+    await _controller.useCurrentLocation(silentPermissionDenial: true);
   }
 
   void _refresh() {
@@ -38,7 +41,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
   @override
   void dispose() {
     _controller.removeListener(_refresh);
-    _controller.dispose();
+    if (_ownsController) _controller.dispose();
     _search.dispose();
     super.dispose();
   }
@@ -46,12 +49,6 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
   Future<void> _find({bool refresh = false}) {
     FocusScope.of(context).unfocus();
     return _controller.search(_search.text, refresh: refresh);
-  }
-
-  Future<void> _locate() async {
-    if (await _controller.useCurrentLocation() && mounted) {
-      _search.text = 'Current location';
-    }
   }
 
   Future<void> _retry() => _controller.retry(fallbackQuery: _search.text);
@@ -90,55 +87,62 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
               ),
             ),
           ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: _controller.isLoading ? null : _locate,
-              icon: const Icon(Icons.my_location, size: 18),
-              label: const Text('Use current location'),
-            ),
-          ),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _controller.isLoading ? null : _showFilters,
-                  icon: const Icon(Icons.tune, size: 19),
-                  label: Text(
-                    [
-                      if (_controller.filter != 'All') _controller.filter,
-                      if (_controller.stateFilter != 'All states')
-                        _controller.stateFilter,
-                      if (_controller.sort == EcoPartnerSort.nameAscending)
-                        'A → Z',
-                      if (_controller.sort == EcoPartnerSort.nameDescending)
-                        'Z → A',
-                      _controller.scopeLabel,
-                    ].join(' · '),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                child: Text(
+                  [
+                    if (_controller.isUsingCurrentLocation) 'Current location',
+                    _controller.scopeLabel,
+                  ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
-              const SizedBox(width: 12),
-              DropdownButton<EcoPartnerLayout>(
-                value: _controller.layout,
-                items: const [
-                  DropdownMenuItem(
+              IconButton.filledTonal(
+                tooltip: 'Filter recommendations',
+                visualDensity: VisualDensity.compact,
+                onPressed: _controller.isLoading ? null : _showFilters,
+                icon: const Icon(Icons.tune, size: 20),
+              ),
+              const SizedBox(width: 6),
+              PopupMenuButton<EcoPartnerLayout>(
+                tooltip: 'Change results layout',
+                initialValue: _controller.layout,
+                onSelected: _controller.selectLayout,
+                icon: Icon(switch (_controller.layout) {
+                  EcoPartnerLayout.list => Icons.view_list_outlined,
+                  EcoPartnerLayout.grid2 => Icons.grid_view_outlined,
+                  EcoPartnerLayout.grid4 => Icons.apps_outlined,
+                }),
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
                     value: EcoPartnerLayout.list,
-                    child: Text('List'),
+                    child: ListTile(
+                      leading: Icon(Icons.view_list_outlined),
+                      title: Text('List'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
                   ),
-                  DropdownMenuItem(
+                  PopupMenuItem(
                     value: EcoPartnerLayout.grid2,
-                    child: Text('2 × 2 grid'),
+                    child: ListTile(
+                      leading: Icon(Icons.grid_view_outlined),
+                      title: Text('Comfortable grid'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
                   ),
-                  DropdownMenuItem(
+                  PopupMenuItem(
                     value: EcoPartnerLayout.grid4,
-                    child: Text('4 × 4 grid'),
+                    child: ListTile(
+                      leading: Icon(Icons.apps_outlined),
+                      title: Text('Compact grid'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
                   ),
                 ],
-                onChanged: (value) {
-                  if (value != null) _controller.selectLayout(value);
-                },
               ),
             ],
           ),
@@ -177,7 +181,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
             if (shown.isEmpty)
               _Message(
                 Icons.eco_outlined,
-                'No ${_controller.filter == 'All' ? 'eco partners' : _controller.filter.toLowerCase()} found${_controller.stateFilter == 'All states' ? '' : ' in ${_controller.stateFilter}'} ${_controller.scopeLabel}.',
+                'No ${_controller.filter == 'All' ? 'eco partners' : _controller.filter.toLowerCase()} found ${_controller.scopeLabel}.',
               ),
             if (shown.isNotEmpty) _resultsView(shown),
             if (_controller.totalPages > 1) ...[
@@ -256,12 +260,13 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
     var selectedFilter = _controller.filter;
     var selectedRadius = _controller.radiusSelection;
     var selectedState = _controller.stateFilter;
+    var selectedAreaMode = _controller.areaMode;
     var selectedSort = _controller.sort;
-    final stateOptions = <String>{
-      'All states',
-      ..._controller.availableStates,
-      if (_controller.stateFilter != 'All states') _controller.stateFilter,
-    }.toList();
+    var currentLocationRequested = false;
+    const radiusSteps = [5.0, 10.0, 25.0, 50.0];
+    var radiusStep = radiusSteps.indexOf(selectedRadius).toDouble();
+    if (radiusStep < 0) radiusStep = 1;
+    final stateOptions = ['All Malaysia', ..._controller.availableStates];
     final value = await showModalBottomSheet<_EcoFilterValue>(
       context: context,
       showDragHandle: true,
@@ -269,7 +274,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
       builder: (sheetContext) => StatefulBuilder(
         builder: (context, setSheetState) => SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -278,7 +283,105 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
                   'Filter recommendations',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 12),
+                const Text(
+                  'Search area',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                SegmentedButton<EcoPartnerAreaMode>(
+                  segments: const [
+                    ButtonSegment(
+                      value: EcoPartnerAreaMode.nearby,
+                      icon: Icon(Icons.near_me_outlined),
+                      label: Text('Nearby'),
+                    ),
+                    ButtonSegment(
+                      value: EcoPartnerAreaMode.statewide,
+                      icon: Icon(Icons.map_outlined),
+                      label: Text('Statewide'),
+                    ),
+                  ],
+                  selected: {selectedAreaMode},
+                  onSelectionChanged: (selection) =>
+                      setSheetState(() => selectedAreaMode = selection.first),
+                ),
+                if (selectedAreaMode == EcoPartnerAreaMode.nearby) ...[
+                  const SizedBox(height: 10),
+                  ChoiceChip(
+                    avatar: const Icon(Icons.my_location, size: 17),
+                    label: const Text('Use current location'),
+                    selected:
+                        _controller.isUsingCurrentLocation ||
+                        currentLocationRequested,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (_) =>
+                        setSheetState(() => currentLocationRequested = true),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Distance',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      Text(
+                        '${selectedRadius.round()} km',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Slider(
+                    value: radiusStep,
+                    min: 0,
+                    max: 3,
+                    divisions: 3,
+                    label: '${selectedRadius.round()} km',
+                    onChanged: (value) => setSheetState(() {
+                      radiusStep = value;
+                      selectedRadius = radiusSteps[value.round()];
+                    }),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('5 km'),
+                        Text('10'),
+                        Text('25'),
+                        Text('50'),
+                      ],
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedState,
+                    decoration: const InputDecoration(
+                      labelText: 'State or nationwide',
+                      prefixIcon: Icon(Icons.location_on_outlined),
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: stateOptions
+                        .map(
+                          (state) => DropdownMenuItem(
+                            value: state,
+                            child: Text(state),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) => setSheetState(
+                      () => selectedState = value ?? 'All Malaysia',
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
                 const Text(
                   'Category',
                   style: TextStyle(fontWeight: FontWeight.w700),
@@ -299,42 +402,14 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
                             (label) => ChoiceChip(
                               label: Text(label),
                               selected: selectedFilter == label,
+                              visualDensity: VisualDensity.compact,
                               onSelected: (_) =>
                                   setSheetState(() => selectedFilter = label),
                             ),
                           )
                           .toList(),
                 ),
-                const SizedBox(height: 20),
-                const Text(
-                  'State',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedState,
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.location_on_outlined),
-                    border: OutlineInputBorder(),
-                  ),
-                  items: stateOptions
-                      .map(
-                        (state) =>
-                            DropdownMenuItem(value: state, child: Text(state)),
-                      )
-                      .toList(),
-                  onChanged: (value) => setSheetState(
-                    () => selectedState = value ?? 'All states',
-                  ),
-                ),
-                if (_controller.availableStates.isEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'Search first to discover states from the available results.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-                const SizedBox(height: 20),
+                const SizedBox(height: 14),
                 const Text(
                   'Alphabetical order',
                   style: TextStyle(fontWeight: FontWeight.w700),
@@ -347,6 +422,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
                     ChoiceChip(
                       label: const Text('Recommended'),
                       selected: selectedSort == EcoPartnerSort.recommended,
+                      visualDensity: VisualDensity.compact,
                       onSelected: (_) => setSheetState(
                         () => selectedSort = EcoPartnerSort.recommended,
                       ),
@@ -354,6 +430,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
                     ChoiceChip(
                       label: const Text('A → Z'),
                       selected: selectedSort == EcoPartnerSort.nameAscending,
+                      visualDensity: VisualDensity.compact,
                       onSelected: (_) => setSheetState(
                         () => selectedSort = EcoPartnerSort.nameAscending,
                       ),
@@ -361,41 +438,14 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
                     ChoiceChip(
                       label: const Text('Z → A'),
                       selected: selectedSort == EcoPartnerSort.nameDescending,
+                      visualDensity: VisualDensity.compact,
                       onSelected: (_) => setSheetState(
                         () => selectedSort = EcoPartnerSort.nameDescending,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Distance',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children:
-                      const [
-                            (5.0, '5 km'),
-                            (10.0, '10 km'),
-                            (25.0, '25 km'),
-                            (50.0, '50 km'),
-                            (0.0, 'All Malaysia'),
-                          ]
-                          .map(
-                            (entry) => ChoiceChip(
-                              label: Text(entry.$2),
-                              selected: selectedRadius == entry.$1,
-                              onSelected: (_) => setSheetState(
-                                () => selectedRadius = entry.$1,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
@@ -403,9 +453,12 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
                       sheetContext,
                       _EcoFilterValue(
                         selectedFilter,
+                        selectedAreaMode,
                         selectedRadius,
                         selectedState,
                         selectedSort,
+                        currentLocationRequested &&
+                            selectedAreaMode == EcoPartnerAreaMode.nearby,
                       ),
                     ),
                     child: const Text('Apply filters'),
@@ -419,9 +472,14 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
     );
     if (value == null || !mounted) return;
     _controller.selectFilter(value.filter);
-    _controller.selectState(value.state);
     _controller.selectSort(value.sort);
-    await _controller.selectRadius(value.radius, fallbackQuery: _search.text);
+    await _controller.applySearchArea(
+      mode: value.areaMode,
+      radius: value.radius,
+      state: value.state,
+      fallbackQuery: _search.text,
+      useCurrentLocation: value.useCurrentLocation,
+    );
   }
 
   void _details(EcoPartner partner) => Navigator.of(context).push(
@@ -441,76 +499,80 @@ class _PartnerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Card(
     margin: const EdgeInsets.only(bottom: 16),
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 120,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              gradient: const LinearGradient(
-                colors: [Color(0xFFBAD7C4), Color(0xFF315E48)],
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 120,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFBAD7C4), Color(0xFF315E48)],
+                ),
               ),
+              child: partner.imageUrl?.isNotEmpty == true
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.network(
+                        partner.imageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) =>
+                            _PartnerMapPreview(partner, icon: _icon),
+                      ),
+                    )
+                  : _PartnerMapPreview(partner, icon: _icon),
             ),
-            child: partner.imageUrl?.isNotEmpty == true
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: Image.network(
-                      partner.imageUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) =>
-                          _PartnerMapPreview(partner, icon: _icon),
+            if (partner.imageSourceName != null) ...[
+              const SizedBox(height: 5),
+              Text(
+                '${partner.imageSourceName}${partner.imageCapturedAt == null ? '' : ' · ${partner.imageCapturedAt!.year}'}',
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ],
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    partner.name,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF164C3B),
                     ),
-                  )
-                : _PartnerMapPreview(partner, icon: _icon),
-          ),
-          if (partner.imageSourceName != null) ...[
-            const SizedBox(height: 5),
-            Text(
-              '${partner.imageSourceName}${partner.imageCapturedAt == null ? '' : ' · ${partner.imageCapturedAt!.year}'}',
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
-          ],
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  partner.name,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF164C3B),
                   ),
                 ),
-              ),
-              if (partner.gstcVerified)
-                const Icon(Icons.verified, color: Color(0xFF0B684B)),
-            ],
-          ),
-          const SizedBox(height: 5),
-          Text(partner.sustainabilityLabel),
-          const SizedBox(height: 4),
-          Text(
-            '${partner.distanceKm.toStringAsFixed(1)} km · ${partner.sourceName}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const Divider(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${_label(partner.category)} · ${partner.subtype}',
-                  style: const TextStyle(color: Color(0xFF806300)),
+                if (partner.gstcVerified)
+                  const Icon(Icons.verified, color: Color(0xFF0B684B)),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text(partner.sustainabilityLabel),
+            const SizedBox(height: 4),
+            Text(
+              '${partner.distanceKm.toStringAsFixed(1)} km · ${partner.sourceName}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const Divider(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${_label(partner.category)} · ${partner.subtype}',
+                    style: const TextStyle(color: Color(0xFF806300)),
+                  ),
                 ),
-              ),
-              TextButton(onPressed: onTap, child: const Text('Details →')),
-            ],
-          ),
-        ],
+                TextButton(onPressed: onTap, child: const Text('Details →')),
+              ],
+            ),
+          ],
+        ),
       ),
     ),
   );
@@ -706,12 +768,21 @@ class _Message extends StatelessWidget {
 }
 
 class _EcoFilterValue {
-  const _EcoFilterValue(this.filter, this.radius, this.state, this.sort);
+  const _EcoFilterValue(
+    this.filter,
+    this.areaMode,
+    this.radius,
+    this.state,
+    this.sort,
+    this.useCurrentLocation,
+  );
 
   final String filter;
+  final EcoPartnerAreaMode areaMode;
   final double radius;
   final String state;
   final EcoPartnerSort sort;
+  final bool useCurrentLocation;
 }
 
 String _label(EcoPartnerCategory category) => switch (category) {

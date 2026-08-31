@@ -10,14 +10,15 @@ enum EcoPartnerSort { recommended, nameAscending, nameDescending }
 
 /// Coordinates Eco Partner searches and exposes presentation-ready state.
 class EcoPartnerController extends ChangeNotifier {
-  EcoPartnerController({EcoPartnerRepository? repository})
+  EcoPartnerController({EcoPartnerRepositoryContract? repository})
     : _repository = repository ?? EcoPartnerRepository();
 
-  final EcoPartnerRepository _repository;
+  final EcoPartnerRepositoryContract _repository;
 
   EcoPartnerSearchResult? result;
   String filter = 'All';
-  String stateFilter = 'All states';
+  EcoPartnerAreaMode areaMode = EcoPartnerAreaMode.nearby;
+  String stateFilter = 'All Malaysia';
   EcoPartnerSort sort = EcoPartnerSort.recommended;
   double radiusSelection = 10;
   String? error;
@@ -28,10 +29,19 @@ class EcoPartnerController extends ChangeNotifier {
   int _requestId = 0;
   static const pageSize = 10;
 
-  double? get radiusKm => radiusSelection == 0 ? null : radiusSelection;
-  String get scopeLabel => radiusKm == null
-      ? 'across Malaysia'
-      : 'within ${radiusSelection.round()} km';
+  EcoPartnerSearchScope get searchScope => switch (areaMode) {
+    EcoPartnerAreaMode.nearby => EcoPartnerSearchScope.nearby(radiusSelection),
+    EcoPartnerAreaMode.statewide when stateFilter == 'All Malaysia' =>
+      const EcoPartnerSearchScope.nationwide(),
+    EcoPartnerAreaMode.statewide => EcoPartnerSearchScope.state(stateFilter),
+  };
+  bool get isUsingCurrentLocation =>
+      result?.destination.label == 'Current location';
+  String get scopeLabel => switch (searchScope.type) {
+    EcoPartnerSearchScopeType.nearby => 'within ${radiusSelection.round()} km',
+    EcoPartnerSearchScopeType.state => 'in $stateFilter',
+    EcoPartnerSearchScopeType.nationwide => 'across Malaysia',
+  };
 
   static const malaysiaStates = [
     'Johor',
@@ -52,24 +62,11 @@ class EcoPartnerController extends ChangeNotifier {
     'Terengganu',
   ];
 
-  List<String> get availableStates {
-    final states =
-        (result?.partners ?? const <EcoPartner>[])
-            .map(_stateFor)
-            .whereType<String>()
-            .toSet()
-            .toList()
-          ..sort();
-    return states;
-  }
+  List<String> get availableStates => malaysiaStates;
 
   List<EcoPartner> get filteredPartners {
     final values = (result?.partners ?? const <EcoPartner>[])
         .where(_matchesFilter)
-        .where(
-          (partner) =>
-              stateFilter == 'All states' || _stateFor(partner) == stateFilter,
-        )
         .toList();
     switch (sort) {
       case EcoPartnerSort.recommended:
@@ -123,7 +120,7 @@ class EcoPartnerController extends ChangeNotifier {
       result = await _repository.searchDestination(
         query,
         refresh: refresh,
-        radiusKm: radiusKm,
+        scope: searchScope,
         includeImages: false,
       );
       currentPage = 0;
@@ -165,7 +162,7 @@ class EcoPartnerController extends ChangeNotifier {
           position.latitude,
           position.longitude,
         ),
-        radiusKm: radiusKm,
+        scope: searchScope,
         includeImages: false,
       );
       currentPage = 0;
@@ -197,7 +194,7 @@ class EcoPartnerController extends ChangeNotifier {
       result = await _repository.searchCoordinates(
         destination,
         refresh: true,
-        radiusKm: radiusKm,
+        scope: searchScope,
         includeImages: false,
       );
       currentPage = 0;
@@ -243,11 +240,40 @@ class EcoPartnerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> selectRadius(double value, {String fallbackQuery = ''}) async {
+  Future<void> selectRadius(
+    double value, {
+    String fallbackQuery = '',
+    bool reload = true,
+  }) async {
     if (radiusSelection == value) return;
     radiusSelection = value;
     notifyListeners();
-    if (result != null) await retry(fallbackQuery: fallbackQuery);
+    if (reload && result != null) {
+      await retry(fallbackQuery: fallbackQuery);
+    }
+  }
+
+  Future<void> applySearchArea({
+    required EcoPartnerAreaMode mode,
+    required double radius,
+    required String state,
+    String fallbackQuery = '',
+    bool useCurrentLocation = false,
+  }) async {
+    final changed =
+        areaMode != mode || radiusSelection != radius || stateFilter != state;
+    areaMode = mode;
+    radiusSelection = radius;
+    stateFilter = state;
+    if (changed) {
+      currentPage = 0;
+      notifyListeners();
+    }
+    if (useCurrentLocation) {
+      await this.useCurrentLocation();
+    } else if (changed && result != null) {
+      await retry(fallbackQuery: fallbackQuery);
+    }
   }
 
   void _beginRequest() {
@@ -269,21 +295,11 @@ class EcoPartnerController extends ChangeNotifier {
     notifyListeners();
     final enriched = await _repository.enrichResult(
       current,
-      radiusKm: radiusKm,
+      scope: searchScope,
     );
     if (requestId != _requestId) return;
     result = enriched;
     isLoadingImages = false;
     notifyListeners();
-  }
-
-  static String? _stateFor(EcoPartner partner) {
-    final address = partner.address.toLowerCase();
-    if (address.contains('pulau pinang')) return 'Penang';
-    if (address.contains('malacca')) return 'Melaka';
-    for (final state in malaysiaStates) {
-      if (address.contains(state.toLowerCase())) return state;
-    }
-    return null;
   }
 }
