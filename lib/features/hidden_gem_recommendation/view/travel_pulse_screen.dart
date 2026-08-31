@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../../shared/models/destination.dart';
 import '../controller/recommendation_controller.dart';
 import '../controller/travel_pulse_controller.dart';
+import '../model/recently_viewed_place.dart';
 import '../model/travel_style.dart';
 import 'hidden_gem_recommendation_routes.dart';
+import 'widgets/hidden_gem_list_tile.dart';
 import 'widgets/radar_chart.dart';
 
 /// "Your Travel Pulse" (FR3) — real recency-weighted category affinity
@@ -103,7 +105,48 @@ class TravelPulseScreen extends ConsumerWidget {
                     subtitle: Text('${item.category.label} • ${item.location}'),
                   ),
                 ),
+            const SizedBox(height: 24),
+            const Text(
+              'Recently Viewed',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            if (pulseController.isLoading)
+              const Center(child: CircularProgressIndicator())
+            else if (pulseController.recentlyViewed.isEmpty)
+              Text(
+                "You haven't viewed any hidden gems yet.",
+                style: TextStyle(color: colorScheme.onSurfaceVariant),
+              )
+            else
+              for (final place in pulseController.recentlyViewed)
+                _RecentlyViewedTile(place: place),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentlyViewedTile extends StatelessWidget {
+  final RecentlyViewedPlace place;
+  const _RecentlyViewedTile({required this.place});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: colorScheme.surfaceContainerHighest,
+          child: Icon(iconForHiddenGemCategory(place.category), color: colorScheme.onSurfaceVariant),
+        ),
+        title: Text(place.name),
+        subtitle: Text('${place.category.label} • ${place.location}'),
+        trailing: Text(
+          place.relativeTimeLabel,
+          style: TextStyle(fontSize: 11.5, color: colorScheme.onSurfaceVariant),
         ),
       ),
     );

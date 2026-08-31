@@ -7,6 +7,10 @@ import '../model/travel_preference_profile.dart';
 import '../model/travel_style.dart';
 import '../../../core/router/shell_routes.dart';
 
+const _monthNames = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
 IconData _iconForStyle(TravelStyle style) {
   switch (style) {
     case TravelStyle.nature:
@@ -127,6 +131,30 @@ class PreferenceSetupScreen extends ConsumerWidget {
                         onSelected: (_) => controller.toggleDestinationType(type),
                       ),
                   ],
+                ),
+                const SizedBox(height: 20),
+                Text('When are you planning to visit?', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(
+                  'Optional — helps us favour destinations that suit that time of year (FR3.4).',
+                  style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 40,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _monthNames.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) {
+                      final month = index + 1;
+                      return ChoiceChip(
+                        label: Text(_monthNames[index]),
+                        selected: controller.intendedTravelMonth == month,
+                        onSelected: (_) => controller.setIntendedTravelMonth(month),
+                      );
+                    },
+                  ),
                 ),
                 if (controller.errorMessage != null) ...[
                   const SizedBox(height: 16),

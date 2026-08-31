@@ -2,7 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../model/hidden_gem_recommendation_repository.dart';
 import '../model/preference_repository.dart';
+import '../model/recently_viewed_place.dart';
 import '../model/travel_style.dart';
 
 /// Default cooling-off window shown to a signed-out tourist or if
@@ -40,16 +42,20 @@ class TravelPulseController extends ChangeNotifier {
   TravelPulseController({
     SupabaseClient? client,
     PreferenceRepository? preferenceRepository,
+    HiddenGemRecommendationRepository? recommendationRepository,
   })  : _client = client ?? Supabase.instance.client,
-        _preferenceRepository = preferenceRepository ?? PreferenceRepository() {
+        _preferenceRepository = preferenceRepository ?? PreferenceRepository(),
+        _recommendationRepository = recommendationRepository ?? HiddenGemRecommendationRepository() {
     _load();
   }
 
   final SupabaseClient _client;
   final PreferenceRepository _preferenceRepository;
+  final HiddenGemRecommendationRepository _recommendationRepository;
 
   bool isLoading = true;
   List<CategoryPulse> pulses = const [];
+  List<RecentlyViewedPlace> recentlyViewed = const [];
 
   Future<void> refresh() => _load();
 
@@ -57,7 +63,10 @@ class TravelPulseController extends ChangeNotifier {
     isLoading = true;
     notifyListeners();
 
-    final affinity = await _loadAffinity();
+    final results = await Future.wait([_loadAffinity(), _recommendationRepository.recentlyViewed()]);
+    final affinity = results[0] as Map<TravelStyle, ({double score, DateTime? lastInteractedAt})>;
+    recentlyViewed = results[1] as List<RecentlyViewedPlace>;
+
     final categories = affinity.isNotEmpty
         ? (affinity.keys.toList()..sort((a, b) => affinity[b]!.score.compareTo(affinity[a]!.score)))
         : (await _preferenceRepository.load())?.categories.toList() ?? const <TravelStyle>[];

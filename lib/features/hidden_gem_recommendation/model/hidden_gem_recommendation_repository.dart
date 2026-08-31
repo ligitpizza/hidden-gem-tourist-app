@@ -4,6 +4,7 @@ import '../../../shared/models/destination.dart';
 import '../../../shared/models/hidden_gem.dart';
 import '../../../shared/services/hidden_gem_scoring.dart';
 import 'hidden_gem_feed_item.dart';
+import 'recently_viewed_place.dart';
 
 /// Below this many recent engagement events, a place's growth rate is too
 /// noisy to trust even if the server already flagged it — mirrors
@@ -101,6 +102,18 @@ class HiddenGemRecommendationRepository {
           .order('name', ascending: true) // tiebreaker, matches the ranking use cases
           .limit(limit);
       return (rows as List).map((row) => _itemFromRow(row as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// "Recently Viewed" on the Travel Pulse screen.
+  Future<List<RecentlyViewedPlace>> recentlyViewed({int limit = 5}) async {
+    try {
+      final rows = await _client.rpc('recently_viewed_places', params: {'p_limit': limit});
+      return (rows as List)
+          .map((row) => RecentlyViewedPlace.fromRow(row as Map<String, dynamic>))
+          .toList();
     } catch (_) {
       return const [];
     }
