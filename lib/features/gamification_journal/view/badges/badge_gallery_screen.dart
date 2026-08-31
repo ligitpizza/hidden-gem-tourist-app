@@ -7,6 +7,7 @@ import '../../model/badge_model.dart';
 import '../../model/user_badge_model.dart';
 import '../../../../shared/widgets/app_header.dart';
 import '../../../../shared/widgets/badge_card.dart';
+import 'badge_share_sheet.dart';
 
 String _filterTagFor(BadgeModel badge) {
   switch (badge.criteriaType) {
@@ -128,15 +129,11 @@ class _BadgeGalleryScreenState extends State<BadgeGalleryScreen> {
                       child: ElevatedButton.icon(
                         icon: const Icon(Icons.share, size: 18),
                         label: const Text('Share Achievement'),
-                        // TODO(phase1): wire up share_plus once media capture
-                        // (RepaintBoundary -> PNG) is implemented for the badge card.
-                        onPressed: () {
-                          ScaffoldMessenger.of(sheetContext).showSnackBar(
-                            const SnackBar(
-                              content: Text('Sharing will be available once media export is wired up.'),
-                            ),
-                          );
-                        },
+                        onPressed: () => showBadgeShareSheet(
+                          sheetContext,
+                          badge: badge,
+                          earnedAt: userBadge!.earnedAt,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 8),
