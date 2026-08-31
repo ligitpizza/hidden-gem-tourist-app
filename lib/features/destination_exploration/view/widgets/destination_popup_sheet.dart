@@ -31,12 +31,24 @@ class DestinationPopupSheet extends StatelessWidget {
       unawaited(checkInController.loadDestinations().catchError((_) {}));
     }
 
+    // Prefer the already-loaded DestinationModel (correct real state,
+    // resolved via the destinations table's city column) over
+    // fromMapDestination()'s bare conversion, which has no city to work
+    // from and silently defaults to 'Penang' for every destination.
+    DestinationModel? resolved;
+    for (final d in checkInController.destinations) {
+      if (d.id == destination.id) {
+        resolved = d;
+        break;
+      }
+    }
+
     final navigator = Navigator.of(context);
     navigator.pop(); // close this popup sheet first
     navigator.push(
       MaterialPageRoute(
         builder: (_) => DestinationDetailScreen(
-          destination: DestinationModel.fromMapDestination(destination),
+          destination: resolved ?? DestinationModel.fromMapDestination(destination),
         ),
       ),
     );

@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../model/check_in_model.dart';
 import '../../model/friend_model.dart';
+import '../../model/user_badge_model.dart';
 
 /// Backs the Friends feature against the real `profiles`/`friendships`
 /// tables (see
@@ -50,7 +52,13 @@ class MockFriendService {
   Future<void> acceptRequest(String friendshipId) async {
     await Supabase.instance.client
         .from('friendships')
-        .update({'status': 'accepted', 'responded_at': DateTime.now().toIso8601String()})
+        .update({
+          'status': 'accepted',
+          'responded_at': DateTime.now().toIso8601String(),
+          // Flips back to true once the requester opens Friends and sees
+          // it — see acknowledgeNewAcceptances().
+          'requester_acknowledged': false,
+        })
         .eq('id', friendshipId);
   }
 
@@ -59,6 +67,39 @@ class MockFriendService {
   /// row" from either party's side.
   Future<void> removeFriendship(String friendshipId) async {
     await Supabase.instance.client.from('friendships').delete().eq('id', friendshipId);
+  }
+
+  /// Marks every outgoing request of [userId]'s that was accepted as seen
+  /// — called when the Tourist opens the Friends list, clearing the
+  /// "new friend" dot.
+  Future<void> acknowledgeNewAcceptances(String userId) async {
+    await Supabase.instance.client
+        .from('friendships')
+        .update({'requester_acknowledged': true})
+        .eq('requester_id', userId)
+        .eq('status', 'accepted')
+        .eq('requester_acknowledged', false);
+  }
+
+  /// A user's non-hidden check-ins — relies on the "Public view non-hidden
+  /// check-ins" RLS policy, so this works for any user, friend or not
+  /// (hidden check-ins never come back regardless of who's asking).
+  Future<List<CheckInModel>> fetchPublicCheckIns(String userId) async {
+    final rows = await Supabase.instance.client
+        .from('journal_check_ins')
+        .select()
+        .eq('user_id', userId)
+        .order('timestamp', ascending: false);
+    return rows.map((r) => CheckInModel.fromJson(r)).toList();
+  }
+
+  /// A user's non-hidden badges — same public-read RLS as check-ins above.
+  Future<List<UserBadgeModel>> fetchPublicBadges(String userId) async {
+    final rows = await Supabase.instance.client
+        .from('journal_user_badges')
+        .select()
+        .eq('user_id', userId);
+    return rows.map((r) => UserBadgeModel.fromJson(r)).toList();
   }
 
   /// The single most recent thing [friendUserId] has done — an unlocked

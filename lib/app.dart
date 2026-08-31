@@ -44,31 +44,45 @@ class HiddenGemsApp extends ConsumerWidget {
     // The Journal module (Module 6) is mock-backed for now and manages its
     // own state with ChangeNotifier controllers rather than Riverpod —
     // this just makes that state available alongside the rest of the app,
-    // it doesn't replace Riverpod anywhere else. Keyed by the signed-in
-    // user when available (Supabase is already initialized in main.dart
-    // before this widget ever builds); the whole app is auth-gated by the
-    // router's redirect, so this only matters for the brief moment before
-    // that redirect lands.
-    final journalUserId = Supabase.instance.client.auth.currentUser?.id ?? 'guest';
+    // it doesn't replace Riverpod anywhere else.
+    //
+    // StreamBuilder + a ValueKey on the signed-in user's id is doing real
+    // work here, not just decoration: Provider's `create:` only runs once
+    // per provider instance, and nothing this widget already watches
+    // (the router, the theme controller) changes value on sign-in/out —
+    // so without this, signing out and into a *different* account without
+    // a full app restart left every controller here still scoped to
+    // whichever user was first signed in, silently reading and writing
+    // that stale user's data under the new session (surfaced as, e.g.,
+    // "everyone sees the same friend list" during two-account testing).
+    // Keying on the id forces Flutter to tear down and rebuild this whole
+    // subtree — fresh controllers, clean state — whenever it changes.
+    return StreamBuilder<AuthState>(
+      stream: Supabase.instance.client.auth.onAuthStateChange,
+      builder: (context, snapshot) {
+        final journalUserId = Supabase.instance.client.auth.currentUser?.id ?? 'guest';
 
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => CheckInController(userId: journalUserId)),
-        ChangeNotifierProvider(create: (_) => BadgeController(userId: journalUserId)),
-        ChangeNotifierProvider(create: (_) => JournalController(userId: journalUserId)),
-        ChangeNotifierProvider(create: (_) => QuizController(userId: journalUserId)),
-        ChangeNotifierProvider(create: (_) => FriendController(userId: journalUserId)),
-        ChangeNotifierProvider(create: (_) => DashboardController()),
-      ],
-      child: MaterialApp.router(
-        title: 'Hidden Gems of Malaysia',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        darkTheme: AppTheme.dark,
-        themeMode: themeModeController.themeMode,
-        scrollBehavior: _AppScrollBehavior(),
-        routerConfig: router,
-      ),
+        return MultiProvider(
+          key: ValueKey(journalUserId),
+          providers: [
+            ChangeNotifierProvider(create: (_) => CheckInController(userId: journalUserId)),
+            ChangeNotifierProvider(create: (_) => BadgeController(userId: journalUserId)),
+            ChangeNotifierProvider(create: (_) => JournalController(userId: journalUserId)),
+            ChangeNotifierProvider(create: (_) => QuizController(userId: journalUserId)),
+            ChangeNotifierProvider(create: (_) => FriendController(userId: journalUserId)),
+            ChangeNotifierProvider(create: (_) => DashboardController()),
+          ],
+          child: MaterialApp.router(
+            title: 'Hidden Gems of Malaysia',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            darkTheme: AppTheme.dark,
+            themeMode: themeModeController.themeMode,
+            scrollBehavior: _AppScrollBehavior(),
+            routerConfig: router,
+          ),
+        );
+      },
     );
   }
 }

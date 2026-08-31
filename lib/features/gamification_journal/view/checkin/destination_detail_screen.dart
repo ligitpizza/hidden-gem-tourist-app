@@ -309,9 +309,16 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
     // Google Maps rather than OSM here specifically — read-only external
     // link a user taps to navigate, not an embedded map/SDK, so it's fine
     // alongside the OSM-based in-app map (see PROJECT_CONTEXT.md §2).
+    //
+    // Uses the "search" endpoint (drops a pin at the exact coordinate)
+    // rather than "dir" (routes from the Tourist's current location) —
+    // the dir endpoint was landing people in the wrong general area
+    // whenever the browser/OS couldn't resolve a precise starting point,
+    // and a route/duration estimate isn't the point here anyway. Both are
+    // free, documented URL schemes — no Google Maps API key needed.
     final uri = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1'
-      '&destination=${widget.destination.latitude},${widget.destination.longitude}',
+      'https://www.google.com/maps/search/?api=1'
+      '&query=${widget.destination.latitude},${widget.destination.longitude}',
     );
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }

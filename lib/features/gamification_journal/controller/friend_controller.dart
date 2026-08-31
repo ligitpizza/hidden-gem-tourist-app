@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../model/check_in_model.dart';
 import '../model/friend_model.dart';
+import '../model/user_badge_model.dart';
 import '../services/mock/mock_friend_service.dart';
 
 /// One accepted friend, joined with their profile and (if loaded) the
@@ -45,42 +47,64 @@ class FriendController extends ChangeNotifier {
   bool isLoading = false;
   bool isSearching = false;
 
+  /// Surfaces the last action's failure (send/accept/decline/remove/
+  /// search) so the UI can show it instead of failing silently — set to
+  /// null again the moment a new action starts.
+  String? errorMessage;
+
   int get pendingIncomingCount => incomingRequests.length;
+
+  /// True when at least one request *this user sent* was accepted and
+  /// hasn't been seen yet — drives the "new friend" dot, separate from
+  /// pendingIncomingCount (which is about requests waiting on *this
+  /// user* to respond).
+  bool get hasNewAcceptedFriends => _friendships.any(
+    (f) =>
+        f.requesterId == userId &&
+        f.status == FriendshipStatus.accepted &&
+        !f.requesterAcknowledged,
+  );
 
   Future<void> loadFriends() async {
     isLoading = true;
+    errorMessage = null;
     notifyListeners();
 
-    _friendships = await _service.fetchFriendships(userId);
+    try {
+      _friendships = await _service.fetchFriendships(userId);
 
-    final accepted = _friendships.where((f) => f.status == FriendshipStatus.accepted).toList();
-    final incoming = _friendships
-        .where((f) => f.status == FriendshipStatus.pending && f.addresseeId == userId)
-        .toList();
-    final outgoing = _friendships
-        .where((f) => f.status == FriendshipStatus.pending && f.requesterId == userId)
-        .toList();
+      final accepted = _friendships.where((f) => f.status == FriendshipStatus.accepted).toList();
+      final incoming = _friendships
+          .where((f) => f.status == FriendshipStatus.pending && f.addresseeId == userId)
+          .toList();
+      final outgoing = _friendships
+          .where((f) => f.status == FriendshipStatus.pending && f.requesterId == userId)
+          .toList();
 
-    final otherIds = _friendships.map((f) => f.otherUserId(userId)).toSet().toList();
-    final profilesById = {
-      for (final p in await _service.fetchProfiles(otherIds)) p.id: p,
-    };
+      final otherIds = _friendships.map((f) => f.otherUserId(userId)).toSet().toList();
+      final profilesById = {
+        for (final p in await _service.fetchProfiles(otherIds)) p.id: p,
+      };
 
-    friends = [
-      for (final f in accepted)
-        if (profilesById[f.otherUserId(userId)] case final profile?)
-          FriendEntry(profile: profile, friendshipId: f.id),
-    ];
-    incomingRequests = [
-      for (final f in incoming)
-        if (profilesById[f.otherUserId(userId)] case final profile?)
-          FriendRequestEntry(profile: profile, friendshipId: f.id),
-    ];
-    outgoingRequests = [
-      for (final f in outgoing)
-        if (profilesById[f.otherUserId(userId)] case final profile?)
-          FriendRequestEntry(profile: profile, friendshipId: f.id),
-    ];
+      friends = [
+        for (final f in accepted)
+          if (profilesById[f.otherUserId(userId)] case final profile?)
+            FriendEntry(profile: profile, friendshipId: f.id),
+      ];
+      incomingRequests = [
+        for (final f in incoming)
+          if (profilesById[f.otherUserId(userId)] case final profile?)
+            FriendRequestEntry(profile: profile, friendshipId: f.id),
+      ];
+      outgoingRequests = [
+        for (final f in outgoing)
+          if (profilesById[f.otherUserId(userId)] case final profile?)
+            FriendRequestEntry(profile: profile, friendshipId: f.id),
+      ];
+    } catch (e) {
+      errorMessage = 'Could not load friends. Please try again.';
+      debugPrint('FriendController.loadFriends failed: $e');
+    }
 
     isLoading = false;
     notifyListeners();
@@ -93,18 +117,57 @@ class FriendController extends ChangeNotifier {
   /// as its own query resolves rather than blocking the whole screen.
   Future<void> _loadActivity() async {
     for (final entry in List.of(friends)) {
-      final activity = await _service.fetchRecentActivity(entry.profile.id);
-      final index = friends.indexWhere((f) => f.friendshipId == entry.friendshipId);
-      if (index == -1) continue;
-      friends[index] = friends[index].copyWith(activity: activity);
+      try {
+        final activity = await _service.fetchRecentActivity(entry.profile.id);
+        final index = friends.indexWhere((f) => f.friendshipId == entry.friendshipId);
+        if (index == -1) continue;
+        friends[index] = friends[index].copyWith(activity: activity);
+        notifyListeners();
+      } catch (e) {
+        // A single friend's activity failing to load shouldn't block the
+        // rest of the list — that row just keeps showing "No activity yet".
+        debugPrint('FriendController._loadActivity failed for ${entry.profile.id}: $e');
+      }
+    }
+  }
+
+  /// Marks the app's own "new friend" dot as seen — call when the Tourist
+  /// opens the Friends list.
+  Future<void> acknowledgeNewFriends() async {
+    if (!hasNewAcceptedFriends) return;
+    try {
+      await _service.acknowledgeNewAcceptances(userId);
+      for (var i = 0; i < _friendships.length; i++) {
+        if (_friendships[i].requesterId == userId && !_friendships[i].requesterAcknowledged) {
+          _friendships[i] = FriendshipModel(
+            id: _friendships[i].id,
+            requesterId: _friendships[i].requesterId,
+            addresseeId: _friendships[i].addresseeId,
+            status: _friendships[i].status,
+            createdAt: _friendships[i].createdAt,
+            requesterAcknowledged: true,
+          );
+        }
+      }
       notifyListeners();
+    } catch (e) {
+      debugPrint('FriendController.acknowledgeNewFriends failed: $e');
     }
   }
 
   Future<void> searchByName(String query) async {
     isSearching = true;
+    errorMessage = null;
     notifyListeners();
-    searchResults = await _service.searchByName(query, excludeUserId: userId);
+
+    try {
+      searchResults = await _service.searchByName(query, excludeUserId: userId);
+    } catch (e) {
+      searchResults = [];
+      errorMessage = 'Search failed. Please try again.';
+      debugPrint('FriendController.searchByName failed: $e');
+    }
+
     isSearching = false;
     notifyListeners();
   }
@@ -125,23 +188,51 @@ class FriendController extends ChangeNotifier {
     return null;
   }
 
-  Future<void> sendRequest(String toUserId) async {
-    await _service.sendRequest(fromUserId: userId, toUserId: toUserId);
-    await loadFriends();
+  /// Reads a friend or a preview target's public check-ins/badges —
+  /// separate from this user's own data, so it doesn't touch `friends`
+  /// or any other state here. Used by FriendProfilePreviewScreen.
+  Future<(List<CheckInModel>, List<UserBadgeModel>)> fetchPublicActivity(String otherUserId) async {
+    final results = await Future.wait([
+      _service.fetchPublicCheckIns(otherUserId),
+      _service.fetchPublicBadges(otherUserId),
+    ]);
+    return (results[0] as List<CheckInModel>, results[1] as List<UserBadgeModel>);
   }
 
-  Future<void> acceptRequest(String friendshipId) async {
-    await _service.acceptRequest(friendshipId);
-    await loadFriends();
-  }
+  /// Returns true on success. On failure, sets [errorMessage] and returns
+  /// false so the caller can show it instead of the action silently doing
+  /// nothing.
+  Future<bool> sendRequest(String toUserId) => _runAction(
+    () => _service.sendRequest(fromUserId: userId, toUserId: toUserId),
+    failureMessage: 'Could not send the friend request. Please try again.',
+  );
 
-  Future<void> declineRequest(String friendshipId) async {
-    await _service.removeFriendship(friendshipId);
-    await loadFriends();
-  }
+  Future<bool> acceptRequest(String friendshipId) => _runAction(
+    () => _service.acceptRequest(friendshipId),
+    failureMessage: 'Could not accept the request. Please try again.',
+  );
 
-  Future<void> removeFriend(String friendshipId) async {
-    await _service.removeFriendship(friendshipId);
-    await loadFriends();
+  Future<bool> declineRequest(String friendshipId) => _runAction(
+    () => _service.removeFriendship(friendshipId),
+    failureMessage: 'Could not decline the request. Please try again.',
+  );
+
+  Future<bool> removeFriend(String friendshipId) => _runAction(
+    () => _service.removeFriendship(friendshipId),
+    failureMessage: 'Could not remove this friend. Please try again.',
+  );
+
+  Future<bool> _runAction(Future<void> Function() action, {required String failureMessage}) async {
+    errorMessage = null;
+    try {
+      await action();
+      await loadFriends();
+      return true;
+    } catch (e) {
+      errorMessage = failureMessage;
+      debugPrint('FriendController action failed: $e');
+      notifyListeners();
+      return false;
+    }
   }
 }

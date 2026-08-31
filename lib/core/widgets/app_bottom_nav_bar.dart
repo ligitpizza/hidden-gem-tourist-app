@@ -230,8 +230,14 @@ class _Indicator extends StatelessWidget {
         final count = _pendingQuizCount(context);
         return count > 0 ? Badge(label: Text('$count'), child: child) : child;
       case 'friends':
-        final count = context.watch<FriendController>().pendingIncomingCount;
-        return count > 0 ? Badge(label: Text('$count'), child: child) : child;
+        final friendController = context.watch<FriendController>();
+        final count = friendController.pendingIncomingCount;
+        // Pending requests waiting on this user take priority (numbered,
+        // more actionable); a plain dot means no pending requests but at
+        // least one sent request was just accepted.
+        if (count > 0) return Badge(label: Text('$count'), child: child);
+        if (friendController.hasNewAcceptedFriends) return Badge(child: child);
+        return child;
       default:
         return child;
     }
@@ -483,9 +489,11 @@ class _NavItem extends StatelessWidget {
     final color = selected ? colorScheme.onPrimary : colorScheme.onSurfaceVariant;
     final hasUnviewedBadges = showIndicator && context.watch<BadgeController>().hasUnviewedBadges;
     final pendingQuizzes = showIndicator ? _pendingQuizCount(context) : 0;
-    final pendingFriendRequests =
-        showIndicator ? context.watch<FriendController>().pendingIncomingCount : 0;
-    final showDot = hasUnviewedBadges || pendingQuizzes > 0 || pendingFriendRequests > 0;
+    final friendController = context.watch<FriendController>();
+    final pendingFriendRequests = showIndicator ? friendController.pendingIncomingCount : 0;
+    final hasNewFriends = showIndicator && friendController.hasNewAcceptedFriends;
+    final showDot =
+        hasUnviewedBadges || pendingQuizzes > 0 || pendingFriendRequests > 0 || hasNewFriends;
 
     return InkWell(
       onTap: onTap,
