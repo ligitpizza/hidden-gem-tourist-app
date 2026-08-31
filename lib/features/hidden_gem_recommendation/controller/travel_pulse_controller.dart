@@ -2,7 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../model/hidden_gem_recommendation_repository.dart';
 import '../model/preference_repository.dart';
+import '../model/recently_viewed_place.dart';
+import '../model/travel_preference_profile.dart';
 import '../model/travel_style.dart';
 
 /// Default cooling-off window shown to a signed-out tourist or if
@@ -40,16 +43,24 @@ class TravelPulseController extends ChangeNotifier {
   TravelPulseController({
     SupabaseClient? client,
     PreferenceRepository? preferenceRepository,
+    HiddenGemRecommendationRepository? recommendationRepository,
   })  : _client = client ?? Supabase.instance.client,
-        _preferenceRepository = preferenceRepository ?? PreferenceRepository() {
+        _preferenceRepository = preferenceRepository ?? PreferenceRepository(),
+        _recommendationRepository = recommendationRepository ?? HiddenGemRecommendationRepository() {
     _load();
   }
 
   final SupabaseClient _client;
   final PreferenceRepository _preferenceRepository;
+  final HiddenGemRecommendationRepository _recommendationRepository;
 
   bool isLoading = true;
   List<CategoryPulse> pulses = const [];
+  List<RecentlyViewedPlace> recentlyViewed = const [];
+
+  /// FR3.4's stored travel month, surfaced as the "Season" badge — null
+  /// means the tourist hasn't set one.
+  int? intendedTravelMonth;
 
   Future<void> refresh() => _load();
 
@@ -57,10 +68,19 @@ class TravelPulseController extends ChangeNotifier {
     isLoading = true;
     notifyListeners();
 
-    final affinity = await _loadAffinity();
+    final results = await Future.wait([
+      _loadAffinity(),
+      _recommendationRepository.recentlyViewed(),
+      _preferenceRepository.load(),
+    ]);
+    final affinity = results[0] as Map<TravelStyle, ({double score, DateTime? lastInteractedAt})>;
+    recentlyViewed = results[1] as List<RecentlyViewedPlace>;
+    final profile = results[2] as TravelPreferenceProfile?;
+    intendedTravelMonth = profile?.intendedTravelMonth;
+
     final categories = affinity.isNotEmpty
         ? (affinity.keys.toList()..sort((a, b) => affinity[b]!.score.compareTo(affinity[a]!.score)))
-        : (await _preferenceRepository.load())?.categories.toList() ?? const <TravelStyle>[];
+        : profile?.categories.toList() ?? const <TravelStyle>[];
     final shown = categories.take(6).toList();
 
     final totalWeight = shown.fold<double>(0, (sum, s) => sum + (affinity[s]?.score ?? 0));

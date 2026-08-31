@@ -4,17 +4,38 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/models/hidden_gem.dart';
 import '../controller/preference_controller.dart';
 import '../model/hidden_gem_feed_item.dart';
+import '../model/interaction_repository.dart';
 
 /// "Hidden Gem Score Detail" / Transparency Report (FR2) — shows exactly
 /// how a place's composite score was built from real, persisted data,
 /// including how much the tourist's own profile boosted it, instead of
 /// just asserting a percentage.
-class ScoreDetailScreen extends ConsumerWidget {
+///
+/// Also the single place a "view" interaction gets logged (FR3.1) —
+/// deliberately centralized here in `initState` rather than at every
+/// individual entry point (Top Match card, Trending card, search result,
+/// "View All" list...) that can navigate here. Scattering the log call
+/// across each caller is exactly what caused it to be missing from two of
+/// them during testing; logging once, here, guarantees every path that
+/// reaches this screen counts as a view.
+class ScoreDetailScreen extends ConsumerStatefulWidget {
   final HiddenGemFeedItem item;
   const ScoreDetailScreen({super.key, required this.item});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ScoreDetailScreen> createState() => _ScoreDetailScreenState();
+}
+
+class _ScoreDetailScreenState extends ConsumerState<ScoreDetailScreen> {
+  @override
+  void initState() {
+    super.initState();
+    InteractionRepository().logView(widget.item.id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
     final colorScheme = Theme.of(context).colorScheme;
     final preferences = ref.watch(preferenceControllerProvider).selected;
 

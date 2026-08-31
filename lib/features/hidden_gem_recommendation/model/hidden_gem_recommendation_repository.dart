@@ -4,6 +4,7 @@ import '../../../shared/models/destination.dart';
 import '../../../shared/models/hidden_gem.dart';
 import '../../../shared/services/hidden_gem_scoring.dart';
 import 'hidden_gem_feed_item.dart';
+import 'recently_viewed_place.dart';
 
 /// Below this many recent engagement events, a place's growth rate is too
 /// noisy to trust even if the server already flagged it — mirrors
@@ -81,6 +82,40 @@ class HiddenGemRecommendationRepository {
       await _client.rpc('recompute_hidden_gem_scores');
     } catch (_) {
       // Ignored — see doc comment.
+    }
+  }
+
+  /// "Search For Gem" (UC diagram) / FR2.3's "... and search results" —
+  /// name match, ranked by the same persisted Hidden Gem Score as
+  /// everything else in this module rather than raw text relevance, so a
+  /// search result is exactly as trustworthy as a recommendation.
+  Future<List<HiddenGemFeedItem>> search(String query, {int limit = 30}) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return const [];
+
+    try {
+      final rows = await _client
+          .from('place_hidden_gem_candidates')
+          .select()
+          .ilike('name', '%$trimmed%')
+          .order('hidden_gem_score', ascending: false, nullsFirst: false)
+          .order('name', ascending: true) // tiebreaker, matches the ranking use cases
+          .limit(limit);
+      return (rows as List).map((row) => _itemFromRow(row as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// "Recently Viewed" on the Travel Pulse screen.
+  Future<List<RecentlyViewedPlace>> recentlyViewed({int limit = 5}) async {
+    try {
+      final rows = await _client.rpc('recently_viewed_places', params: {'p_limit': limit});
+      return (rows as List)
+          .map((row) => RecentlyViewedPlace.fromRow(row as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return const [];
     }
   }
 

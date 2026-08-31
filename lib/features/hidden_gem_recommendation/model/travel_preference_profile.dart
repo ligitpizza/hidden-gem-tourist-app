@@ -80,11 +80,17 @@ class TravelPreferenceProfile {
   final Set<DestinationTypePreference> destinationTypes;
   final DateTime? onboardedAt;
 
+  /// FR3.4's "intended travel period", simplified to a month (1–12).
+  /// Null means "no preference" — `get_personalized_recommendations`
+  /// falls back to the current month server-side.
+  final int? intendedTravelMonth;
+
   const TravelPreferenceProfile({
     required this.categories,
     this.budgetRange,
     this.destinationTypes = const {},
     this.onboardedAt,
+    this.intendedTravelMonth,
   });
 
   static const empty = TravelPreferenceProfile(categories: {});
@@ -106,6 +112,7 @@ class TravelPreferenceProfile {
           .toSet(),
       onboardedAt:
           row['onboarded_at'] != null ? DateTime.tryParse(row['onboarded_at'] as String) : null,
+      intendedTravelMonth: (row['intended_travel_month'] as num?)?.toInt(),
     );
   }
 
@@ -116,6 +123,7 @@ class TravelPreferenceProfile {
       'budget_range': budgetRange?.dbValue,
       'destination_types': destinationTypes.map((t) => t.dbValue).toList(),
       'onboarded_at': onboardedAt?.toIso8601String(),
+      'intended_travel_month': intendedTravelMonth,
       'updated_at': DateTime.now().toIso8601String(),
     };
   }
@@ -125,12 +133,14 @@ class TravelPreferenceProfile {
     BudgetRange? budgetRange,
     Set<DestinationTypePreference>? destinationTypes,
     DateTime? onboardedAt,
+    int? intendedTravelMonth,
   }) {
     return TravelPreferenceProfile(
       categories: categories ?? this.categories,
       budgetRange: budgetRange ?? this.budgetRange,
       destinationTypes: destinationTypes ?? this.destinationTypes,
       onboardedAt: onboardedAt ?? this.onboardedAt,
+      intendedTravelMonth: intendedTravelMonth ?? this.intendedTravelMonth,
     );
   }
 }

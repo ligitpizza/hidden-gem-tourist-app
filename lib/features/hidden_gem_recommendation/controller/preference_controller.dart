@@ -31,6 +31,7 @@ class PreferenceController extends ChangeNotifier {
   final Set<TravelStyle> selected = {};
   BudgetRange? budgetRange;
   final Set<DestinationTypePreference> destinationTypes = {};
+  int? intendedTravelMonth;
 
   bool get canSelectMore => selected.length < maxSelections;
   bool get canConfirm => selected.isNotEmpty && selected.length <= maxSelections;
@@ -45,6 +46,7 @@ class PreferenceController extends ChangeNotifier {
       destinationTypes
         ..clear()
         ..addAll(profile.destinationTypes);
+      intendedTravelMonth = profile.intendedTravelMonth;
       wasAlreadySet = profile.hasAnyPreference;
     }
     isLoading = false;
@@ -78,6 +80,13 @@ class PreferenceController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Passing the same month again clears it back to "no preference" —
+  /// matches how [setBudgetRange] already handles a re-tap.
+  void setIntendedTravelMonth(int? month) {
+    intendedTravelMonth = intendedTravelMonth == month ? null : month;
+    notifyListeners();
+  }
+
   Future<bool> save() async {
     if (!canConfirm) {
       errorMessage = 'Pick 1 to $maxSelections travel styles first.';
@@ -95,6 +104,7 @@ class PreferenceController extends ChangeNotifier {
           budgetRange: budgetRange,
           destinationTypes: Set.of(destinationTypes),
           onboardedAt: wasAlreadySet ? null : DateTime.now(),
+          intendedTravelMonth: intendedTravelMonth,
         ),
       );
       wasAlreadySet = true;

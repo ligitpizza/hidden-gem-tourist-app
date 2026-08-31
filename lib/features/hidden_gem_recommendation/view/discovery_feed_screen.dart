@@ -28,7 +28,10 @@ class DiscoveryFeedScreen extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             children: [
-              _SearchBar(onTunePressed: () => context.push(HiddenGemRecommendationRoutes.travelStyle)),
+              _SearchBar(
+                onSearchTap: () => context.push(HiddenGemRecommendationRoutes.search),
+                onTunePressed: () => context.push(HiddenGemRecommendationRoutes.travelStyle),
+              ),
               const SizedBox(height: 10),
               _TravelPulseLink(onTap: () => context.push(HiddenGemRecommendationRoutes.travelPulse)),
               const SizedBox(height: 20),
@@ -44,15 +47,21 @@ class DiscoveryFeedScreen extends ConsumerWidget {
               if (controller.isLoading)
                 const _FeedLoadingCard()
               else if (controller.topMatches.isEmpty)
-                const _EmptyFeedCard(message: 'No matches yet — check back soon.')
+                _EmptyFeedCard(
+                  message: "No hidden gems match your current preferences yet — try "
+                      'broadening your selected travel styles.',
+                  actionLabel: 'Update Preferences',
+                  onAction: () => context.push(HiddenGemRecommendationRoutes.travelStyle),
+                )
               else
                 _TopMatchCard(
                   item: controller.topMatches.first,
-                  onExplore: () {
-                    final item = controller.topMatches.first;
-                    InteractionRepository().logView(item.id);
-                    context.push(HiddenGemRecommendationRoutes.scoreDetail, extra: item);
-                  },
+                  // "view" is logged centrally by ScoreDetailScreen itself,
+                  // not here — see its doc comment.
+                  onExplore: () => context.push(
+                    HiddenGemRecommendationRoutes.scoreDetail,
+                    extra: controller.topMatches.first,
+                  ),
                 ),
               const SizedBox(height: 28),
               _SectionHeader(
@@ -78,10 +87,8 @@ class DiscoveryFeedScreen extends ConsumerWidget {
                       final item = controller.trending[index];
                       return _TrendingCard(
                         item: item,
-                        onTap: () {
-                          InteractionRepository().logView(item.id);
-                          context.push(HiddenGemRecommendationRoutes.scoreDetail, extra: item);
-                        },
+                        onTap: () =>
+                            context.push(HiddenGemRecommendationRoutes.scoreDetail, extra: item),
                       );
                     },
                   ),
@@ -95,26 +102,40 @@ class DiscoveryFeedScreen extends ConsumerWidget {
 }
 
 class _SearchBar extends StatelessWidget {
+  final VoidCallback onSearchTap;
   final VoidCallback onTunePressed;
-  const _SearchBar({required this.onTunePressed});
+  const _SearchBar({required this.onSearchTap, required this.onTunePressed});
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withAlpha(140),
         borderRadius: BorderRadius.circular(28),
       ),
       child: Row(
         children: [
-          Icon(Icons.search, color: colorScheme.onSurfaceVariant),
-          const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              'Discover your next hidden gem.',
-              style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(28),
+              onTap: onSearchTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  children: [
+                    Icon(Icons.search, color: colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Discover your next hidden gem.',
+                        style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
           IconButton(
@@ -483,21 +504,42 @@ class _FeedLoadingCard extends StatelessWidget {
   }
 }
 
+/// E2 in "View Recommended Destinations": "system displays a message
+/// suggesting the tourist broaden their selected preferences" — [onAction]
+/// makes that suggestion actionable (jump straight to Preference Setup)
+/// rather than just naming the fix in text; omit it for empty states that
+/// aren't preference-driven (e.g. "nothing trending").
 class _EmptyFeedCard extends StatelessWidget {
   final String message;
-  const _EmptyFeedCard({required this.message});
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  const _EmptyFeedCard({required this.message, this.actionLabel, this.onAction});
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      height: 120,
+      constraints: const BoxConstraints(minHeight: 120),
+      padding: const EdgeInsets.all(16),
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withAlpha(100),
         borderRadius: BorderRadius.circular(18),
       ),
-      child: Text(message, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: colorScheme.onSurfaceVariant),
+          ),
+          if (actionLabel != null) ...[
+            const SizedBox(height: 8),
+            TextButton(onPressed: onAction, child: Text(actionLabel!)),
+          ],
+        ],
+      ),
     );
   }
 }
