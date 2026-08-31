@@ -36,9 +36,21 @@ class TravelPulseScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text(
-              'Real-time analysis of your exploration DNA.',
-              style: TextStyle(color: colorScheme.onSurfaceVariant),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    'Real-time analysis of your exploration DNA.',
+                    style: TextStyle(color: colorScheme.onSurfaceVariant),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _SeasonBadge(
+                  month: pulseController.intendedTravelMonth,
+                  onTap: () => context.push(HiddenGemRecommendationRoutes.travelStyle),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             Container(
@@ -147,6 +159,51 @@ class _RecentlyViewedTile extends StatelessWidget {
         trailing: Text(
           place.relativeTimeLabel,
           style: TextStyle(fontSize: 11.5, color: colorScheme.onSurfaceVariant),
+        ),
+      ),
+    );
+  }
+}
+
+const _monthNames = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/// FR3.4's stored travel month, shown as a "Season" badge — tapping it
+/// jumps straight to Preference Setup to change it. Matches the mockup's
+/// "Season" chip next to the category-weights header.
+class _SeasonBadge extends StatelessWidget {
+  final int? month;
+  final VoidCallback onTap;
+  const _SeasonBadge({required this.month, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final label = month == null ? 'Any time' : _monthNames[month! - 1];
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: colorScheme.primaryContainer,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.calendar_month, size: 13, color: colorScheme.onPrimaryContainer),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: colorScheme.onPrimaryContainer,
+              ),
+            ),
+          ],
         ),
       ),
     );

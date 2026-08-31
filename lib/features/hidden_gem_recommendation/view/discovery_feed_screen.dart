@@ -47,7 +47,12 @@ class DiscoveryFeedScreen extends ConsumerWidget {
               if (controller.isLoading)
                 const _FeedLoadingCard()
               else if (controller.topMatches.isEmpty)
-                const _EmptyFeedCard(message: 'No matches yet — check back soon.')
+                _EmptyFeedCard(
+                  message: "No hidden gems match your current preferences yet — try "
+                      'broadening your selected travel styles.',
+                  actionLabel: 'Update Preferences',
+                  onAction: () => context.push(HiddenGemRecommendationRoutes.travelStyle),
+                )
               else
                 _TopMatchCard(
                   item: controller.topMatches.first,
@@ -499,21 +504,42 @@ class _FeedLoadingCard extends StatelessWidget {
   }
 }
 
+/// E2 in "View Recommended Destinations": "system displays a message
+/// suggesting the tourist broaden their selected preferences" — [onAction]
+/// makes that suggestion actionable (jump straight to Preference Setup)
+/// rather than just naming the fix in text; omit it for empty states that
+/// aren't preference-driven (e.g. "nothing trending").
 class _EmptyFeedCard extends StatelessWidget {
   final String message;
-  const _EmptyFeedCard({required this.message});
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  const _EmptyFeedCard({required this.message, this.actionLabel, this.onAction});
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      height: 120,
+      constraints: const BoxConstraints(minHeight: 120),
+      padding: const EdgeInsets.all(16),
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withAlpha(100),
         borderRadius: BorderRadius.circular(18),
       ),
-      child: Text(message, style: TextStyle(color: colorScheme.onSurfaceVariant)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: colorScheme.onSurfaceVariant),
+          ),
+          if (actionLabel != null) ...[
+            const SizedBox(height: 8),
+            TextButton(onPressed: onAction, child: Text(actionLabel!)),
+          ],
+        ],
+      ),
     );
   }
 }
