@@ -23,12 +23,16 @@ extension _HalalFilterX on _HalalFilter {
     switch (this) {
       case _HalalFilter.all:
         return 'All';
+
       case _HalalFilter.certified:
         return 'Halal Certified';
+
       case _HalalFilter.muslimFriendly:
         return 'Muslim-Friendly';
+
       case _HalalFilter.nonHalal:
         return 'Non-Halal';
+
       case _HalalFilter.unknown:
         return 'Unknown';
     }
@@ -45,13 +49,16 @@ class TraditionalFoodNearbyScreen
   final TraditionalFood food;
 
   @override
-  ConsumerState<TraditionalFoodNearbyScreen> createState() =>
+  ConsumerState<TraditionalFoodNearbyScreen>
+  createState() =>
       _TraditionalFoodNearbyScreenState();
 }
 
 class _TraditionalFoodNearbyScreenState
-    extends ConsumerState<TraditionalFoodNearbyScreen> {
-  final MapController _mapController = MapController();
+    extends ConsumerState<
+        TraditionalFoodNearbyScreen> {
+  final MapController _mapController =
+  MapController();
 
   final TextEditingController _searchController =
   TextEditingController();
@@ -64,19 +71,29 @@ class _TraditionalFoodNearbyScreenState
 
   double? _maxDistanceKm;
 
-  _HalalFilter _halalFilter = _HalalFilter.all;
+  _HalalFilter _halalFilter =
+      _HalalFilter.all;
 
   TraditionalFoodPlace? _selectedPlace;
 
-  TraditionalFood get food => widget.food;
+  TraditionalFood get food =>
+      widget.food;
+
+  // =========================================================
+  // INIT
+  // =========================================================
 
   @override
   void initState() {
     super.initState();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _tryExistingLocationPermission();
-    });
+    WidgetsBinding.instance.addPostFrameCallback(
+          (_) {
+        _locateUser(
+          moveMap: false,
+        );
+      },
+    );
   }
 
   @override
@@ -87,27 +104,10 @@ class _TraditionalFoodNearbyScreenState
   }
 
   // =========================================================
-  // LOCATION
+  // GPS
   // =========================================================
 
-  Future<void> _tryExistingLocationPermission() async {
-    try {
-      final permission = await Geolocator.checkPermission();
-
-      if (permission == LocationPermission.always ||
-          permission == LocationPermission.whileInUse) {
-        await _locateUser(
-          requestPermission: false,
-          moveMap: false,
-        );
-      }
-    } catch (_) {
-      // GPS is optional when the page first opens.
-    }
-  }
-
   Future<bool> _locateUser({
-    bool requestPermission = true,
     bool moveMap = true,
   }) async {
     if (_locatingUser) {
@@ -119,15 +119,16 @@ class _TraditionalFoodNearbyScreenState
     });
 
     try {
-      final serviceEnabled =
+      final enabled =
       await Geolocator.isLocationServiceEnabled();
 
-      if (!serviceEnabled) {
+      if (!enabled) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context)
+              .showSnackBar(
             const SnackBar(
               content: Text(
-                'Please turn on location services first.',
+                'Please turn on location services.',
               ),
             ),
           );
@@ -136,19 +137,23 @@ class _TraditionalFoodNearbyScreenState
         return false;
       }
 
-      var permission = await Geolocator.checkPermission();
+      var permission =
+      await Geolocator.checkPermission();
 
-      if (permission == LocationPermission.denied &&
-          requestPermission) {
-        permission = await Geolocator.requestPermission();
+      if (permission ==
+          LocationPermission.denied) {
+        permission =
+        await Geolocator.requestPermission();
       }
 
-      if (permission == LocationPermission.denied) {
+      if (permission ==
+          LocationPermission.denied) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context)
+              .showSnackBar(
             const SnackBar(
               content: Text(
-                'Location permission is required to calculate nearby restaurants.',
+                'Location permission is required to calculate nearby food locations.',
               ),
             ),
           );
@@ -157,9 +162,11 @@ class _TraditionalFoodNearbyScreenState
         return false;
       }
 
-      if (permission == LocationPermission.deniedForever) {
+      if (permission ==
+          LocationPermission.deniedForever) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context)
+              .showSnackBar(
             SnackBar(
               content: const Text(
                 'Location permission is permanently denied.',
@@ -201,16 +208,10 @@ class _TraditionalFoodNearbyScreenState
       }
 
       return true;
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not determine your current location.',
-            ),
-          ),
-        );
-      }
+    } catch (error) {
+      debugPrint(
+        'Location error: $error',
+      );
 
       return false;
     } finally {
@@ -229,15 +230,14 @@ class _TraditionalFoodNearbyScreenState
   double? _distanceToPlace(
       TraditionalFoodPlace place,
       ) {
-    final userLocation = _userLocation;
-
-    if (userLocation == null) {
+    if (_userLocation == null) {
       return null;
     }
 
-    final metres = Geolocator.distanceBetween(
-      userLocation.latitude,
-      userLocation.longitude,
+    final metres =
+    Geolocator.distanceBetween(
+      _userLocation!.latitude,
+      _userLocation!.longitude,
       place.latitude,
       place.longitude,
     );
@@ -246,41 +246,42 @@ class _TraditionalFoodNearbyScreenState
   }
 
   // =========================================================
-  // FILTER
+  // FILTER LOCATIONS
   // =========================================================
 
-  List<TraditionalFoodPlace> _filteredPlaces(
+  List<TraditionalFoodPlace>
+  _filteredPlaces(
       List<TraditionalFoodPlace> places,
       ) {
     final query =
     _searchQuery.trim().toLowerCase();
 
-    final filtered = places.where(
+    final result = places.where(
           (place) {
-        // Search
+        // Search.
         if (query.isNotEmpty) {
-          final searchableText = [
+          final searchable = [
             place.name,
             place.category,
-            place.city ?? '',
             place.state,
-            _halalStatusLabel(
-              place.halalStatus,
-            ),
+            place.city ?? '',
+            place.address ?? '',
+            place.description ?? '',
           ].join(' ').toLowerCase();
 
-          if (!searchableText.contains(query)) {
+          if (!searchable.contains(query)) {
             return false;
           }
         }
 
-        // Halal status
+        // Halal filter.
         switch (_halalFilter) {
           case _HalalFilter.all:
             break;
 
           case _HalalFilter.certified:
-            if (place.halalStatus != 'certified') {
+            if (place.halalStatus !=
+                'certified') {
               return false;
             }
             break;
@@ -293,25 +294,28 @@ class _TraditionalFoodNearbyScreenState
             break;
 
           case _HalalFilter.nonHalal:
-            if (place.halalStatus != 'non_halal') {
+            if (place.halalStatus !=
+                'non_halal') {
               return false;
             }
             break;
 
           case _HalalFilter.unknown:
-            if (place.halalStatus != 'unknown') {
+            if (place.halalStatus !=
+                'unknown') {
               return false;
             }
             break;
         }
 
-        // Distance
+        // Distance filter.
         if (_maxDistanceKm != null) {
           final distance =
           _distanceToPlace(place);
 
           if (distance == null ||
-              distance > _maxDistanceKm!) {
+              distance >
+                  _maxDistanceKm!) {
             return false;
           }
         }
@@ -320,33 +324,40 @@ class _TraditionalFoodNearbyScreenState
       },
     ).toList();
 
-    // Nearest first when GPS is available.
-    filtered.sort(
+    // Nearest first.
+    result.sort(
           (a, b) {
-        final distanceA = _distanceToPlace(a);
-        final distanceB = _distanceToPlace(b);
+        final distanceA =
+        _distanceToPlace(a);
+
+        final distanceB =
+        _distanceToPlace(b);
 
         if (distanceA != null &&
             distanceB != null) {
-          final result =
-          distanceA.compareTo(distanceB);
+          final comparison =
+          distanceA.compareTo(
+            distanceB,
+          );
 
-          if (result != 0) {
-            return result;
+          if (comparison != 0) {
+            return comparison;
           }
         }
 
-        return a.name.toLowerCase().compareTo(
+        return a.name
+            .toLowerCase()
+            .compareTo(
           b.name.toLowerCase(),
         );
       },
     );
 
-    return filtered;
+    return result;
   }
 
   // =========================================================
-  // SELECT RESTAURANT
+  // SELECT LOCATION
   // =========================================================
 
   void _selectPlace(
@@ -366,7 +377,7 @@ class _TraditionalFoodNearbyScreenState
   }
 
   // =========================================================
-  // EXTERNAL MAP
+  // OPEN EXTERNAL OSM
   // =========================================================
 
   Future<void> _openLocation(
@@ -379,16 +390,18 @@ class _TraditionalFoodNearbyScreenState
           '#map=17/${place.latitude}/${place.longitude}',
     );
 
-    final success = await launchUrl(
+    final opened = await launchUrl(
       uri,
-      mode: LaunchMode.externalApplication,
+      mode:
+      LaunchMode.externalApplication,
     );
 
-    if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         const SnackBar(
           content: Text(
-            'Could not open the map application.',
+            'Could not open this location.',
           ),
         ),
       );
@@ -400,7 +413,8 @@ class _TraditionalFoodNearbyScreenState
   // =========================================================
 
   Future<void> _showFilters() async {
-    var temporaryHalal = _halalFilter;
+    var temporaryHalal =
+        _halalFilter;
 
     double? temporaryDistance =
         _maxDistanceKm;
@@ -408,6 +422,7 @@ class _TraditionalFoodNearbyScreenState
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (
           bottomSheetContext,
           ) {
@@ -417,15 +432,15 @@ class _TraditionalFoodNearbyScreenState
               setSheetState,
               ) {
             return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
+              child: SingleChildScrollView(
+                padding:
+                const EdgeInsets.fromLTRB(
                   20,
                   0,
                   20,
                   24,
                 ),
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment:
                   CrossAxisAlignment.start,
                   children: [
@@ -433,7 +448,7 @@ class _TraditionalFoodNearbyScreenState
                       children: [
                         Expanded(
                           child: Text(
-                            'Restaurant Filters',
+                            'Location Filters',
                             style:
                             GoogleFonts.montserrat(
                               fontSize: 21,
@@ -444,22 +459,25 @@ class _TraditionalFoodNearbyScreenState
                         ),
                         TextButton(
                           onPressed: () {
-                            setSheetState(() {
-                              temporaryHalal =
-                                  _HalalFilter.all;
+                            setSheetState(
+                                  () {
+                                temporaryHalal =
+                                    _HalalFilter.all;
 
-                              temporaryDistance =
-                              null;
-                            });
+                                temporaryDistance =
+                                null;
+                              },
+                            );
                           },
-                          child: const Text(
+                          child:
+                          const Text(
                             'Reset',
                           ),
                         ),
                       ],
                     ),
 
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 24),
 
                     Text(
                       'Halal Status',
@@ -487,10 +505,12 @@ class _TraditionalFoodNearbyScreenState
                             temporaryHalal ==
                                 filter,
                             onSelected: (_) {
-                              setSheetState(() {
-                                temporaryHalal =
-                                    filter;
-                              });
+                              setSheetState(
+                                    () {
+                                  temporaryHalal =
+                                      filter;
+                                },
+                              );
                             },
                           ),
                       ],
@@ -515,25 +535,30 @@ class _TraditionalFoodNearbyScreenState
                       runSpacing: 8,
                       children: [
                         ChoiceChip(
-                          label: const Text(
+                          label:
+                          const Text(
                             'Any Distance',
                           ),
                           selected:
                           temporaryDistance ==
                               null,
                           onSelected: (_) {
-                            setSheetState(() {
-                              temporaryDistance =
-                              null;
-                            });
+                            setSheetState(
+                                  () {
+                                temporaryDistance =
+                                null;
+                              },
+                            );
                           },
                         ),
+
                         for (final distance
-                        in <double>[
+                        in const <double>[
                           5,
                           10,
                           25,
                           50,
+                          100,
                         ])
                           ChoiceChip(
                             label: Text(
@@ -543,22 +568,26 @@ class _TraditionalFoodNearbyScreenState
                             temporaryDistance ==
                                 distance,
                             onSelected: (_) {
-                              setSheetState(() {
-                                temporaryDistance =
-                                    distance;
-                              });
+                              setSheetState(
+                                    () {
+                                  temporaryDistance =
+                                      distance;
+                                },
+                              );
                             },
                           ),
                       ],
                     ),
 
-                    const SizedBox(height: 26),
+                    const SizedBox(height: 28),
 
                     SizedBox(
                       width: double.infinity,
                       height: 50,
-                      child: FilledButton.icon(
+                      child:
+                      FilledButton.icon(
                         onPressed: () async {
+                          // Distance needs GPS.
                           if (temporaryDistance !=
                               null &&
                               _userLocation ==
@@ -604,11 +633,13 @@ class _TraditionalFoodNearbyScreenState
                             bottomSheetContext,
                           );
                         },
-                        icon: const Icon(
+                        icon:
+                        const Icon(
                           Icons
                               .filter_alt_rounded,
                         ),
-                        label: const Text(
+                        label:
+                        const Text(
                           'Apply Filters',
                         ),
                       ),
@@ -624,13 +655,14 @@ class _TraditionalFoodNearbyScreenState
   }
 
   // =========================================================
-  // ACTIVE FILTER COUNT
+  // FILTER COUNT
   // =========================================================
 
-  int get _activeFilterCount {
+  int get _filterCount {
     var count = 0;
 
-    if (_halalFilter != _HalalFilter.all) {
+    if (_halalFilter !=
+        _HalalFilter.all) {
       count++;
     }
 
@@ -657,91 +689,71 @@ class _TraditionalFoodNearbyScreenState
       controller.places,
     );
 
+    if (controller.isLoading &&
+        controller.places.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'Find Nearby',
+          ),
+        ),
+        body: const Center(
+          child:
+          CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
           '${food.name} Nearby',
           maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.montserrat(
-            fontWeight: FontWeight.w700,
+          overflow:
+          TextOverflow.ellipsis,
+          style:
+          GoogleFonts.montserrat(
+            fontWeight:
+            FontWeight.w700,
           ),
         ),
       ),
-      body: _buildBody(
-        controller: controller,
-        places: places,
+      body: controller.places.isEmpty
+          ? _NoLocations(
+        foodName:
+        food.name,
+      )
+          : _buildMap(
+        controller.places,
+        places,
       ),
     );
   }
 
-  Widget _buildBody({
-    required TraditionalFoodDetailController controller,
-    required List<TraditionalFoodPlace> places,
-  }) {
-    if (controller.isLoading &&
-        controller.places.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
-    }
+  // =========================================================
+  // MAP
+  // =========================================================
 
-    if (controller.errorMessage != null &&
-        controller.places.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(30),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.cloud_off_outlined,
-                size: 48,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                controller.errorMessage!,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: controller.refresh,
-                icon: const Icon(
-                  Icons.refresh_rounded,
-                ),
-                label: const Text(
-                  'Try Again',
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (controller.places.isEmpty) {
-      return _NoRestaurants(
-        foodName: food.name,
-      );
-    }
-
-    final mapCenter = _initialCenter(
-      controller.places,
+  Widget _buildMap(
+      List<TraditionalFoodPlace> allPlaces,
+      List<TraditionalFoodPlace> places,
+      ) {
+    final center =
+    _averageCenter(
+      allPlaces,
     );
 
     return Stack(
       children: [
-        // =====================================================
-        // MAP
-        // =====================================================
-
         FlutterMap(
-          mapController: _mapController,
-          options: MapOptions(
+          mapController:
+          _mapController,
+          options:
+          MapOptions(
             initialCenter:
-            _userLocation ?? mapCenter,
+            center,
             initialZoom:
-            _userLocation == null ? 11 : 13,
+            11,
           ),
           children: [
             TileLayer(
@@ -753,62 +765,71 @@ class _TraditionalFoodNearbyScreenState
 
             MarkerLayer(
               markers: [
-                for (final place in places)
+                for (final place
+                in places)
                   Marker(
-                    point: LatLng(
+                    point:
+                    LatLng(
                       place.latitude,
                       place.longitude,
                     ),
                     width:
-                    _selectedPlace?.placeId ==
-                        place.placeId
-                        ? 52
-                        : 44,
+                    _selectedPlace?.id ==
+                        place.id
+                        ? 54
+                        : 46,
                     height:
-                    _selectedPlace?.placeId ==
-                        place.placeId
-                        ? 52
-                        : 44,
-                    child: GestureDetector(
+                    _selectedPlace?.id ==
+                        place.id
+                        ? 54
+                        : 46,
+                    child:
+                    GestureDetector(
                       onTap: () {
                         _selectPlace(
                           place,
                         );
                       },
-                      child: _RestaurantMarker(
+                      child:
+                      _LocationMarker(
                         selected:
-                        _selectedPlace?.placeId ==
-                            place.placeId,
+                        _selectedPlace?.id ==
+                            place.id,
                         halalStatus:
                         place.halalStatus,
                       ),
                     ),
                   ),
 
-                if (_userLocation != null)
+                if (_userLocation !=
+                    null)
                   Marker(
-                    point: _userLocation!,
+                    point:
+                    _userLocation!,
                     width: 36,
                     height: 36,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.blue,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white,
-                          width: 3,
+                    child:
+                    Container(
+                      decoration:
+                      BoxDecoration(
+                        color:
+                        Colors.blue,
+                        shape:
+                        BoxShape.circle,
+                        border:
+                        Border.all(
+                          color:
+                          Colors.white,
+                          width:
+                          3,
                         ),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 6,
-                          ),
-                        ],
                       ),
-                      child: const Icon(
+                      child:
+                      const Icon(
                         Icons
                             .person_pin_circle_rounded,
-                        color: Colors.white,
+                        color:
+                        Colors.white,
                         size: 20,
                       ),
                     ),
@@ -829,40 +850,59 @@ class _TraditionalFoodNearbyScreenState
           child: Row(
             children: [
               Expanded(
-                child: Material(
+                child:
+                Material(
                   elevation: 4,
                   borderRadius:
-                  BorderRadius.circular(16),
-                  child: TextField(
+                  BorderRadius.circular(
+                    16,
+                  ),
+                  child:
+                  TextField(
                     controller:
                     _searchController,
-                    onChanged: (value) {
+                    onChanged:
+                        (value) {
                       setState(() {
-                        _searchQuery = value;
-                        _selectedPlace = null;
+                        _searchQuery =
+                            value;
+
+                        _selectedPlace =
+                        null;
                       });
                     },
-                    decoration: InputDecoration(
+                    decoration:
+                    InputDecoration(
                       hintText:
-                      'Search restaurant...',
-                      prefixIcon: const Icon(
-                        Icons.search_rounded,
+                      'Search location...',
+                      prefixIcon:
+                      const Icon(
+                        Icons
+                            .search_rounded,
                       ),
                       suffixIcon:
-                      _searchQuery.trim().isEmpty
+                      _searchQuery
+                          .trim()
+                          .isEmpty
                           ? null
                           : IconButton(
-                        onPressed: () {
+                        onPressed:
+                            () {
                           _searchController
                               .clear();
 
-                          setState(() {
-                            _searchQuery = '';
-                            _selectedPlace =
-                            null;
-                          });
+                          setState(
+                                () {
+                              _searchQuery =
+                              '';
+
+                              _selectedPlace =
+                              null;
+                            },
+                          );
                         },
-                        icon: const Icon(
+                        icon:
+                        const Icon(
                           Icons
                               .close_rounded,
                         ),
@@ -882,59 +922,65 @@ class _TraditionalFoodNearbyScreenState
                 ),
               ),
 
-              const SizedBox(width: 9),
+              const SizedBox(width: 8),
 
               SizedBox(
                 width: 52,
                 height: 52,
-                child: Stack(
-                  clipBehavior: Clip.none,
+                child:
+                Stack(
+                  clipBehavior:
+                  Clip.none,
                   children: [
                     Positioned.fill(
                       child:
-                      FloatingActionButton.small(
+                      FloatingActionButton
+                          .small(
                         heroTag:
-                        'food-nearby-filter',
+                        'food-filter',
                         onPressed:
                         _showFilters,
-                        child: const Icon(
-                          Icons.tune_rounded,
+                        child:
+                        const Icon(
+                          Icons
+                              .tune_rounded,
                         ),
                       ),
                     ),
 
-                    if (_activeFilterCount > 0)
+                    if (_filterCount >
+                        0)
                       Positioned(
                         right: -3,
                         top: -4,
-                        child: Container(
-                          width: 21,
-                          height: 21,
+                        child:
+                        Container(
+                          width:
+                          21,
+                          height:
+                          21,
                           alignment:
                           Alignment.center,
                           decoration:
                           BoxDecoration(
                             color:
-                            Theme.of(context)
+                            Theme.of(
+                              context,
+                            )
                                 .colorScheme
                                 .error,
                             shape:
                             BoxShape.circle,
-                            border:
-                            Border.all(
-                              color:
-                              Theme.of(context)
-                                  .colorScheme
-                                  .surface,
-                              width: 2,
-                            ),
                           ),
-                          child: Text(
-                            '$_activeFilterCount',
+                          child:
+                          Text(
+                            '$_filterCount',
                             style:
                             const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
+                              color:
+                              Colors.white,
+                              fontSize:
+                              10,
                               fontWeight:
                               FontWeight.bold,
                             ),
@@ -949,86 +995,68 @@ class _TraditionalFoodNearbyScreenState
         ),
 
         // =====================================================
-        // RESULT COUNT
-        // =====================================================
-
-        Positioned(
-          top: 76,
-          left: 12,
-          child: Material(
-            elevation: 2,
-            borderRadius:
-            BorderRadius.circular(999),
-            child: Padding(
-              padding:
-              const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 7,
-              ),
-              child: Text(
-                '${places.length} restaurant${places.length == 1 ? '' : 's'}',
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        ),
-
-        // =====================================================
-        // GPS
+        // GPS BUTTON
         // =====================================================
 
         Positioned(
           right: 15,
           bottom:
-          _selectedPlace == null ? 210 : 275,
-          child: FloatingActionButton.small(
-            heroTag: 'food-nearby-location',
+          _selectedPlace ==
+              null
+              ? 200
+              : 275,
+          child:
+          FloatingActionButton
+              .small(
+            heroTag:
+            'food-location',
             onPressed:
             _locatingUser
                 ? null
                 : () {
               _locateUser();
             },
-            child: _locatingUser
+            child:
+            _locatingUser
                 ? const Padding(
               padding:
-              EdgeInsets.all(10),
+              EdgeInsets.all(
+                10,
+              ),
               child:
               CircularProgressIndicator(
-                strokeWidth: 2,
+                strokeWidth:
+                2,
               ),
             )
                 : const Icon(
-              Icons.my_location_rounded,
+              Icons
+                  .my_location_rounded,
             ),
           ),
         ),
 
         // =====================================================
-        // RESTAURANT LIST
+        // LIST
         // =====================================================
 
         if (_selectedPlace == null)
           DraggableScrollableSheet(
-            initialChildSize: 0.26,
-            minChildSize: 0.18,
-            maxChildSize: 0.62,
-            snap: true,
-            snapSizes: const [
-              0.18,
-              0.26,
-              0.62,
-            ],
+            initialChildSize:
+            0.30,
+            minChildSize:
+            0.18,
+            maxChildSize:
+            0.65,
             builder: (
                 context,
                 scrollController,
                 ) {
-              return _RestaurantListSheet(
-                foodName: food.name,
-                places: places,
+              return _LocationsSheet(
+                foodName:
+                food.name,
+                places:
+                places,
                 scrollController:
                 scrollController,
                 distanceBuilder:
@@ -1040,21 +1068,24 @@ class _TraditionalFoodNearbyScreenState
           ),
 
         // =====================================================
-        // SELECTED RESTAURANT
+        // SELECTED LOCATION
         // =====================================================
 
         if (_selectedPlace != null)
           DraggableScrollableSheet(
-            initialChildSize: 0.31,
-            minChildSize: 0.22,
-            maxChildSize: 0.46,
-            snap: true,
+            initialChildSize:
+            0.36,
+            minChildSize:
+            0.24,
+            maxChildSize:
+            0.55,
             builder: (
                 context,
                 scrollController,
                 ) {
-              return _SelectedRestaurantSheet(
-                place: _selectedPlace!,
+              return _SelectedLocationSheet(
+                place:
+                _selectedPlace!,
                 distanceKm:
                 _distanceToPlace(
                   _selectedPlace!,
@@ -1063,10 +1094,11 @@ class _TraditionalFoodNearbyScreenState
                 scrollController,
                 onClose: () {
                   setState(() {
-                    _selectedPlace = null;
+                    _selectedPlace =
+                    null;
                   });
                 },
-                onOpenLocation: () {
+                onOpen: () {
                   _openLocation(
                     _selectedPlace!,
                   );
@@ -1080,45 +1112,36 @@ class _TraditionalFoodNearbyScreenState
         // =====================================================
 
         if (places.isEmpty &&
-            controller.places.isNotEmpty)
+            allPlaces.isNotEmpty)
           Positioned(
-            top: 120,
-            left: 24,
-            right: 24,
-            child: Card(
-              child: Padding(
+            top: 90,
+            left: 25,
+            right: 25,
+            child:
+            Card(
+              child:
+              Padding(
                 padding:
-                const EdgeInsets.all(20),
-                child: Column(
+                const EdgeInsets.all(
+                  20,
+                ),
+                child:
+                Column(
                   mainAxisSize:
                   MainAxisSize.min,
                   children: [
                     const Icon(
                       Icons
-                          .restaurant_menu_outlined,
+                          .search_off_rounded,
                       size: 38,
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'No restaurants match your filters.',
+                    const SizedBox(
+                      height: 8,
                     ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () {
-                        _searchController
-                            .clear();
-
-                        setState(() {
-                          _searchQuery = '';
-                          _halalFilter =
-                              _HalalFilter.all;
-                          _maxDistanceKm = null;
-                          _selectedPlace = null;
-                        });
-                      },
-                      child: const Text(
-                        'Clear Filters',
-                      ),
+                    const Text(
+                      'No locations match your filters.',
+                      textAlign:
+                      TextAlign.center,
                     ),
                   ],
                 ),
@@ -1126,29 +1149,33 @@ class _TraditionalFoodNearbyScreenState
             ),
           ),
 
-        // =====================================================
-        // OSM ATTRIBUTION
-        // =====================================================
-
         Positioned(
           left: 5,
           bottom: 4,
-          child: IgnorePointer(
-            child: Container(
+          child:
+          IgnorePointer(
+            child:
+            Container(
               padding:
               const EdgeInsets.symmetric(
                 horizontal: 5,
                 vertical: 2,
               ),
-              color: Theme.of(context)
+              color:
+              Theme.of(
+                context,
+              )
                   .colorScheme
                   .surface
                   .withValues(
-                alpha: 0.85,
+                alpha:
+                0.85,
               ),
-              child: const Text(
+              child:
+              const Text(
                 '© OpenStreetMap contributors',
-                style: TextStyle(
+                style:
+                TextStyle(
                   fontSize: 8,
                 ),
               ),
@@ -1159,37 +1186,36 @@ class _TraditionalFoodNearbyScreenState
     );
   }
 
-  LatLng _initialCenter(
+  LatLng _averageCenter(
       List<TraditionalFoodPlace> places,
       ) {
-    if (places.isEmpty) {
-      return const LatLng(
-        4.2105,
-        101.9758,
-      );
-    }
-
-    var lat = 0.0;
-    var lng = 0.0;
+    var latitude = 0.0;
+    var longitude = 0.0;
 
     for (final place in places) {
-      lat += place.latitude;
-      lng += place.longitude;
+      latitude +=
+          place.latitude;
+
+      longitude +=
+          place.longitude;
     }
 
     return LatLng(
-      lat / places.length,
-      lng / places.length,
+      latitude /
+          places.length,
+      longitude /
+          places.length,
     );
   }
 }
 
 // ===========================================================
-// RESTAURANT MARKER
+// LOCATION MARKER
 // ===========================================================
 
-class _RestaurantMarker extends StatelessWidget {
-  const _RestaurantMarker({
+class _LocationMarker
+    extends StatelessWidget {
+  const _LocationMarker({
     required this.selected,
     required this.halalStatus,
   });
@@ -1201,28 +1227,46 @@ class _RestaurantMarker extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedScale(
       duration:
-      const Duration(milliseconds: 160),
-      scale: selected ? 1.17 : 1,
-      child: Container(
-        decoration: BoxDecoration(
-          color: _halalMarkerColor(
+      const Duration(
+        milliseconds: 160,
+      ),
+      scale:
+      selected ? 1.18 : 1,
+      child:
+      Container(
+        decoration:
+        BoxDecoration(
+          color:
+          _halalColor(
             halalStatus,
           ),
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: Colors.white,
-            width: selected ? 4 : 3,
+          shape:
+          BoxShape.circle,
+          border:
+          Border.all(
+            color:
+            Colors.white,
+            width:
+            selected
+                ? 4
+                : 3,
           ),
-          boxShadow: const [
+          boxShadow:
+          const [
             BoxShadow(
-              color: Colors.black26,
-              blurRadius: 7,
+              color:
+              Colors.black26,
+              blurRadius:
+              7,
             ),
           ],
         ),
-        child: const Icon(
-          Icons.restaurant_rounded,
-          color: Colors.white,
+        child:
+        const Icon(
+          Icons
+              .restaurant_rounded,
+          color:
+          Colors.white,
           size: 20,
         ),
       ),
@@ -1231,12 +1275,12 @@ class _RestaurantMarker extends StatelessWidget {
 }
 
 // ===========================================================
-// RESTAURANT LIST SHEET
+// LOCATION LIST
 // ===========================================================
 
-class _RestaurantListSheet
+class _LocationsSheet
     extends StatelessWidget {
-  const _RestaurantListSheet({
+  const _LocationsSheet({
     required this.foodName,
     required this.places,
     required this.scrollController,
@@ -1245,40 +1289,53 @@ class _RestaurantListSheet
   });
 
   final String foodName;
+
   final List<TraditionalFoodPlace> places;
+
   final ScrollController scrollController;
 
   final double? Function(
       TraditionalFoodPlace place,
       ) distanceBuilder;
 
-  final ValueChanged<TraditionalFoodPlace>
-  onSelected;
+  final ValueChanged<
+      TraditionalFoodPlace> onSelected;
 
   @override
   Widget build(BuildContext context) {
     final colors =
-        Theme.of(context).colorScheme;
+        Theme.of(context)
+            .colorScheme;
 
     return Material(
       elevation: 16,
-      color: colors.surface,
+      color:
+      colors.surface,
       borderRadius:
       const BorderRadius.vertical(
-        top: Radius.circular(24),
+        top:
+        Radius.circular(
+          24,
+        ),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
+      child:
+      Column(
         children: [
-          const SizedBox(height: 9),
+          const SizedBox(
+            height: 9,
+          ),
 
           Container(
             width: 38,
             height: 4,
-            decoration: BoxDecoration(
-              color: colors.outlineVariant,
+            decoration:
+            BoxDecoration(
+              color:
+              colors.outlineVariant,
               borderRadius:
-              BorderRadius.circular(999),
+              BorderRadius.circular(
+                999,
+              ),
             ),
           ),
 
@@ -1290,45 +1347,41 @@ class _RestaurantListSheet
               16,
               8,
             ),
-            child: Row(
+            child:
+            Row(
               children: [
                 Expanded(
-                  child: Text(
-                    'Where to Find $foodName',
-                    maxLines: 1,
+                  child:
+                  Text(
+                    'Places Serving $foodName',
+                    maxLines:
+                    1,
                     overflow:
                     TextOverflow.ellipsis,
                     style:
                     GoogleFonts.montserrat(
-                      fontSize: 17,
+                      fontSize:
+                      17,
                       fontWeight:
                       FontWeight.w700,
                     ),
                   ),
                 ),
+
                 Text(
                   '${places.length}',
-                  style: GoogleFonts.inter(
-                    fontWeight:
-                    FontWeight.w700,
-                    color:
-                    colors.onSurfaceVariant,
-                  ),
                 ),
               ],
             ),
           ),
 
-          const Divider(height: 1),
+          const Divider(
+            height: 1,
+          ),
 
           Expanded(
-            child: places.isEmpty
-                ? const Center(
-              child: Text(
-                'No restaurants found.',
-              ),
-            )
-                : ListView.separated(
+            child:
+            ListView.separated(
               controller:
               scrollController,
               padding:
@@ -1343,17 +1396,22 @@ class _RestaurantListSheet
                 height: 8,
               ),
               itemBuilder:
-                  (context, index) {
+                  (
+                  context,
+                  index,
+                  ) {
                 final place =
                 places[index];
 
-                return _RestaurantListTile(
-                  place: place,
+                return _LocationTile(
+                  place:
+                  place,
                   distanceKm:
                   distanceBuilder(
                     place,
                   ),
-                  onTap: () {
+                  onTap:
+                      () {
                     onSelected(
                       place,
                     );
@@ -1369,116 +1427,142 @@ class _RestaurantListSheet
 }
 
 // ===========================================================
-// RESTAURANT LIST TILE
+// LOCATION TILE
 // ===========================================================
 
-class _RestaurantListTile extends StatelessWidget {
-  const _RestaurantListTile({
+class _LocationTile
+    extends StatelessWidget {
+  const _LocationTile({
     required this.place,
     required this.distanceKm,
     required this.onTap,
   });
 
   final TraditionalFoodPlace place;
+
   final double? distanceKm;
+
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors =
-        Theme.of(context).colorScheme;
+        Theme.of(context)
+            .colorScheme;
 
     return Material(
-      color: colors.surfaceContainerLow,
+      color:
+      colors.surfaceContainerLow,
       borderRadius:
-      BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
+      BorderRadius.circular(
+        14,
+      ),
+      child:
+      InkWell(
+        onTap:
+        onTap,
         borderRadius:
-        BorderRadius.circular(14),
-        child: Padding(
+        BorderRadius.circular(
+          14,
+        ),
+        child:
+        Padding(
           padding:
-          const EdgeInsets.all(12),
-          child: Row(
+          const EdgeInsets.all(
+            12,
+          ),
+          child:
+          Row(
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: _halalMarkerColor(
-                    place.halalStatus,
-                  ),
-                  shape: BoxShape.circle,
+              CircleAvatar(
+                backgroundColor:
+                _halalColor(
+                  place
+                      .halalStatus,
                 ),
-                child: const Icon(
-                  Icons.restaurant_rounded,
-                  color: Colors.white,
-                  size: 20,
+                child:
+                const Icon(
+                  Icons
+                      .restaurant_rounded,
+                  color:
+                  Colors.white,
                 ),
               ),
 
-              const SizedBox(width: 11),
+              const SizedBox(
+                width: 11,
+              ),
 
               Expanded(
-                child: Column(
+                child:
+                Column(
                   crossAxisAlignment:
                   CrossAxisAlignment.start,
                   children: [
                     Text(
-                      place.name,
-                      maxLines: 1,
+                      place
+                          .name,
+                      maxLines:
+                      1,
                       overflow:
                       TextOverflow.ellipsis,
                       style:
                       GoogleFonts.inter(
-                        fontSize: 13,
                         fontWeight:
                         FontWeight.w700,
                       ),
                     ),
 
-                    const SizedBox(height: 3),
+                    const SizedBox(
+                      height: 3,
+                    ),
 
                     Text(
                       [
-                        if (place.city != null &&
+                        if (place.city !=
+                            null &&
                             place.city!
                                 .trim()
                                 .isNotEmpty)
-                          place.city!,
-                        if (place.state
-                            .trim()
-                            .isNotEmpty)
-                          place.state,
-                      ].join(', '),
-                      maxLines: 1,
-                      overflow:
-                      TextOverflow.ellipsis,
+                          place
+                              .city!,
+                        place
+                            .state,
+                      ].join(
+                        ', ',
+                      ),
                       style:
                       GoogleFonts.inter(
-                        fontSize: 10,
-                        color: colors
-                            .onSurfaceVariant,
+                        fontSize:
+                        10,
+                        color:
+                        colors.onSurfaceVariant,
                       ),
                     ),
 
-                    const SizedBox(height: 5),
+                    const SizedBox(
+                      height: 5,
+                    ),
 
                     Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
+                      spacing:
+                      6,
+                      runSpacing:
+                      5,
                       children: [
-                        _RestaurantTag(
-                          label:
-                          _halalStatusLabel(
-                            place.halalStatus,
+                        _Tag(
+                          text:
+                          _halalLabel(
+                            place
+                                .halalStatus,
                           ),
                         ),
+
                         if (distanceKm !=
                             null)
-                          _RestaurantTag(
-                            label:
-                            '${distanceKm!.toStringAsFixed(1)} km',
+                          _Tag(
+                            text:
+                            '${distanceKm!.toStringAsFixed(1)} km away',
                           ),
                       ],
                     ),
@@ -1487,7 +1571,8 @@ class _RestaurantListTile extends StatelessWidget {
               ),
 
               const Icon(
-                Icons.chevron_right_rounded,
+                Icons
+                    .chevron_right_rounded,
               ),
             ],
           ),
@@ -1498,41 +1583,49 @@ class _RestaurantListTile extends StatelessWidget {
 }
 
 // ===========================================================
-// SELECTED RESTAURANT
+// SELECTED LOCATION
 // ===========================================================
 
-class _SelectedRestaurantSheet
+class _SelectedLocationSheet
     extends StatelessWidget {
-  const _SelectedRestaurantSheet({
+  const _SelectedLocationSheet({
     required this.place,
     required this.distanceKm,
     required this.scrollController,
     required this.onClose,
-    required this.onOpenLocation,
+    required this.onOpen,
   });
 
   final TraditionalFoodPlace place;
+
   final double? distanceKm;
 
   final ScrollController scrollController;
 
   final VoidCallback onClose;
-  final VoidCallback onOpenLocation;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
     final colors =
-        Theme.of(context).colorScheme;
+        Theme.of(context)
+            .colorScheme;
 
     return Material(
       elevation: 16,
-      color: colors.surface,
+      color:
+      colors.surface,
       borderRadius:
       const BorderRadius.vertical(
-        top: Radius.circular(24),
+        top:
+        Radius.circular(
+          24,
+        ),
       ),
-      child: ListView(
-        controller: scrollController,
+      child:
+      ListView(
+        controller:
+        scrollController,
         padding:
         const EdgeInsets.fromLTRB(
           18,
@@ -1542,11 +1635,14 @@ class _SelectedRestaurantSheet
         ),
         children: [
           Center(
-            child: Container(
+            child:
+            Container(
               width: 38,
               height: 4,
-              decoration: BoxDecoration(
-                color: colors.outlineVariant,
+              decoration:
+              BoxDecoration(
+                color:
+                colors.outlineVariant,
                 borderRadius:
                 BorderRadius.circular(
                   999,
@@ -1555,63 +1651,67 @@ class _SelectedRestaurantSheet
             ),
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(
+            height: 12,
+          ),
 
           Row(
-            crossAxisAlignment:
-            CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: _halalMarkerColor(
-                    place.halalStatus,
-                  ),
-                  borderRadius:
-                  BorderRadius.circular(
-                    15,
-                  ),
+              CircleAvatar(
+                radius: 26,
+                backgroundColor:
+                _halalColor(
+                  place
+                      .halalStatus,
                 ),
-                child: const Icon(
-                  Icons.restaurant_rounded,
-                  color: Colors.white,
+                child:
+                const Icon(
+                  Icons
+                      .restaurant_rounded,
+                  color:
+                  Colors.white,
                 ),
               ),
 
-              const SizedBox(width: 12),
+              const SizedBox(
+                width: 12,
+              ),
 
               Expanded(
-                child: Column(
+                child:
+                Column(
                   crossAxisAlignment:
                   CrossAxisAlignment.start,
                   children: [
                     Text(
-                      place.name,
+                      place
+                          .name,
                       style:
                       GoogleFonts.montserrat(
-                        fontSize: 18,
+                        fontSize:
+                        18,
                         fontWeight:
                         FontWeight.w700,
                       ),
                     ),
 
-                    const SizedBox(height: 4),
+                    const SizedBox(
+                      height: 3,
+                    ),
 
                     Text(
                       [
-                        if (place.city != null &&
+                        if (place.city !=
+                            null &&
                             place.city!
                                 .trim()
                                 .isNotEmpty)
-                          place.city!,
-                        place.state,
-                      ].join(', '),
-                      style:
-                      GoogleFonts.inter(
-                        fontSize: 12,
-                        color: colors
-                            .onSurfaceVariant,
+                          place
+                              .city!,
+                        place
+                            .state,
+                      ].join(
+                        ', ',
                       ),
                     ),
                   ],
@@ -1619,53 +1719,137 @@ class _SelectedRestaurantSheet
               ),
 
               IconButton(
-                onPressed: onClose,
-                icon: const Icon(
-                  Icons.close_rounded,
+                onPressed:
+                onClose,
+                icon:
+                const Icon(
+                  Icons
+                      .close_rounded,
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 14),
+          if (place.address != null &&
+              place.address!
+                  .trim()
+                  .isNotEmpty) ...[
+            const SizedBox(
+              height: 14,
+            ),
+
+            Row(
+              crossAxisAlignment:
+              CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons
+                      .location_on_outlined,
+                  size:
+                  18,
+                ),
+                const SizedBox(
+                  width: 6,
+                ),
+                Expanded(
+                  child:
+                  Text(
+                    place.address!,
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          if (place.description !=
+              null &&
+              place.description!
+                  .trim()
+                  .isNotEmpty) ...[
+            const SizedBox(
+              height: 14,
+            ),
+
+            Text(
+              place.description!,
+              style:
+              GoogleFonts.inter(
+                fontSize: 12,
+                height:
+                1.45,
+              ),
+            ),
+          ],
+
+          const SizedBox(
+            height: 14,
+          ),
 
           Wrap(
             spacing: 7,
-            runSpacing: 7,
+            runSpacing:
+            7,
             children: [
-              _RestaurantTag(
-                label: _halalStatusLabel(
-                  place.halalStatus,
+              _Tag(
+                text:
+                _halalLabel(
+                  place
+                      .halalStatus,
                 ),
               ),
 
-              if (place.category
-                  .trim()
-                  .isNotEmpty)
-                _RestaurantTag(
-                  label: place.category,
+              _Tag(
+                text:
+                _displayValue(
+                  place
+                      .category,
                 ),
+              ),
 
-              if (distanceKm != null)
-                _RestaurantTag(
-                  label:
+              if (distanceKm !=
+                  null)
+                _Tag(
+                  text:
                   '${distanceKm!.toStringAsFixed(1)} km away',
                 ),
             ],
           ),
 
-          const SizedBox(height: 18),
+          if (place.verificationSource !=
+              null &&
+              place.verificationSource!
+                  .trim()
+                  .isNotEmpty) ...[
+            const SizedBox(
+              height: 14,
+            ),
 
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: onOpenLocation,
-              icon: const Icon(
-                Icons.map_outlined,
+            Text(
+              'Verified source: ${place.verificationSource}',
+              style:
+              GoogleFonts.inter(
+                fontSize: 10,
+                color:
+                colors.onSurfaceVariant,
               ),
-              label: const Text(
-                'Open Location',
-              ),
+            ),
+          ],
+
+          const SizedBox(
+            height: 20,
+          ),
+
+          FilledButton.icon(
+            onPressed:
+            onOpen,
+            icon:
+            const Icon(
+              Icons
+                  .map_outlined,
+            ),
+            label:
+            const Text(
+              'Open Location',
             ),
           ),
         ],
@@ -1675,49 +1859,12 @@ class _SelectedRestaurantSheet
 }
 
 // ===========================================================
-// TAG
+// NO LOCATIONS
 // ===========================================================
 
-class _RestaurantTag extends StatelessWidget {
-  const _RestaurantTag({
-    required this.label,
-  });
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding:
-      const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 4,
-      ),
-      decoration: BoxDecoration(
-        color: Theme.of(context)
-            .colorScheme
-            .surfaceContainerHighest,
-        borderRadius:
-        BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.inter(
-          fontSize: 9,
-          fontWeight:
-          FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-// ===========================================================
-// NO RESTAURANTS
-// ===========================================================
-
-class _NoRestaurants extends StatelessWidget {
-  const _NoRestaurants({
+class _NoLocations
+    extends StatelessWidget {
+  const _NoLocations({
     required this.foodName,
   });
 
@@ -1726,43 +1873,44 @@ class _NoRestaurants extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
+      child:
+      Padding(
         padding:
-        const EdgeInsets.all(32),
-        child: Column(
+        const EdgeInsets.all(
+          32,
+        ),
+        child:
+        Column(
           mainAxisSize:
           MainAxisSize.min,
           children: [
             Icon(
               Icons
                   .location_off_outlined,
-              size: 55,
-              color: Theme.of(context)
+              size:
+              55,
+              color:
+              Theme.of(
+                context,
+              )
                   .colorScheme
                   .outline,
             ),
-            const SizedBox(height: 14),
+
+            const SizedBox(
+              height: 14,
+            ),
+
             Text(
-              'No restaurants for $foodName have been added yet.',
+              'No verified locations for $foodName have been added yet.',
               textAlign:
               TextAlign.center,
               style:
               GoogleFonts.montserrat(
-                fontSize: 17,
+                fontSize:
+                17,
                 fontWeight:
                 FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 7),
-            Text(
-              'Restaurant locations will appear here once they are linked to this traditional food.',
-              textAlign:
-              TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurfaceVariant,
               ),
             ),
           ],
@@ -1773,10 +1921,60 @@ class _NoRestaurants extends StatelessWidget {
 }
 
 // ===========================================================
-// HALAL STATUS LABEL
+// TAG
 // ===========================================================
 
-String _halalStatusLabel(
+class _Tag
+    extends StatelessWidget {
+  const _Tag({
+    required this.text,
+  });
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding:
+      const EdgeInsets.symmetric(
+        horizontal:
+        8,
+        vertical:
+        4,
+      ),
+      decoration:
+      BoxDecoration(
+        color:
+        Theme.of(
+          context,
+        )
+            .colorScheme
+            .surfaceContainerHighest,
+        borderRadius:
+        BorderRadius.circular(
+          999,
+        ),
+      ),
+      child:
+      Text(
+        text,
+        style:
+        GoogleFonts.inter(
+          fontSize:
+          9,
+          fontWeight:
+          FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+// ===========================================================
+// HELPERS
+// ===========================================================
+
+String _halalLabel(
     String value,
     ) {
   switch (value) {
@@ -1794,11 +1992,7 @@ String _halalStatusLabel(
   }
 }
 
-// ===========================================================
-// MARKER COLOR
-// ===========================================================
-
-Color _halalMarkerColor(
+Color _halalColor(
     String value,
     ) {
   switch (value) {
@@ -1822,4 +2016,28 @@ Color _halalMarkerColor(
         0xFF6B7280,
       );
   }
+}
+
+String _displayValue(
+    String value,
+    ) {
+  final normalized = value
+      .replaceAll(
+    '_',
+    ' ',
+  )
+      .trim();
+
+  return normalized
+      .split(' ')
+      .where(
+        (word) =>
+    word.isNotEmpty,
+  )
+      .map(
+        (word) =>
+    word[0].toUpperCase() +
+        word.substring(1),
+  )
+      .join(' ');
 }

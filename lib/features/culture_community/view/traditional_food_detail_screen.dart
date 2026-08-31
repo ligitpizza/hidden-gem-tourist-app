@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
@@ -12,7 +11,7 @@ import '../model/traditional_food_place.dart';
 import 'culture_community_routes.dart';
 
 class TraditionalFoodDetailScreen
-    extends ConsumerStatefulWidget {
+    extends ConsumerWidget {
   const TraditionalFoodDetailScreen({
     super.key,
     required this.food,
@@ -20,191 +19,13 @@ class TraditionalFoodDetailScreen
 
   final TraditionalFood food;
 
-  @override
-  ConsumerState<TraditionalFoodDetailScreen>
-  createState() =>
-      _TraditionalFoodDetailScreenState();
-}
-
-class _TraditionalFoodDetailScreenState
-    extends ConsumerState<TraditionalFoodDetailScreen> {
-  LatLng? _userLocation;
-
-  bool _locatingUser = false;
-
-  TraditionalFood get food => widget.food;
-
-  @override
-  void initState() {
-    super.initState();
-
-    WidgetsBinding.instance.addPostFrameCallback(
-          (_) {
-        _tryExistingLocationPermission();
-      },
-    );
-  }
-
   // =========================================================
-  // LOCATION
+  // OPEN FIND NEARBY PAGE
   // =========================================================
 
-  Future<void>
-  _tryExistingLocationPermission() async {
-    try {
-      final permission =
-      await Geolocator.checkPermission();
-
-      if (permission ==
-          LocationPermission.always ||
-          permission ==
-              LocationPermission.whileInUse) {
-        await _locateUser(
-          requestPermission: false,
-        );
-      }
-    } catch (_) {
-      // User location is optional.
-    }
-  }
-
-  Future<bool> _locateUser({
-    bool requestPermission = true,
-  }) async {
-    if (_locatingUser) {
-      return false;
-    }
-
-    if (mounted) {
-      setState(() {
-        _locatingUser = true;
-      });
-    }
-
-    try {
-      final serviceEnabled =
-      await Geolocator
-          .isLocationServiceEnabled();
-
-      if (!serviceEnabled) {
-        return false;
-      }
-
-      var permission =
-      await Geolocator.checkPermission();
-
-      if (permission ==
-          LocationPermission.denied &&
-          requestPermission) {
-        permission =
-        await Geolocator.requestPermission();
-      }
-
-      if (permission ==
-          LocationPermission.denied ||
-          permission ==
-              LocationPermission.deniedForever) {
-        return false;
-      }
-
-      final position =
-      await Geolocator.getCurrentPosition();
-
-      if (!mounted) {
-        return false;
-      }
-
-      setState(() {
-        _userLocation = LatLng(
-          position.latitude,
-          position.longitude,
-        );
-      });
-
-      return true;
-    } catch (_) {
-      return false;
-    } finally {
-      if (mounted) {
-        setState(() {
-          _locatingUser = false;
-        });
-      }
-    }
-  }
-
-  // =========================================================
-  // DISTANCE
-  // =========================================================
-
-  double? _distanceToPlace(
-      TraditionalFoodPlace place,
+  void _openNearby(
+      BuildContext context,
       ) {
-    final userLocation = _userLocation;
-
-    if (userLocation == null) {
-      return null;
-    }
-
-    final metres =
-    Geolocator.distanceBetween(
-      userLocation.latitude,
-      userLocation.longitude,
-      place.latitude,
-      place.longitude,
-    );
-
-    return metres / 1000;
-  }
-
-  // =========================================================
-  // SORT LOCATIONS
-  // =========================================================
-
-  List<TraditionalFoodPlace> _sortPlaces(
-      List<TraditionalFoodPlace> places,
-      ) {
-    final result =
-    List<TraditionalFoodPlace>.from(
-      places,
-    );
-
-    result.sort(
-          (a, b) {
-        final distanceA =
-        _distanceToPlace(a);
-
-        final distanceB =
-        _distanceToPlace(b);
-
-        if (distanceA != null &&
-            distanceB != null) {
-          final comparison =
-          distanceA.compareTo(
-            distanceB,
-          );
-
-          if (comparison != 0) {
-            return comparison;
-          }
-        }
-
-        return a.name
-            .toLowerCase()
-            .compareTo(
-          b.name.toLowerCase(),
-        );
-      },
-    );
-
-    return result;
-  }
-
-  // =========================================================
-  // OPEN NEARBY RESTAURANTS PAGE
-  // =========================================================
-
-  void _openNearbyRestaurants() {
     context.push(
       CultureCommunityRoutes.foodNearby,
       extra: food,
@@ -216,7 +37,10 @@ class _TraditionalFoodDetailScreenState
   // =========================================================
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+      BuildContext context,
+      WidgetRef ref,
+      ) {
     final colors =
         Theme.of(context).colorScheme;
 
@@ -226,18 +50,12 @@ class _TraditionalFoodDetailScreenState
       ),
     );
 
-    final places = _sortPlaces(
-      controller.places,
-    );
-
     return Scaffold(
       appBar: AppBar(
         title: Text(
           'Food Details',
-          style:
-          GoogleFonts.montserrat(
-            fontWeight:
-            FontWeight.w700,
+          style: GoogleFonts.montserrat(
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -247,14 +65,12 @@ class _TraditionalFoodDetailScreenState
       // =======================================================
 
       body: RefreshIndicator(
-        onRefresh:
-        controller.refresh,
+        onRefresh: controller.refresh,
         child: ListView(
           physics:
           const AlwaysScrollableScrollPhysics(),
-          padding:
-          const EdgeInsets.only(
-            bottom: 120,
+          padding: const EdgeInsets.only(
+            bottom: 110,
           ),
           children: [
             // =================================================
@@ -270,401 +86,305 @@ class _TraditionalFoodDetailScreenState
             // =================================================
 
             Padding(
-              padding:
-              const EdgeInsets.fromLTRB(
+              padding: const EdgeInsets.fromLTRB(
                 16,
-                24,
+                22,
                 16,
-                36,
+                32,
               ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints:
-                  const BoxConstraints(
-                    maxWidth: 1000,
-                  ),
-                  child: Column(
+              child: Column(
+                crossAxisAlignment:
+                CrossAxisAlignment.start,
+                children: [
+                  // ===========================================
+                  // ORIGIN + CULTURE
+                  // ===========================================
+
+                  Row(
                     crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
+                    CrossAxisAlignment.start,
                     children: [
-                      // =======================================
-                      // ORIGIN + CULTURE
-                      // =======================================
-
-                      Row(
-                        crossAxisAlignment:
-                        CrossAxisAlignment
-                            .start,
-                        children: [
-                          Expanded(
-                            child:
-                            _InfoCard(
-                              icon: Icons
-                                  .location_on_outlined,
-                              label:
-                              'ORIGIN',
-                              value:
-                              food.region !=
-                                  null &&
-                                  food.region!
-                                      .trim()
-                                      .isNotEmpty
-                                  ? '${food.state}\n${food.region}'
-                                  : food
-                                  .state,
-                            ),
-                          ),
-
-                          const SizedBox(
-                            width: 10,
-                          ),
-
-                          Expanded(
-                            child:
-                            _InfoCard(
-                              icon: Icons
-                                  .groups_outlined,
-                              label:
-                              'CULTURE',
-                              value: food
-                                  .culturalCategory,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(
-                        height: 30,
-                      ),
-
-                      // =======================================
-                      // ABOUT
-                      // =======================================
-
-                      const _SectionTitle(
-                        icon: Icons
-                            .menu_book_outlined,
-                        title:
-                        'About This Dish',
-                      ),
-
-                      const SizedBox(
-                        height: 12,
-                      ),
-
-                      Text(
-                        food.description
-                            .trim()
-                            .isEmpty
-                            ? 'Description is not available for this dish.'
-                            : food
-                            .description,
-                        style:
-                        GoogleFonts.inter(
-                          fontSize: 16,
-                          height: 1.6,
-                          color: colors
-                              .onSurfaceVariant,
-                        ),
-                      ),
-
-                      // =======================================
-                      // CULTURAL HISTORY
-                      // =======================================
-
-                      if (food.culturalHistory
-                          .trim()
-                          .isNotEmpty) ...[
-                        const SizedBox(
-                          height: 30,
-                        ),
-
-                        _CulturalHistoryCard(
-                          history: food
-                              .culturalHistory,
-                        ),
-                      ],
-
-                      const SizedBox(
-                        height: 30,
-                      ),
-
-                      // =======================================
-                      // INGREDIENTS
-                      // =======================================
-
-                      _IngredientsCard(
-                        ingredients:
-                        food.ingredients,
-                      ),
-
-                      // =======================================
-                      // DIETARY INFORMATION
-                      // =======================================
-
-                      if (food.dietaryTags
-                          .isNotEmpty ||
-                          food.allergens
-                              .isNotEmpty ||
-                          (food.allergyNotes !=
-                              null &&
-                              food.allergyNotes!
+                      Expanded(
+                        child: _InfoCard(
+                          icon:
+                          Icons.location_on_outlined,
+                          label: 'ORIGIN',
+                          value: food.region != null &&
+                              food.region!
                                   .trim()
-                                  .isNotEmpty)) ...[
-                        const SizedBox(
-                          height: 26,
+                                  .isNotEmpty
+                              ? '${food.state}\n${food.region}'
+                              : food.state,
                         ),
+                      ),
 
-                        _DietaryCard(
-                          food: food,
+                      const SizedBox(width: 10),
+
+                      Expanded(
+                        child: _InfoCard(
+                          icon: Icons.groups_outlined,
+                          label: 'CULTURE',
+                          value:
+                          food.culturalCategory,
                         ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  // ===========================================
+                  // ABOUT
+                  // ===========================================
+
+                  const _SectionTitle(
+                    icon: Icons.menu_book_outlined,
+                    title: 'About This Dish',
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  Text(
+                    food.description.trim().isEmpty
+                        ? 'Description is not available.'
+                        : food.description,
+                    style: GoogleFonts.inter(
+                      fontSize: 15,
+                      height: 1.55,
+                      color:
+                      colors.onSurfaceVariant,
+                    ),
+                  ),
+
+                  // ===========================================
+                  // CULTURAL STORY
+                  // ===========================================
+
+                  if (food.culturalHistory
+                      .trim()
+                      .isNotEmpty) ...[
+                    const SizedBox(height: 28),
+
+                    _CulturalStoryCard(
+                      text:
+                      food.culturalHistory,
+                    ),
+                  ],
+
+                  const SizedBox(height: 28),
+
+                  // ===========================================
+                  // INGREDIENTS
+                  // ===========================================
+
+                  _IngredientsCard(
+                    ingredients:
+                    food.ingredients,
+                  ),
+
+                  // ===========================================
+                  // DIETARY INFORMATION
+                  // ===========================================
+
+                  if (food.dietaryTags
+                      .isNotEmpty ||
+                      food.allergens
+                          .isNotEmpty ||
+                      (food.allergyNotes !=
+                          null &&
+                          food.allergyNotes!
+                              .trim()
+                              .isNotEmpty)) ...[
+                    const SizedBox(height: 24),
+
+                    _DietaryCard(
+                      food: food,
+                    ),
+                  ],
+
+                  // ===========================================
+                  // TRAVEL STYLES
+                  // ===========================================
+
+                  if (food.travelStyles
+                      .isNotEmpty) ...[
+                    const SizedBox(height: 26),
+
+                    const _SectionTitle(
+                      icon: Icons.explore_outlined,
+                      title: 'Experience',
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    Wrap(
+                      spacing: 7,
+                      runSpacing: 7,
+                      children: [
+                        for (final style
+                        in food.travelStyles)
+                          Chip(
+                            label: Text(
+                              '#${_displayValue(style)}',
+                            ),
+                          ),
                       ],
+                    ),
+                  ],
 
-                      // =======================================
-                      // EXPERIENCE TAGS
-                      // =======================================
+                  const SizedBox(height: 32),
 
-                      if (food.travelStyles
-                          .isNotEmpty) ...[
-                        const SizedBox(
-                          height: 28,
-                        ),
+                  // ===========================================
+                  // WHERE TO FIND IT
+                  // ===========================================
 
-                        const _SectionTitle(
-                          icon: Icons
-                              .explore_outlined,
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: _SectionTitle(
+                          icon:
+                          Icons.restaurant_outlined,
                           title:
-                          'Experience',
+                          'Where to Find It',
+                        ),
+                      ),
+
+                      if (controller
+                          .places.isNotEmpty)
+                        Text(
+                          '${controller.places.length} '
+                              'location${controller.places.length == 1 ? '' : 's'}',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: colors
+                                .onSurfaceVariant,
+                          ),
+                        ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // ===========================================
+                  // LOADING LOCATIONS
+                  // ===========================================
+
+                  if (controller.isLoading &&
+                      controller.places.isEmpty)
+                    const Center(
+                      child: Padding(
+                        padding:
+                        EdgeInsets.all(30),
+                        child:
+                        CircularProgressIndicator(),
+                      ),
+                    )
+
+                  // ===========================================
+                  // NO LOCATIONS
+                  // ===========================================
+
+                  else if (controller
+                      .places.isEmpty)
+                    _NoLocationCard(
+                      foodName: food.name,
+                    )
+
+                  // ===========================================
+                  // LOCATIONS EXIST
+                  // ===========================================
+
+                  else ...[
+                      _FoodLocationMap(
+                        places:
+                        controller.places,
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      for (final place
+                      in controller.places
+                          .take(3)) ...[
+                        _FoodLocationCard(
+                          place: place,
                         ),
 
-                        const SizedBox(
-                          height: 10,
-                        ),
-
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            for (final style
-                            in food
-                                .travelStyles)
-                              Chip(
-                                label: Text(
-                                  '#${_displayTag(style)}',
-                                ),
-                              ),
-                          ],
-                        ),
+                        const SizedBox(height: 9),
                       ],
 
-                      const SizedBox(
-                        height: 32,
-                      ),
+                      const SizedBox(height: 3),
 
-                      // =======================================
-                      // WHERE TO FIND IT HEADER
-                      // =======================================
-
-                      Row(
-                        children: [
-                          const Expanded(
-                            child:
-                            _SectionTitle(
-                              icon: Icons
-                                  .restaurant_outlined,
-                              title:
-                              'Where to Find It',
-                            ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            _openNearby(
+                              context,
+                            );
+                          },
+                          icon: const Icon(
+                            Icons.map_outlined,
                           ),
-
-                          if (controller
-                              .places
-                              .isNotEmpty)
-                            Text(
-                              '${controller.places.length} '
-                                  'location${controller.places.length == 1 ? '' : 's'}',
-                              style:
-                              GoogleFonts
-                                  .inter(
-                                fontSize:
-                                12,
-                                color: colors
-                                    .onSurfaceVariant,
-                              ),
-                            ),
-                        ],
-                      ),
-
-                      const SizedBox(
-                        height: 14,
-                      ),
-
-                      // =======================================
-                      // LOCATION LOADING
-                      // =======================================
-
-                      if (controller
-                          .isLoading &&
-                          controller
-                              .places
-                              .isEmpty)
-                        const Center(
-                          child: Padding(
-                            padding:
-                            EdgeInsets.all(
-                              30,
-                            ),
-                            child:
-                            CircularProgressIndicator(),
+                          label: Text(
+                            controller.places.length >
+                                3
+                                ? 'View All ${controller.places.length} Locations'
+                                : 'View Locations on Map',
                           ),
-                        )
-
-                      // =======================================
-                      // NO RESTAURANTS
-                      // =======================================
-
-                      else if (places
-                          .isEmpty)
-                        _NoPlaceCard(
-                          foodName:
-                          food.name,
-                        )
-
-                      // =======================================
-                      // RESTAURANTS EXIST
-                      // =======================================
-
-                      else ...[
-                          // -------------------------------------
-                          // MAP PREVIEW
-                          // -------------------------------------
-
-                          _FoodPlacesMap(
-                            places:
-                            places,
-                            userLocation:
-                            _userLocation,
-                          ),
-
-                          const SizedBox(
-                            height: 14,
-                          ),
-
-                          // -------------------------------------
-                          // FIRST 3 RESTAURANTS
-                          // -------------------------------------
-
-                          for (final place
-                          in places
-                              .take(3)) ...[
-                            _NearbyPlaceTile(
-                              place:
-                              place,
-                              distanceKm:
-                              _distanceToPlace(
-                                place,
-                              ),
-                            ),
-
-                            const SizedBox(
-                              height: 8,
-                            ),
-                          ],
-
-                          // -------------------------------------
-                          // VIEW ALL / FIND NEARBY
-                          // -------------------------------------
-
-                          Align(
-                            alignment:
-                            Alignment
-                                .centerRight,
-                            child:
-                            TextButton.icon(
-                              onPressed:
-                              _openNearbyRestaurants,
-                              icon:
-                              const Icon(
-                                Icons
-                                    .near_me_outlined,
-                                size: 18,
-                              ),
-                              label:
-                              Text(
-                                places.length >
-                                    3
-                                    ? 'View All ${places.length} Locations'
-                                    : 'View Nearby Restaurants',
-                              ),
-                            ),
-                          ),
-                        ],
-
-                      // =======================================
-                      // ERROR
-                      // =======================================
-
-                      if (controller
-                          .errorMessage !=
-                          null) ...[
-                        const SizedBox(
-                          height: 20,
                         ),
+                      ),
+                    ],
 
-                        Container(
-                          width:
-                          double.infinity,
-                          padding:
-                          const EdgeInsets
-                              .all(
-                            14,
-                          ),
-                          decoration:
-                          BoxDecoration(
+                  // ===========================================
+                  // ERROR
+                  // ===========================================
+
+                  if (controller.errorMessage !=
+                      null) ...[
+                    const SizedBox(height: 18),
+
+                    Container(
+                      width: double.infinity,
+                      padding:
+                      const EdgeInsets.all(
+                        13,
+                      ),
+                      decoration: BoxDecoration(
+                        color:
+                        colors.errorContainer,
+                        borderRadius:
+                        BorderRadius.circular(
+                          14,
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons
+                                .error_outline_rounded,
                             color: colors
-                                .errorContainer,
-                            borderRadius:
-                            BorderRadius
-                                .circular(
-                              14,
-                            ),
+                                .onErrorContainer,
                           ),
-                          child: Row(
-                            crossAxisAlignment:
-                            CrossAxisAlignment
-                                .start,
-                            children: [
-                              Icon(
-                                Icons
-                                    .error_outline_rounded,
+
+                          const SizedBox(width: 8),
+
+                          Expanded(
+                            child: Text(
+                              controller
+                                  .errorMessage!,
+                              style: TextStyle(
                                 color: colors
                                     .onErrorContainer,
                               ),
-
-                              const SizedBox(
-                                width: 8,
-                              ),
-
-                              Expanded(
-                                child:
-                                Text(
-                                  controller
-                                      .errorMessage!,
-                                  style:
-                                  TextStyle(
-                                    color: colors
-                                        .onErrorContainer,
-                                  ),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ],
@@ -672,39 +392,33 @@ class _TraditionalFoodDetailScreenState
       ),
 
       // =======================================================
-      // BOTTOM ACTION BAR
+      // ACTION BAR
       // =======================================================
 
-      bottomNavigationBar:
-      SafeArea(
+      bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
-          padding:
-          const EdgeInsets.fromLTRB(
+          padding: const EdgeInsets.fromLTRB(
             12,
-            10,
+            9,
             12,
-            10,
+            9,
           ),
-          decoration:
-          BoxDecoration(
+          decoration: BoxDecoration(
             color: colors.surface,
             border: Border(
               top: BorderSide(
-                color: colors
-                    .outlineVariant,
+                color:
+                colors.outlineVariant,
               ),
             ),
-            boxShadow:
-            const [
+            boxShadow: const [
               BoxShadow(
-                color:
-                Colors.black12,
-                blurRadius: 12,
-                offset:
-                Offset(
+                color: Colors.black12,
+                blurRadius: 10,
+                offset: Offset(
                   0,
-                  -3,
+                  -2,
                 ),
               ),
             ],
@@ -712,14 +426,13 @@ class _TraditionalFoodDetailScreenState
           child: Row(
             children: [
               // ===============================================
-              // SAVE TO FAVORITES
+              // SAVE FAVORITE
               // ===============================================
 
               Expanded(
-                child:
-                OutlinedButton.icon(
-                  onPressed: controller
-                      .isSavingFavourite
+                child: OutlinedButton.icon(
+                  onPressed:
+                  controller.isSavingFavourite
                       ? null
                       : () async {
                     final success =
@@ -736,11 +449,10 @@ class _TraditionalFoodDetailScreenState
                         context,
                       ).showSnackBar(
                         SnackBar(
-                          content:
-                          Text(
+                          content: Text(
                             controller
                                 .errorMessage ??
-                                'Could not save this food.',
+                                'Could not update Favorite.',
                           ),
                         ),
                       );
@@ -752,8 +464,7 @@ class _TraditionalFoodDetailScreenState
                       context,
                     ).showSnackBar(
                       SnackBar(
-                        content:
-                        Text(
+                        content: Text(
                           controller
                               .isFavourite
                               ? '${food.name} saved to Favorites.'
@@ -762,66 +473,54 @@ class _TraditionalFoodDetailScreenState
                       ),
                     );
                   },
-
                   icon: controller
                       .isSavingFavourite
                       ? const SizedBox(
-                    width: 18,
-                    height: 18,
+                    width: 17,
+                    height: 17,
                     child:
                     CircularProgressIndicator(
-                      strokeWidth:
-                      2,
+                      strokeWidth: 2,
                     ),
                   )
                       : Icon(
-                    controller
-                        .isFavourite
+                    controller.isFavourite
                         ? Icons
                         .favorite_rounded
                         : Icons
                         .favorite_border_rounded,
                   ),
-
                   label: Text(
-                    controller
-                        .isFavourite
+                    controller.isFavourite
                         ? 'Saved'
                         : 'Save',
                   ),
                 ),
               ),
 
-              const SizedBox(
-                width: 10,
-              ),
+              const SizedBox(width: 10),
 
               // ===============================================
               // FIND NEARBY
-              //
-              // IMPORTANT:
-              // This now opens the dedicated nearby restaurant
-              // map page instead of showing a bottom sheet.
               // ===============================================
 
               Expanded(
                 flex: 2,
-                child:
-                FilledButton.icon(
-                  onPressed: controller
-                      .places
-                      .isEmpty
+                child: FilledButton.icon(
+                  // Disable only when there are no known
+                  // locations serving this food.
+                  onPressed:
+                  controller.places.isEmpty
                       ? null
-                      : _openNearbyRestaurants,
-
-                  icon:
-                  const Icon(
-                    Icons
-                        .near_me_outlined,
+                      : () {
+                    _openNearby(
+                      context,
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.near_me_outlined,
                   ),
-
-                  label:
-                  const Text(
+                  label: const Text(
                     'Find Nearby',
                   ),
                 ),
@@ -848,7 +547,7 @@ class _FoodHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 390,
+      height: 350,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -857,19 +556,15 @@ class _FoodHero extends StatelessWidget {
           ),
 
           const DecoratedBox(
-            decoration:
-            BoxDecoration(
-              gradient:
-              LinearGradient(
-                begin: Alignment
-                    .topCenter,
-                end: Alignment
-                    .bottomCenter,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin:
+                Alignment.topCenter,
+                end:
+                Alignment.bottomCenter,
                 colors: [
-                  Colors
-                      .transparent,
-                  Colors
-                      .black87,
+                  Colors.transparent,
+                  Colors.black87,
                 ],
                 stops: [
                   0.35,
@@ -882,89 +577,73 @@ class _FoodHero extends StatelessWidget {
           Positioned(
             left: 18,
             right: 18,
-            bottom: 24,
+            bottom: 23,
             child: Column(
               crossAxisAlignment:
-              CrossAxisAlignment
-                  .start,
+              CrossAxisAlignment.start,
               children: [
                 Wrap(
                   spacing: 7,
                   runSpacing: 7,
                   children: [
                     _HeroTag(
-                      label: food
-                          .culturalCategory,
+                      text:
+                      food.culturalCategory,
                     ),
 
                     for (final tag
-                    in food
-                        .dietaryTags
+                    in food.dietaryTags
                         .take(2))
                       _HeroTag(
-                        label:
-                        _displayTag(
+                        text:
+                        _displayValue(
                           tag,
                         ),
                       ),
                   ],
                 ),
 
-                const SizedBox(
-                  height: 12,
-                ),
+                const SizedBox(height: 11),
 
                 Text(
                   food.name,
                   style:
-                  GoogleFonts
-                      .montserrat(
-                    fontSize: 32,
+                  GoogleFonts.montserrat(
+                    fontSize: 30,
                     height: 1.1,
                     fontWeight:
-                    FontWeight
-                        .w700,
-                    color:
-                    Colors.white,
+                    FontWeight.w700,
+                    color: Colors.white,
                   ),
                 ),
 
-                const SizedBox(
-                  height: 10,
-                ),
+                const SizedBox(height: 8),
 
                 Row(
                   children: [
                     const Icon(
                       Icons
                           .location_on_outlined,
-                      color:
-                      Colors.white,
-                      size: 19,
+                      size: 18,
+                      color: Colors.white,
                     ),
 
-                    const SizedBox(
-                      width: 5,
-                    ),
+                    const SizedBox(width: 5),
 
                     Expanded(
                       child: Text(
-                        food.region !=
-                            null &&
+                        food.region != null &&
                             food.region!
                                 .trim()
                                 .isNotEmpty
                             ? '${food.state} • ${food.region}'
-                            : food
-                            .state,
+                            : food.state,
                         style:
-                        GoogleFonts
-                            .inter(
+                        GoogleFonts.inter(
                           color:
                           Colors.white,
                           fontWeight:
-                          FontWeight
-                              .w600,
+                          FontWeight.w600,
                         ),
                       ),
                     ),
@@ -985,44 +664,33 @@ class _FoodHero extends StatelessWidget {
 
 class _HeroTag extends StatelessWidget {
   const _HeroTag({
-    required this.label,
+    required this.text,
   });
 
-  final String label;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding:
-      const EdgeInsets
-          .symmetric(
-        horizontal: 10,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
         vertical: 5,
       ),
-      decoration:
-      BoxDecoration(
-        color:
-        const Color(
+      decoration: BoxDecoration(
+        color: const Color(
           0xFFFED65B,
         ),
         borderRadius:
-        BorderRadius
-            .circular(
-          999,
-        ),
+        BorderRadius.circular(999),
       ),
       child: Text(
-        label.toUpperCase(),
-        style:
-        GoogleFonts.inter(
-          color:
-          const Color(
+        text.toUpperCase(),
+        style: GoogleFonts.inter(
+          color: const Color(
             0xFF574500,
           ),
-          fontSize: 10,
-          letterSpacing: 0.4,
-          fontWeight:
-          FontWeight.w700,
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -1042,16 +710,15 @@ class _FoodImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url =
+    final imageUrl =
     food.imageUrl?.trim();
 
-    if (url != null &&
-        url.isNotEmpty) {
+    if (imageUrl != null &&
+        imageUrl.isNotEmpty) {
       return Image.network(
-        url,
+        imageUrl,
         fit: BoxFit.cover,
-        errorBuilder:
-            (_, _, _) {
+        errorBuilder: (_, _, _) {
           return _fallback(
             context,
           );
@@ -1068,18 +735,14 @@ class _FoodImage extends StatelessWidget {
       BuildContext context,
       ) {
     final colors =
-        Theme.of(context)
-            .colorScheme;
+        Theme.of(context).colorScheme;
 
     return Container(
-      decoration:
-      BoxDecoration(
-        gradient:
-        LinearGradient(
-          begin: Alignment
-              .topLeft,
-          end: Alignment
-              .bottomRight,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end:
+          Alignment.bottomRight,
           colors: [
             const Color(
               0xFF1B4332,
@@ -1089,15 +752,11 @@ class _FoodImage extends StatelessWidget {
           ],
         ),
       ),
-      alignment:
-      Alignment.center,
-      child:
-      const Icon(
-        Icons
-            .restaurant_rounded,
-        size: 80,
-        color:
-        Colors.white70,
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.restaurant_rounded,
+        size: 76,
+        color: Colors.white70,
       ),
     );
   }
@@ -1121,106 +780,70 @@ class _InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors =
-        Theme.of(context)
-            .colorScheme;
+        Theme.of(context).colorScheme;
 
     return Container(
-      padding:
-      const EdgeInsets.all(
-        14,
+      constraints: const BoxConstraints(
+        minHeight: 95,
       ),
-      constraints:
-      const BoxConstraints(
-        minHeight: 100,
-      ),
-      decoration:
-      BoxDecoration(
-        color: colors
-            .surfaceContainerLow,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color:
+        colors.surfaceContainerLow,
         borderRadius:
-        BorderRadius
-            .circular(
-          16,
-        ),
-        border:
-        Border.all(
-          color: colors
-              .outlineVariant,
+        BorderRadius.circular(15),
+        border: Border.all(
+          color: colors.outlineVariant,
         ),
       ),
       child: Row(
         crossAxisAlignment:
-        CrossAxisAlignment
-            .start,
+        CrossAxisAlignment.start,
         children: [
           Container(
             padding:
-            const EdgeInsets
-                .all(
-              8,
-            ),
-            decoration:
-            BoxDecoration(
-              color: colors
-                  .secondaryContainer,
+            const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color:
+              colors.secondaryContainer,
               borderRadius:
-              BorderRadius
-                  .circular(
-                10,
-              ),
+              BorderRadius.circular(9),
             ),
-            child:
-            Icon(
+            child: Icon(
               icon,
+              size: 19,
               color: colors
                   .onSecondaryContainer,
-              size: 20,
             ),
           ),
 
-          const SizedBox(
-            width: 9,
-          ),
+          const SizedBox(width: 8),
 
           Expanded(
-            child:
-            Column(
+            child: Column(
               crossAxisAlignment:
-              CrossAxisAlignment
-                  .start,
+              CrossAxisAlignment.start,
               children: [
                 Text(
                   label,
-                  style:
-                  GoogleFonts
-                      .inter(
-                    fontSize:
-                    10,
+                  style: GoogleFonts.inter(
+                    fontSize: 9,
                     fontWeight:
-                    FontWeight
-                        .w600,
+                    FontWeight.w600,
                     color: colors
                         .onSurfaceVariant,
                   ),
                 ),
 
-                const SizedBox(
-                  height: 4,
-                ),
+                const SizedBox(height: 4),
 
                 Text(
                   value,
-                  style:
-                  GoogleFonts
-                      .inter(
-                    fontSize:
-                    13,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
                     fontWeight:
-                    FontWeight
-                        .w700,
-                    color:
-                    colors
-                        .primary,
+                    FontWeight.w700,
+                    color: colors.primary,
                   ),
                 ),
               ],
@@ -1251,31 +874,23 @@ class _SectionTitle extends StatelessWidget {
       children: [
         Icon(
           icon,
-          color:
-          Theme.of(context)
+          size: 21,
+          color: Theme.of(context)
               .colorScheme
               .primary,
-          size: 22,
         ),
 
-        const SizedBox(
-          width: 8,
-        ),
+        const SizedBox(width: 7),
 
         Expanded(
           child: Text(
             title,
             style:
-            GoogleFonts
-                .montserrat(
-              fontSize: 21,
+            GoogleFonts.montserrat(
+              fontSize: 19,
               fontWeight:
-              FontWeight
-                  .w700,
-              color:
-              Theme.of(
-                context,
-              )
+              FontWeight.w700,
+              color: Theme.of(context)
                   .colorScheme
                   .primary,
             ),
@@ -1287,97 +902,69 @@ class _SectionTitle extends StatelessWidget {
 }
 
 // ===========================================================
-// CULTURAL HISTORY
+// CULTURAL STORY
 // ===========================================================
 
-class _CulturalHistoryCard
+class _CulturalStoryCard
     extends StatelessWidget {
-  const _CulturalHistoryCard({
-    required this.history,
+  const _CulturalStoryCard({
+    required this.text,
   });
 
-  final String history;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
     final colors =
-        Theme.of(context)
-            .colorScheme;
+        Theme.of(context).colorScheme;
 
     return Container(
-      width:
-      double.infinity,
-      padding:
-      const EdgeInsets.all(
-        20,
-      ),
-      decoration:
-      BoxDecoration(
-        color: colors
-            .surfaceContainerLow,
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color:
+        colors.surfaceContainerLow,
         borderRadius:
-        BorderRadius
-            .circular(
-          18,
-        ),
-        border:
-        Border.all(
-          color: colors
-              .outlineVariant,
+        BorderRadius.circular(17),
+        border: Border.all(
+          color: colors.outlineVariant,
         ),
       ),
       child: Column(
         crossAxisAlignment:
-        CrossAxisAlignment
-            .start,
+        CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Icon(
-                Icons
-                    .history_edu,
-                color:
-                colors
-                    .secondary,
+                Icons.history_edu,
+                color: colors.secondary,
               ),
 
-              const SizedBox(
-                width: 8,
-              ),
+              const SizedBox(width: 7),
 
-              Expanded(
-                child:
-                Text(
-                  'Cultural Story',
-                  style:
-                  GoogleFonts
-                      .montserrat(
-                    fontSize:
-                    19,
-                    fontWeight:
-                    FontWeight
-                        .w700,
-                    color:
-                    colors
-                        .primary,
-                  ),
+              Text(
+                'Cultural Story',
+                style:
+                GoogleFonts.montserrat(
+                  fontSize: 18,
+                  fontWeight:
+                  FontWeight.w700,
+                  color: colors.primary,
                 ),
               ),
             ],
           ),
 
-          const SizedBox(
-            height: 12,
-          ),
+          const SizedBox(height: 11),
 
           Text(
-            history,
-            style:
-            GoogleFonts.inter(
+            text,
+            style: GoogleFonts.inter(
               fontSize: 14,
-              height: 1.6,
-              color: colors
-                  .onSurfaceVariant,
+              height: 1.55,
+              color:
+              colors.onSurfaceVariant,
             ),
           ),
         ],
@@ -1401,75 +988,49 @@ class _IngredientsCard
   @override
   Widget build(BuildContext context) {
     final colors =
-        Theme.of(context)
-            .colorScheme;
+        Theme.of(context).colorScheme;
 
     return Container(
-      width:
-      double.infinity,
-      padding:
-      const EdgeInsets.all(
-        20,
-      ),
-      decoration:
-      BoxDecoration(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
         color: colors.surface,
         borderRadius:
-        BorderRadius
-            .circular(
-          18,
-        ),
-        border:
-        Border.all(
-          color: colors
-              .outlineVariant,
+        BorderRadius.circular(17),
+        border: Border.all(
+          color: colors.outlineVariant,
         ),
       ),
       child: Column(
         crossAxisAlignment:
-        CrossAxisAlignment
-            .start,
+        CrossAxisAlignment.start,
         children: [
           const _SectionTitle(
-            icon: Icons
-                .restaurant_menu_rounded,
-            title:
-            'Main Ingredients',
+            icon:
+            Icons.restaurant_menu_rounded,
+            title: 'Main Ingredients',
           ),
 
-          const SizedBox(
-            height: 16,
-          ),
+          const SizedBox(height: 14),
 
-          if (ingredients
-              .isEmpty)
+          if (ingredients.isEmpty)
             Text(
               'Ingredient information is not available.',
-              style:
-              GoogleFonts
-                  .inter(
-                color: colors
-                    .onSurfaceVariant,
+              style: GoogleFonts.inter(
+                color:
+                colors.onSurfaceVariant,
               ),
             )
           else
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 7,
+              runSpacing: 7,
               children: [
                 for (final ingredient
                 in ingredients)
                   Chip(
-                    avatar:
-                    const Icon(
-                      Icons
-                          .restaurant_menu_rounded,
-                      size: 17,
-                    ),
                     label:
-                    Text(
-                      ingredient,
-                    ),
+                    Text(ingredient),
                   ),
               ],
             ),
@@ -1493,148 +1054,87 @@ class _DietaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors =
-        Theme.of(context)
-            .colorScheme;
+        Theme.of(context).colorScheme;
 
     return Container(
-      width:
-      double.infinity,
-      padding:
-      const EdgeInsets.all(
-        18,
-      ),
-      decoration:
-      BoxDecoration(
-        color: colors
-            .surfaceContainerHigh,
+      width: double.infinity,
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(
+        color:
+        colors.surfaceContainerHigh,
         borderRadius:
-        BorderRadius
-            .circular(
-          18,
-        ),
+        BorderRadius.circular(17),
         border: Border(
-          left:
-          BorderSide(
-            color: colors
-                .secondary,
+          left: BorderSide(
             width: 4,
+            color: colors.secondary,
           ),
         ),
       ),
       child: Column(
         crossAxisAlignment:
-        CrossAxisAlignment
-            .start,
+        CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(
-                Icons
-                    .info_outline_rounded,
-                color: colors
-                    .secondary,
-              ),
-
-              const SizedBox(
-                width: 7,
-              ),
-
-              Expanded(
-                child:
-                Text(
-                  'Dietary Information',
-                  style:
-                  GoogleFonts
-                      .montserrat(
-                    fontWeight:
-                    FontWeight
-                        .w700,
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            'Dietary Information',
+            style: GoogleFonts.montserrat(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+            ),
           ),
 
-          // =============================================
-          // DIETARY TAGS
-          // =============================================
-
-          if (food
-              .dietaryTags
+          if (food.dietaryTags
               .isNotEmpty) ...[
-            const SizedBox(
-              height: 12,
-            ),
+            const SizedBox(height: 11),
 
             Wrap(
               spacing: 7,
               runSpacing: 7,
               children: [
                 for (final tag
-                in food
-                    .dietaryTags)
+                in food.dietaryTags)
                   Chip(
-                    avatar:
-                    const Icon(
+                    avatar: const Icon(
                       Icons
                           .check_circle_outline_rounded,
                       size: 16,
                     ),
-                    label:
-                    Text(
-                      _displayTag(
-                        tag,
-                      ),
+                    label: Text(
+                      _displayValue(tag),
                     ),
                   ),
               ],
             ),
           ],
 
-          // =============================================
-          // ALLERGENS
-          // =============================================
-
-          if (food
-              .allergens
+          if (food.allergens
               .isNotEmpty) ...[
-            const SizedBox(
-              height: 14,
-            ),
+            const SizedBox(height: 14),
 
             Text(
               'Allergens',
-              style:
-              GoogleFonts
-                  .inter(
+              style: GoogleFonts.inter(
                 fontSize: 12,
-                fontWeight:
-                FontWeight
-                    .w700,
+                fontWeight: FontWeight.w700,
               ),
             ),
 
-            const SizedBox(
-              height: 7,
-            ),
+            const SizedBox(height: 6),
 
             Wrap(
               spacing: 7,
               runSpacing: 7,
               children: [
                 for (final allergen
-                in food
-                    .allergens)
+                in food.allergens)
                   Chip(
-                    avatar:
-                    const Icon(
+                    avatar: const Icon(
                       Icons
                           .warning_amber_rounded,
                       size: 16,
                     ),
-                    label:
-                    Text(
-                      _displayTag(
+                    label: Text(
+                      _displayValue(
                         allergen,
                       ),
                     ),
@@ -1643,65 +1143,41 @@ class _DietaryCard extends StatelessWidget {
             ),
           ],
 
-          // =============================================
-          // ALLERGY NOTES
-          // =============================================
-
-          if (food.allergyNotes !=
-              null &&
+          if (food.allergyNotes != null &&
               food.allergyNotes!
                   .trim()
                   .isNotEmpty) ...[
-            const SizedBox(
-              height: 12,
-            ),
+            const SizedBox(height: 10),
 
             Text(
               food.allergyNotes!,
-              style:
-              GoogleFonts
-                  .inter(
+              style: GoogleFonts.inter(
                 fontSize: 12,
-                height: 1.45,
-                color: colors
-                    .onSurfaceVariant,
+                height: 1.4,
               ),
             ),
           ],
 
-          const SizedBox(
-            height: 14,
-          ),
-
-          // =============================================
-          // HALAL NOTE
-          // =============================================
+          const SizedBox(height: 13),
 
           Row(
             crossAxisAlignment:
-            CrossAxisAlignment
-                .start,
+            CrossAxisAlignment.start,
             children: [
               Icon(
-                Icons
-                    .restaurant_outlined,
+                Icons.info_outline_rounded,
                 size: 17,
-                color:
-                colors.primary,
+                color: colors.primary,
               ),
 
-              const SizedBox(
-                width: 7,
-              ),
+              const SizedBox(width: 7),
 
               Expanded(
                 child: Text(
-                  'Halal status is shown per food location because preparation and certification can differ between restaurants.',
-                  style:
-                  GoogleFonts
-                      .inter(
+                  'Halal status is shown for each food location because certification and preparation may differ between restaurants.',
+                  style: GoogleFonts.inter(
                     fontSize: 11,
-                    height: 1.45,
+                    height: 1.4,
                     color: colors
                         .onSurfaceVariant,
                   ),
@@ -1716,79 +1192,51 @@ class _DietaryCard extends StatelessWidget {
 }
 
 // ===========================================================
-// FOOD LOCATION MAP PREVIEW
+// MAP PREVIEW
 // ===========================================================
 
-class _FoodPlacesMap extends StatelessWidget {
-  const _FoodPlacesMap({
+class _FoodLocationMap extends StatelessWidget {
+  const _FoodLocationMap({
     required this.places,
-    required this.userLocation,
   });
 
   final List<TraditionalFoodPlace> places;
 
-  final LatLng? userLocation;
-
   LatLng get _center {
-    if (places.isEmpty) {
-      return const LatLng(
-        4.2105,
-        101.9758,
-      );
-    }
-
     var latitude = 0.0;
     var longitude = 0.0;
 
-    for (final place
-    in places) {
-      latitude +=
-          place.latitude;
-
-      longitude +=
-          place.longitude;
+    for (final place in places) {
+      latitude += place.latitude;
+      longitude += place.longitude;
     }
 
     return LatLng(
-      latitude /
-          places.length,
-      longitude /
-          places.length,
+      latitude / places.length,
+      longitude / places.length,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 230,
-      decoration:
-      BoxDecoration(
+      height: 220,
+      decoration: BoxDecoration(
         borderRadius:
-        BorderRadius
-            .circular(
-          18,
-        ),
-        border:
-        Border.all(
-          color:
-          Theme.of(
-            context,
-          )
+        BorderRadius.circular(17),
+        border: Border.all(
+          color: Theme.of(context)
               .colorScheme
               .outlineVariant,
         ),
       ),
-      clipBehavior:
-      Clip.antiAlias,
+      clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
           FlutterMap(
-            options:
-            MapOptions(
-              initialCenter:
-              _center,
-              initialZoom:
-              11,
+            options: MapOptions(
+              initialCenter: _center,
+              initialZoom: 11,
             ),
             children: [
               TileLayer(
@@ -1800,97 +1248,39 @@ class _FoodPlacesMap extends StatelessWidget {
 
               MarkerLayer(
                 markers: [
-                  // ===========================================
-                  // RESTAURANT MARKERS
-                  // ===========================================
-
-                  for (final place
-                  in places)
+                  for (final place in places)
                     Marker(
-                      point:
-                      LatLng(
+                      point: LatLng(
                         place.latitude,
                         place.longitude,
                       ),
                       width: 44,
-                      height:
-                      44,
-                      child:
-                      Container(
-                        decoration:
-                        BoxDecoration(
+                      height: 44,
+                      child: Container(
+                        decoration: BoxDecoration(
                           color:
-                          _halalStatusColor(
+                          _halalColor(
                             place.halalStatus,
                           ),
-                          shape:
-                          BoxShape.circle,
-                          border:
-                          Border.all(
+                          shape: BoxShape.circle,
+                          border: Border.all(
                             color:
                             Colors.white,
-                            width:
-                            3,
+                            width: 3,
                           ),
-                          boxShadow:
-                          const [
+                          boxShadow: const [
                             BoxShadow(
                               color:
                               Colors.black26,
-                              blurRadius:
-                              6,
+                              blurRadius: 6,
                             ),
                           ],
                         ),
-                        child:
-                        const Icon(
+                        child: const Icon(
                           Icons
                               .restaurant_rounded,
-                          color:
-                          Colors.white,
-                          size:
-                          19,
-                        ),
-                      ),
-                    ),
-
-                  // ===========================================
-                  // USER LOCATION
-                  // ===========================================
-
-                  if (userLocation !=
-                      null)
-                    Marker(
-                      point:
-                      userLocation!,
-                      width:
-                      34,
-                      height:
-                      34,
-                      child:
-                      Container(
-                        decoration:
-                        BoxDecoration(
-                          color:
-                          Colors.blue,
-                          shape:
-                          BoxShape.circle,
-                          border:
-                          Border.all(
-                            color:
-                            Colors.white,
-                            width:
-                            3,
-                          ),
-                        ),
-                        child:
-                        const Icon(
-                          Icons
-                              .person_pin_circle_rounded,
-                          color:
-                          Colors.white,
-                          size:
-                          19,
+                          color: Colors.white,
+                          size: 19,
                         ),
                       ),
                     ),
@@ -1899,42 +1289,26 @@ class _FoodPlacesMap extends StatelessWidget {
             ],
           ),
 
-          // =============================================
-          // OSM ATTRIBUTION
-          // =============================================
-
           Positioned(
             left: 5,
             bottom: 4,
-            child:
-            IgnorePointer(
-              child:
-              Container(
+            child: IgnorePointer(
+              child: Container(
                 padding:
-                const EdgeInsets
-                    .symmetric(
-                  horizontal:
-                  5,
-                  vertical:
-                  2,
+                const EdgeInsets.symmetric(
+                  horizontal: 5,
+                  vertical: 2,
                 ),
-                color:
-                Theme.of(
-                  context,
-                )
+                color: Theme.of(context)
                     .colorScheme
                     .surface
                     .withValues(
-                  alpha:
-                  0.85,
+                  alpha: 0.85,
                 ),
-                child:
-                const Text(
+                child: const Text(
                   '© OpenStreetMap contributors',
-                  style:
-                  TextStyle(
-                    fontSize:
-                    8,
+                  style: TextStyle(
+                    fontSize: 8,
                   ),
                 ),
               ),
@@ -1947,135 +1321,152 @@ class _FoodPlacesMap extends StatelessWidget {
 }
 
 // ===========================================================
-// NEARBY RESTAURANT PREVIEW
+// LOCATION CARD
 // ===========================================================
 
-class _NearbyPlaceTile extends StatelessWidget {
-  const _NearbyPlaceTile({
+class _FoodLocationCard
+    extends StatelessWidget {
+  const _FoodLocationCard({
     required this.place,
-    required this.distanceKm,
   });
 
   final TraditionalFoodPlace place;
 
-  final double? distanceKm;
-
   @override
   Widget build(BuildContext context) {
     final colors =
-        Theme.of(context)
-            .colorScheme;
+        Theme.of(context).colorScheme;
 
     return Container(
-      padding:
-      const EdgeInsets.all(
-        13,
-      ),
-      decoration:
-      BoxDecoration(
-        color: colors
-            .surfaceContainerLow,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color:
+        colors.surfaceContainerLow,
         borderRadius:
-        BorderRadius
-            .circular(
-          14,
-        ),
-        border:
-        Border.all(
-          color: colors
-              .outlineVariant,
+        BorderRadius.circular(14),
+        border: Border.all(
+          color: colors.outlineVariant,
         ),
       ),
       child: Row(
         children: [
           CircleAvatar(
             backgroundColor:
-            _halalStatusColor(
+            _halalColor(
               place.halalStatus,
             ),
-            child:
-            const Icon(
-              Icons
-                  .restaurant_rounded,
-              color:
-              Colors.white,
+            child: const Icon(
+              Icons.restaurant_rounded,
+              color: Colors.white,
             ),
           ),
 
-          const SizedBox(
-            width: 11,
-          ),
+          const SizedBox(width: 11),
 
           Expanded(
-            child:
-            Column(
+            child: Column(
               crossAxisAlignment:
-              CrossAxisAlignment
-                  .start,
+              CrossAxisAlignment.start,
               children: [
                 Text(
                   place.name,
-                  style:
-                  GoogleFonts
-                      .inter(
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
                     fontWeight:
-                    FontWeight
-                        .w700,
+                    FontWeight.w700,
                   ),
                 ),
 
-                const SizedBox(
-                  height: 3,
-                ),
+                const SizedBox(height: 3),
 
                 Text(
                   [
-                    if (place.city !=
-                        null &&
+                    if (place.city != null &&
                         place.city!
                             .trim()
                             .isNotEmpty)
                       place.city!,
-                    if (place.state
-                        .trim()
-                        .isNotEmpty)
-                      place.state,
+                    place.state,
                   ].join(', '),
-                  style:
-                  GoogleFonts
-                      .inter(
-                    fontSize:
-                    11,
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
                     color: colors
                         .onSurfaceVariant,
                   ),
                 ),
 
-                const SizedBox(
-                  height: 7,
-                ),
+                const SizedBox(height: 6),
 
                 Wrap(
-                  spacing: 8,
-                  runSpacing:
-                  5,
+                  spacing: 6,
+                  runSpacing: 5,
                   children: [
                     _SmallTag(
-                      text:
-                      _halalStatusLabel(
+                      text: _halalLabel(
                         place.halalStatus,
                       ),
                     ),
 
-                    if (distanceKm !=
-                        null)
-                      _SmallTag(
-                        text:
-                        '${distanceKm!.toStringAsFixed(1)} km away',
+                    _SmallTag(
+                      text: _displayValue(
+                        place.category,
                       ),
+                    ),
                   ],
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ===========================================================
+// NO LOCATION
+// ===========================================================
+
+class _NoLocationCard
+    extends StatelessWidget {
+  const _NoLocationCard({
+    required this.foodName,
+  });
+
+  final String foodName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerLow,
+        borderRadius:
+        BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.location_off_outlined,
+            size: 42,
+            color: Theme.of(context)
+                .colorScheme
+                .outline,
+          ),
+
+          const SizedBox(height: 10),
+
+          Text(
+            'No verified locations serving $foodName have been added yet.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurfaceVariant,
             ),
           ),
         ],
@@ -2098,34 +1489,22 @@ class _SmallTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding:
-      const EdgeInsets
-          .symmetric(
+      padding: const EdgeInsets.symmetric(
         horizontal: 7,
         vertical: 3,
       ),
-      decoration:
-      BoxDecoration(
-        color:
-        Theme.of(
-          context,
-        )
+      decoration: BoxDecoration(
+        color: Theme.of(context)
             .colorScheme
             .surfaceContainerHighest,
         borderRadius:
-        BorderRadius
-            .circular(
-          999,
-        ),
+        BorderRadius.circular(999),
       ),
       child: Text(
         text,
-        style:
-        GoogleFonts.inter(
+        style: GoogleFonts.inter(
           fontSize: 9,
-          fontWeight:
-          FontWeight
-              .w600,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -2133,83 +1512,10 @@ class _SmallTag extends StatelessWidget {
 }
 
 // ===========================================================
-// NO LOCATION
+// HELPERS
 // ===========================================================
 
-class _NoPlaceCard extends StatelessWidget {
-  const _NoPlaceCard({
-    required this.foodName,
-  });
-
-  final String foodName;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width:
-      double.infinity,
-      padding:
-      const EdgeInsets.all(
-        24,
-      ),
-      decoration:
-      BoxDecoration(
-        color:
-        Theme.of(
-          context,
-        )
-            .colorScheme
-            .surfaceContainerLow,
-        borderRadius:
-        BorderRadius
-            .circular(
-          16,
-        ),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            Icons
-                .location_off_outlined,
-            size: 42,
-            color:
-            Theme.of(
-              context,
-            )
-                .colorScheme
-                .outline,
-          ),
-
-          const SizedBox(
-            height: 10,
-          ),
-
-          Text(
-            'No food locations for $foodName have been added yet.',
-            textAlign:
-            TextAlign.center,
-            style:
-            GoogleFonts.inter(
-              fontSize: 13,
-              color:
-              Theme.of(
-                context,
-              )
-                  .colorScheme
-                  .onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ===========================================================
-// HALAL STATUS LABEL
-// ===========================================================
-
-String _halalStatusLabel(
+String _halalLabel(
     String value,
     ) {
   switch (value) {
@@ -2222,17 +1528,12 @@ String _halalStatusLabel(
     case 'non_halal':
       return 'Non-Halal';
 
-    case 'unknown':
     default:
       return 'Status Unknown';
   }
 }
 
-// ===========================================================
-// HALAL STATUS COLOR
-// ===========================================================
-
-Color _halalStatusColor(
+Color _halalColor(
     String value,
     ) {
   switch (value) {
@@ -2258,11 +1559,7 @@ Color _halalStatusColor(
   }
 }
 
-// ===========================================================
-// DISPLAY TAG
-// ===========================================================
-
-String _displayTag(
+String _displayValue(
     String value,
     ) {
   if (value.trim().isEmpty) {
