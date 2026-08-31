@@ -27,12 +27,18 @@ class FriendshipModel {
   final FriendshipStatus status;
   final DateTime createdAt;
 
+  /// False from the moment the addressee accepts until the requester
+  /// opens the Friends list and sees it — drives the "new friend" red dot,
+  /// same pattern as UserBadgeModel.acknowledged.
+  final bool requesterAcknowledged;
+
   FriendshipModel({
     required this.id,
     required this.requesterId,
     required this.addresseeId,
     required this.status,
     required this.createdAt,
+    this.requesterAcknowledged = true,
   });
 
   /// The user id on the other side of this relationship, from [viewerId]'s
@@ -49,6 +55,7 @@ class FriendshipModel {
           ? FriendshipStatus.accepted
           : FriendshipStatus.pending,
       createdAt: DateTime.parse(json['created_at'] as String),
+      requesterAcknowledged: json['requester_acknowledged'] as bool? ?? true,
     );
   }
 }

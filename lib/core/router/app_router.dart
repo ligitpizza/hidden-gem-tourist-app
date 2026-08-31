@@ -425,6 +425,14 @@ class _MainShellState extends State<_MainShell> {
           // Navigator directly first, then let goBranch do its normal work.
           if (reselectingCurrentTab) {
             _branchNavigatorKeys[index].currentState?.popUntil((route) => route.isFirst);
+          } else if (widget.navigationShell.currentIndex == 5) {
+            // Leaving the Journal tab for a different one resets any
+            // screen pushed from the More menu (Badges/Quizzes/History/
+            // Friends, and Friends' own nested search/profile-preview
+            // screens) — they're meant to be reached only via the More
+            // menu, not to linger as "what Journal shows now" the next
+            // time that tab becomes active again.
+            _branchNavigatorKeys[5].currentState?.popUntil((route) => route.isFirst);
           }
           widget.navigationShell.goBranch(index, initialLocation: reselectingCurrentTab);
         },

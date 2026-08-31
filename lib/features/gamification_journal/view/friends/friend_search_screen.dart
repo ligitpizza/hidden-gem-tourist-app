@@ -7,6 +7,7 @@ import '../../../../config/theme.dart';
 import '../../../../shared/widgets/app_header.dart';
 import '../../controller/friend_controller.dart';
 import '../../model/friend_model.dart';
+import 'friend_profile_preview_screen.dart';
 
 class FriendSearchScreen extends StatefulWidget {
   const FriendSearchScreen({super.key});
@@ -88,6 +89,10 @@ class _FriendSearchScreenState extends State<FriendSearchScreen> {
   }
 }
 
+/// Tapping the row (rather than an inline Add button) opens the full
+/// profile preview — that's where Add Friend / Accept / Remove actually
+/// live now, alongside the stats a Tourist would want to see before
+/// deciding to add someone.
 class _SearchResultTile extends StatelessWidget {
   const _SearchResultTile({required this.profile});
 
@@ -100,45 +105,51 @@ class _SearchResultTile extends StatelessWidget {
     final relationship = friendController.relationshipWith(profile.id);
     final name = profile.fullName.isEmpty ? 'Someone' : profile.fullName;
 
-    Widget trailing;
-    if (relationship == null) {
-      trailing = FilledButton(
-        onPressed: () => context.read<FriendController>().sendRequest(profile.id),
-        child: const Text('Add'),
-      );
-    } else if (relationship.status == FriendshipStatus.accepted) {
-      trailing = Text('Friends', style: AppTypography.labelSm.copyWith(color: colors.onSurfaceVariant));
-    } else {
-      trailing = Text('Pending', style: AppTypography.labelSm.copyWith(color: colors.onSurfaceVariant));
+    String? statusLabel;
+    if (relationship != null) {
+      statusLabel = relationship.status == FriendshipStatus.accepted ? 'Friends' : 'Pending';
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerLowest,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: colors.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: colors.primaryContainerTint,
-            child: Text(
-              name[0].toUpperCase(),
-              style: AppTypography.bodySm.copyWith(
-                color: colors.primaryContainer,
-                fontWeight: FontWeight.w700,
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => FriendProfilePreviewScreen(profile: profile)),
+        ),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: colors.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: colors.primaryContainerTint,
+                child: Text(
+                  name[0].toUpperCase(),
+                  style: AppTypography.bodySm.copyWith(
+                    color: colors.primaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(name, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
+              ),
+              if (statusLabel != null) ...[
+                Text(statusLabel, style: AppTypography.labelSm.copyWith(color: colors.onSurfaceVariant)),
+                const SizedBox(width: 4),
+              ],
+              Icon(Icons.chevron_right, size: 18, color: colors.onSurfaceVariant),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(name, style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600)),
-          ),
-          trailing,
-        ],
+        ),
       ),
     );
   }

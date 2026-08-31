@@ -192,10 +192,21 @@ class _MapBodyState extends State<_MapBody> {
     if (checkInController.destinations.isEmpty) {
       unawaited(checkInController.loadDestinations().catchError((_) {}));
     }
+    // Prefer the already-loaded DestinationModel (correct real state,
+    // resolved via the destinations table's city column) over
+    // fromMapDestination()'s bare conversion, which has no city to work
+    // from and silently defaults to 'Penang' for every destination.
+    DestinationModel? resolved;
+    for (final d in checkInController.destinations) {
+      if (d.id == destination.id) {
+        resolved = d;
+        break;
+      }
+    }
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => DestinationDetailScreen(
-          destination: DestinationModel.fromMapDestination(destination),
+          destination: resolved ?? DestinationModel.fromMapDestination(destination),
         ),
       ),
     );

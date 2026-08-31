@@ -34,7 +34,7 @@ class QuizListScreen extends StatelessWidget {
     final checkInController = context.watch<CheckInController>();
     final quizController = context.watch<QuizController>();
 
-    // Only destinations the Traveler has actually checked into get a quiz,
+    // Only destinations the Tourist has actually checked into get a quiz,
     // matching the doc's "questions based on user checked-in hotspots" rule.
     final visitedDestinationIds = checkInController.history
         .map((c) => c.destinationId)
