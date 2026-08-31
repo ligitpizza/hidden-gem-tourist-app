@@ -5,23 +5,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/models/destination.dart';
-import '../../itinerary_planning/model/saved_itineraries_store.dart';
 import '../model/packing_checklist.dart';
+import '../model/packing_location_source.dart';
 import '../model/packing_weather_service.dart';
 
 class PackingChecklistController extends ChangeNotifier {
   PackingChecklistController({
-    SavedItinerariesStore? itineraries,
+    PackingLocationSource? locationSource,
     PackingWeatherService? weatherService,
-  }) : _itineraries = itineraries ?? SavedItinerariesStore.instance,
+  }) : _locationSource = locationSource ?? SavedPackingLocationSource(),
        _weatherService = weatherService ?? PackingWeatherService();
 
-  final SavedItinerariesStore _itineraries;
+  final PackingLocationSource _locationSource;
   final PackingWeatherService _weatherService;
   final Set<String> packedIds = {};
   List<PackingChecklistSection> sections = const [];
   List<PackingChecklistItem> customItems = const [];
   String tripLabel = 'Travel essentials';
+  List<PackingLocationOption> locationOptions = const [];
+  String? selectedLocationId;
   Set<DestinationCategory> destinationCategories = const {};
   bool isLoading = true;
   PackingWeatherSummary? weather;
@@ -75,28 +77,49 @@ class PackingChecklistController extends ChangeNotifier {
   Future<void> load() async {
     isLoading = true;
     notifyListeners();
-    await _itineraries.ensureLoaded();
-    final saved = _itineraries.saved;
-    final destinations = saved.isEmpty
-        ? const <Destination>[]
-        : saved.first.plan.destinations;
-    tripLabel = destinations.isEmpty
-        ? 'Travel essentials'
-        : destinations.map((destination) => destination.name).join(' · ');
-    destinationCategories = destinations
-        .map((destination) => destination.category)
-        .toSet();
-    weather = destinations.isEmpty
-        ? null
-        : await _weatherService.getForecast(
-            latitude: destinations.first.location.latitude,
-            longitude: destinations.first.location.longitude,
-          );
-    sections = _buildSections(destinationCategories, weather);
+    locationOptions = await _locationSource.load();
+    final preferences = await SharedPreferences.getInstance();
+    final savedSelection = preferences.getString(_selectionStorageKey);
+    selectedLocationId =
+        locationOptions.any((option) => option.id == savedSelection)
+        ? savedSelection
+        : locationOptions.firstOrNull?.id;
+    await _rebuildForSelectedLocation();
     await _loadCustomItems();
     await _loadPackedState();
     isLoading = false;
     notifyListeners();
+  }
+
+  Future<void> selectLocation(String id) async {
+    if (selectedLocationId == id ||
+        !locationOptions.any((option) => option.id == id)) {
+      return;
+    }
+    isLoading = true;
+    notifyListeners();
+    selectedLocationId = id;
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_selectionStorageKey, id);
+    await _rebuildForSelectedLocation();
+    await _loadPackedState();
+    isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> _rebuildForSelectedLocation() async {
+    final selected = locationOptions
+        .where((option) => option.id == selectedLocationId)
+        .firstOrNull;
+    tripLabel = selected?.label ?? 'Travel essentials';
+    destinationCategories = selected?.categories ?? const {};
+    weather = selected == null
+        ? null
+        : await _weatherService.getForecast(
+            latitude: selected.latitude,
+            longitude: selected.longitude,
+          );
+    sections = _buildSections(destinationCategories, weather);
   }
 
   int _metricScore(Set<String> ids) {
@@ -213,15 +236,22 @@ class PackingChecklistController extends ChangeNotifier {
   }
 
   String get _storageKey {
-    final userId = Supabase.instance.client.auth.currentUser?.id ?? 'guest';
-    final categoryKey =
-        destinationCategories.map((category) => category.name).toList()..sort();
-    return 'packing_checklist_${userId}_${categoryKey.join('_')}';
+    final locationKey = selectedLocationId ?? 'essentials';
+    return 'packing_checklist_${_userId}_$locationKey';
   }
 
   String get _customStorageKey {
-    final userId = Supabase.instance.client.auth.currentUser?.id ?? 'guest';
-    return 'packing_custom_items_$userId';
+    return 'packing_custom_items_$_userId';
+  }
+
+  String get _selectionStorageKey => 'packing_location_$_userId';
+
+  String get _userId {
+    try {
+      return Supabase.instance.client.auth.currentUser?.id ?? 'guest';
+    } catch (_) {
+      return 'guest';
+    }
   }
 
   static List<PackingChecklistSection> _buildSections(

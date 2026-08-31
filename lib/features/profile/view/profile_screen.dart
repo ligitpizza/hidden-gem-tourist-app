@@ -23,6 +23,8 @@ import '../../itinerary_planning/controller/gem_category_preference_controller.d
 import '../../itinerary_planning/model/saved_itineraries_store.dart';
 import '../../itinerary_planning/view/widgets/gem_category_filter.dart';
 import '../../itinerary_planning/view/widgets/saved_itinerary_tile.dart';
+import '../../travel_prep/model/saved_eco_partners_store.dart';
+import '../../travel_prep/view/widgets/saved_eco_partner_tile.dart';
 import 'widgets/profile_share_sheet.dart';
 
 /// The Tourist's showcase page — everything worth bragging about in one
@@ -60,6 +62,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _badgeController.addListener(_refresh);
     _journalController.addListener(_refresh);
     SavedItinerariesStore.instance.ensureLoaded();
+    SavedEcoPartnersStore.instance.ensureLoaded();
 
     // The app shell (_MainShell in app_router.dart) owns the module's
     // one-time initial data load at app start, so this just needs an
@@ -111,9 +114,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       final topBadges = pinnedBadges.isNotEmpty
           ? pinnedBadges
           : badgeController.allBadges
-              .where((b) => badgeController.isUnlocked(b.id))
-              .take(3)
-              .toList();
+                .where((b) => badgeController.isUnlocked(b.id))
+                .take(3)
+                .toList();
 
       final destinationsById = {
         for (final d in checkInController.destinations) d.id: d,
@@ -127,10 +130,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           .expand(
             (e) => e.media
                 .where((m) => m.type == JournalMediaType.photo)
-                .map((m) => SharePhoto(
-                      url: m.url,
-                      destinationName: destinationsById[e.destinationId]?.name ?? 'Hidden gem',
-                    )),
+                .map(
+                  (m) => SharePhoto(
+                    url: m.url,
+                    destinationName:
+                        destinationsById[e.destinationId]?.name ?? 'Hidden gem',
+                  ),
+                ),
           )
           .take(3)
           .toList();
@@ -149,7 +155,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     } catch (e, stackTrace) {
       debugPrint('ProfileScreen: could not open share sheet: $e\n$stackTrace');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open the share preview. Please try again.')),
+        const SnackBar(
+          content: Text('Could not open the share preview. Please try again.'),
+        ),
       );
     }
   }
@@ -186,7 +194,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       body: RefreshIndicator(
         onRefresh: _refresh,
         color: colors.primary,
-        child: dashboardController.status == DashboardStatus.loading && stats.totalCheckIns == 0
+        child:
+            dashboardController.status == DashboardStatus.loading &&
+                stats.totalCheckIns == 0
             ? const Center(child: CircularProgressIndicator())
             : dashboardController.status == DashboardStatus.error && stats.totalCheckIns == 0
                 ? _DashboardErrorState(
@@ -203,7 +213,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       CircleAvatar(
                         radius: 32,
                         backgroundColor: colors.primaryContainer,
-                        child: Icon(Icons.person, size: 32, color: colors.onPrimaryContainer),
+                        child: Icon(
+                          Icons.person,
+                          size: 32,
+                          color: colors.onPrimaryContainer,
+                        ),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -214,18 +228,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             if (user?.email != null)
                               Text(
                                 user!.email!,
-                                style: AppTypography.bodySm.copyWith(color: colors.onSurfaceVariant),
+                                style: AppTypography.bodySm.copyWith(
+                                  color: colors.onSurfaceVariant,
+                                ),
                               ),
                           ],
                         ),
                       ),
                       const SizedBox(width: 8),
                       TextButton.icon(
-                        onPressed: () => _openShareSheet(context, travellerName: fullName),
+                        onPressed: () =>
+                            _openShareSheet(context, travellerName: fullName),
                         style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
                           visualDensity: VisualDensity.compact,
-                          side: BorderSide(color: AppColors.of(context).outlineVariant),
+                          side: BorderSide(
+                            color: AppColors.of(context).outlineVariant,
+                          ),
                         ),
                         icon: const Icon(Icons.ios_share, size: 16),
                         label: const Text('Share to…'),
@@ -247,11 +269,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(child: _StatTile(number: '${stats.totalCheckIns}', label: 'Check-ins')),
+                        Expanded(
+                          child: _StatTile(
+                            number: '${stats.totalCheckIns}',
+                            label: 'Check-ins',
+                          ),
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: _StatTile(
-                            number: '${stats.badgesEarned}/${stats.badgesAvailable}',
+                            number:
+                                '${stats.badgesEarned}/${stats.badgesAvailable}',
                             label: 'Badges',
                           ),
                         ),
@@ -268,7 +296,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   const SizedBox(height: 24),
 
                   // --- Achievements ---------------------------------------
-                  Text('Achievements', style: AppTypography.headlineSm.copyWith(fontSize: 15)),
+                  Text(
+                    'Achievements',
+                    style: AppTypography.headlineSm.copyWith(fontSize: 15),
+                  ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -297,7 +328,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Journal highlights', style: AppTypography.headlineSm.copyWith(fontSize: 15)),
+                      Text(
+                        'Journal highlights',
+                        style: AppTypography.headlineSm.copyWith(fontSize: 15),
+                      ),
                       TextButton(
                         // A plain push, not context.push(ShellRoutes.journal)
                         // — that path is the Journal tab's own shell-branch
@@ -306,7 +340,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         // normal page with a working back button.
                         onPressed: () => Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => const JournalTimelineScreen(isTabRoot: false),
+                            builder: (_) =>
+                                const JournalTimelineScreen(isTabRoot: false),
                           ),
                         ),
                         child: const Text('View journal'),
@@ -325,34 +360,44 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        mainAxisSpacing: 6,
-                        crossAxisSpacing: 6,
-                        childAspectRatio: 1,
-                      ),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            mainAxisSpacing: 6,
+                            crossAxisSpacing: 6,
+                            childAspectRatio: 1,
+                          ),
                       itemCount: journalPhotos.length,
                       itemBuilder: (context, index) => ClipRRect(
                         borderRadius: BorderRadius.circular(AppRadius.md),
                         child: Image.network(
                           journalPhotos[index].url,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Container(color: colors.surfaceContainerHigh),
+                          errorBuilder: (_, _, _) =>
+                              Container(color: colors.surfaceContainerHigh),
                         ),
                       ),
                     ),
                   const SizedBox(height: 24),
 
                   // --- Category breakdown -------------------------------
-                  Text("Where you've been exploring", style: AppTypography.headlineSm.copyWith(fontSize: 15)),
+                  Text(
+                    "Where you've been exploring",
+                    style: AppTypography.headlineSm.copyWith(fontSize: 15),
+                  ),
                   const SizedBox(height: 8),
                   _SectionCard(
-                    child: CategoryBreakdownList(breakdown: stats.categoryBreakdown),
+                    child: CategoryBreakdownList(
+                      breakdown: stats.categoryBreakdown,
+                    ),
                   ),
                   const SizedBox(height: 24),
 
                   // --- Economic impact -----------------------------------
-                  Text('Local Economy Support Tracker', style: AppTypography.headlineSm.copyWith(fontSize: 15)),
+                  Text(
+                    'Local Economy Support Tracker',
+                    style: AppTypography.headlineSm.copyWith(fontSize: 15),
+                  ),
                   const SizedBox(height: 8),
                   _SectionCard(
                     child: Column(
@@ -365,15 +410,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               children: [
                                 const TextSpan(text: "You've contributed "),
                                 TextSpan(
-                                  text: 'RM ${stats.economicImpactTotalRM.toStringAsFixed(0)}',
-                                  style: TextStyle(fontWeight: FontWeight.bold, color: colors.primaryContainer),
+                                  text:
+                                      'RM ${stats.economicImpactTotalRM.toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: colors.primaryContainer,
+                                  ),
                                 ),
-                                const TextSpan(text: ' directly to micro-businesses and rural communities.'),
+                                const TextSpan(
+                                  text:
+                                      ' directly to micro-businesses and rural communities.',
+                                ),
                               ],
                             ),
                           ),
-                        if (stats.economicImpactBreakdown.isNotEmpty) const SizedBox(height: 12),
-                        EconomicImpactChart(breakdown: stats.economicImpactBreakdown),
+                        if (stats.economicImpactBreakdown.isNotEmpty)
+                          const SizedBox(height: 12),
+                        EconomicImpactChart(
+                          breakdown: stats.economicImpactBreakdown,
+                        ),
                       ],
                     ),
                   ),
@@ -383,10 +438,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Recently visited', style: AppTypography.headlineSm.copyWith(fontSize: 15)),
+                      Text(
+                        'Recently visited',
+                        style: AppTypography.headlineSm.copyWith(fontSize: 15),
+                      ),
                       if (checkInController.history.isNotEmpty)
                         TextButton(
-                          onPressed: () => context.push(ShellRoutes.journalHistory),
+                          onPressed: () =>
+                              context.push(ShellRoutes.journalHistory),
                           child: const Text('View all'),
                         ),
                     ],
@@ -424,13 +483,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   const SizedBox(height: 10),
                   SegmentedButton<ThemeMode>(
                     segments: const [
-                      ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode_outlined), label: Text('Light')),
-                      ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode_outlined), label: Text('Dark')),
-                      ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.brightness_auto_outlined), label: Text('System')),
+                      ButtonSegment(
+                        value: ThemeMode.light,
+                        icon: Icon(Icons.light_mode_outlined),
+                        label: Text('Light'),
+                      ),
+                      ButtonSegment(
+                        value: ThemeMode.dark,
+                        icon: Icon(Icons.dark_mode_outlined),
+                        label: Text('Dark'),
+                      ),
+                      ButtonSegment(
+                        value: ThemeMode.system,
+                        icon: Icon(Icons.brightness_auto_outlined),
+                        label: Text('System'),
+                      ),
                     ],
                     selected: {themeModeController.themeMode},
-                    onSelectionChanged: (selection) =>
-                        ref.read(themeModeControllerProvider).setThemeMode(selection.first),
+                    onSelectionChanged: (selection) => ref
+                        .read(themeModeControllerProvider)
+                        .setThemeMode(selection.first),
                   ),
                   const SizedBox(height: 24),
 
@@ -438,45 +510,57 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   // Collapsed by default (empty until the traveller opens it) —
                   // editing lives here only; Plan Your Route just displays
                   // whatever's selected, live.
-                  Builder(builder: (context) {
-                    final gemPrefs = ref.watch(gemCategoryPreferenceControllerProvider);
-                    return Theme(
-                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                      child: ExpansionTile(
-                        tilePadding: EdgeInsets.zero,
-                        childrenPadding: const EdgeInsets.only(top: 8, bottom: 4),
-                        title: Text(
-                          'INTERESTED HIDDEN GEM CATEGORIES',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: colors.onSurfaceVariant,
-                            letterSpacing: 0.6,
+                  Builder(
+                    builder: (context) {
+                      final gemPrefs = ref.watch(
+                        gemCategoryPreferenceControllerProvider,
+                      );
+                      return Theme(
+                        data: Theme.of(
+                          context,
+                        ).copyWith(dividerColor: Colors.transparent),
+                        child: ExpansionTile(
+                          tilePadding: EdgeInsets.zero,
+                          childrenPadding: const EdgeInsets.only(
+                            top: 8,
+                            bottom: 4,
                           ),
-                        ),
-                        subtitle: Text(
-                          gemPrefs.selected.isEmpty
-                              ? 'Tap to add your interests — updates live in Plan Your Route.'
-                              : '${gemPrefs.selected.length} selected — tap to edit.',
-                          style: AppTypography.bodySm.copyWith(color: colors.onSurfaceVariant),
-                        ),
-                        children: [
-                          GemCategoryFilter(
-                            selected: gemPrefs.selected,
-                            onToggle: (category) =>
-                                ref.read(gemCategoryPreferenceControllerProvider).toggle(category),
-                            onToggleGroup: (group) =>
-                                ref.read(gemCategoryPreferenceControllerProvider).toggleGroup(group),
+                          title: Text(
+                            'INTERESTED HIDDEN GEM CATEGORIES',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: colors.onSurfaceVariant,
+                              letterSpacing: 0.6,
+                            ),
                           ),
-                        ],
-                      ),
-                    );
-                  }),
+                          subtitle: Text(
+                            gemPrefs.selected.isEmpty
+                                ? 'Tap to add your interests — updates live in Plan Your Route.'
+                                : '${gemPrefs.selected.length} selected — tap to edit.',
+                            style: AppTypography.bodySm.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                          children: [
+                            GemCategoryFilter(
+                              selected: gemPrefs.selected,
+                              onToggle: (category) => ref
+                                  .read(gemCategoryPreferenceControllerProvider)
+                                  .toggle(category),
+                              onToggleGroup: (group) => ref
+                                  .read(gemCategoryPreferenceControllerProvider)
+                                  .toggleGroup(group),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                   const SizedBox(height: 24),
 
-                  // --- Saved itineraries (duplicated from the Saved tab) -----
                   Text(
-                    'SAVED ITINERARIES',
+                    'SAVED TRIPS & ECO PARTNERS',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -485,6 +569,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
+                  Text(
+                    'Itineraries',
+                    style: AppTypography.bodySm.copyWith(
+                      color: colors.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
                   ListenableBuilder(
                     listenable: SavedItinerariesStore.instance,
                     builder: (context, _) {
@@ -499,21 +591,85 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(store.error!, style: AppTypography.bodySm.copyWith(color: colors.onSurfaceVariant)),
+                            Text(
+                              store.error!,
+                              style: AppTypography.bodySm.copyWith(
+                                color: colors.onSurfaceVariant,
+                              ),
+                            ),
                             const SizedBox(height: 8),
-                            OutlinedButton(onPressed: store.refresh, child: const Text('Retry')),
+                            OutlinedButton(
+                              onPressed: store.refresh,
+                              child: const Text('Retry'),
+                            ),
                           ],
                         );
                       }
                       if (store.saved.isEmpty) {
                         return Text(
                           'No saved itineraries yet — plan a trip and save it to see it here.',
-                          style: AppTypography.bodySm.copyWith(color: colors.onSurfaceVariant),
+                          style: AppTypography.bodySm.copyWith(
+                            color: colors.onSurfaceVariant,
+                          ),
                         );
                       }
                       return Column(
                         children: [
-                          for (final saved in store.saved) SavedItineraryTile(saved: saved),
+                          for (final saved in store.saved)
+                            SavedItineraryTile(saved: saved),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Eco Partners',
+                    style: AppTypography.bodySm.copyWith(
+                      color: colors.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ListenableBuilder(
+                    listenable: SavedEcoPartnersStore.instance,
+                    builder: (context, _) {
+                      final store = SavedEcoPartnersStore.instance;
+                      if (store.isLoading && store.saved.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      if (store.error != null && store.saved.isEmpty) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              store.error!,
+                              style: AppTypography.bodySm.copyWith(
+                                color: colors.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            OutlinedButton(
+                              onPressed: store.refresh,
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        );
+                      }
+                      if (store.saved.isEmpty) {
+                        return Text(
+                          'No saved Eco Partners yet — save one from Eco Partner recommendations.',
+                          style: AppTypography.bodySm.copyWith(
+                            color: colors.onSurfaceVariant,
+                          ),
+                        );
+                      }
+                      return Column(
+                        children: [
+                          for (final saved in store.saved)
+                            SavedEcoPartnerTile(saved: saved),
                         ],
                       );
                     },
@@ -579,7 +735,11 @@ class _StatTile extends StatelessWidget {
         children: [
           Text(number, style: AppTypography.headlineSm),
           const SizedBox(height: 2),
-          Text(label, textAlign: TextAlign.center, style: AppTypography.bodySm.copyWith(fontSize: 10.5)),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySm.copyWith(fontSize: 10.5),
+          ),
         ],
       ),
     );
@@ -647,7 +807,10 @@ class _AchievementCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               label,
-              style: AppTypography.labelMd.copyWith(color: colors.primaryContainer, letterSpacing: 0),
+              style: AppTypography.labelMd.copyWith(
+                color: colors.primaryContainer,
+                letterSpacing: 0,
+              ),
             ),
           ],
         ),

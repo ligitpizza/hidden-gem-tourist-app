@@ -28,8 +28,7 @@ class TravelPrepDashboardScreen extends StatefulWidget {
       _TravelPrepDashboardScreenState();
 }
 
-class _TravelPrepDashboardScreenState
-    extends State<TravelPrepDashboardScreen> {
+class _TravelPrepDashboardScreenState extends State<TravelPrepDashboardScreen> {
   final _checklistController = PackingChecklistController();
 
   @override
@@ -126,9 +125,7 @@ class _TravelPrepDashboardScreenState
             description:
                 'Personalized list based on Emerald Falls weather and activities.',
             button: 'Open Checklist',
-            progress: _checklistController.isLoading
-                ? null
-                : checklistProgress,
+            progress: _checklistController.isLoading ? null : checklistProgress,
             progressLabel: _checklistController.isLoading
                 ? null
                 : '${_checklistController.packedItems}/${_checklistController.totalItems} packed',
@@ -302,6 +299,43 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
                     color: const Color(0xFF003B2B),
                   ),
                 ),
+                if (_controller.locationOptions.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _controller.selectedLocationId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Packing location',
+                      prefixIcon: Icon(Icons.luggage_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _controller.locationOptions
+                        .map(
+                          (option) => DropdownMenuItem(
+                            value: option.id,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  option.label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  option.subtitle,
+                                  style: Theme.of(context).textTheme.labelSmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) _controller.selectLocation(value);
+                    },
+                  ),
+                ],
                 const SizedBox(height: 4),
                 Text(
                   'Recommendations for ${_controller.tripLabel}',
