@@ -1,5 +1,6 @@
 import 'package:collab/features/travel_prep/controller/packing_checklist_controller.dart';
 import 'package:collab/features/travel_prep/model/packing_location_source.dart';
+import 'package:collab/features/travel_prep/model/packing_checklist_repository.dart';
 import 'package:collab/features/travel_prep/model/packing_weather_service.dart';
 import 'package:collab/shared/models/destination.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -34,6 +35,20 @@ void main() {
       expect(controller.packedIds, contains('passport'));
     },
   );
+
+  test('packing cache is isolated by authenticated user ID', () async {
+    SharedPreferences.setMockInitialValues({});
+    final first = PackingChecklistRepository(userId: 'user-a');
+    final second = PackingChecklistRepository(userId: 'user-b');
+
+    await first.saveSelection('eco:1');
+    await first.savePackedIds('eco:1', {'passport'});
+
+    expect(await first.loadSelection(), 'eco:1');
+    expect(await first.loadPackedIds('eco:1'), {'passport'});
+    expect(await second.loadSelection(), isNull);
+    expect(await second.loadPackedIds('eco:1'), isEmpty);
+  });
 }
 
 class _FakePackingLocationSource implements PackingLocationSource {

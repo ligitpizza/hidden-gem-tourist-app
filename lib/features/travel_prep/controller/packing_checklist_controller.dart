@@ -1,11 +1,8 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/models/destination.dart';
 import '../model/packing_checklist.dart';
+import '../model/packing_checklist_repository.dart';
 import '../model/packing_location_source.dart';
 import '../model/packing_weather_service.dart';
 
@@ -13,11 +10,14 @@ class PackingChecklistController extends ChangeNotifier {
   PackingChecklistController({
     PackingLocationSource? locationSource,
     PackingWeatherService? weatherService,
+    PackingChecklistRepositoryContract? persistence,
   }) : _locationSource = locationSource ?? SavedPackingLocationSource(),
-       _weatherService = weatherService ?? PackingWeatherService();
+       _weatherService = weatherService ?? PackingWeatherService(),
+       _persistence = persistence ?? PackingChecklistRepository();
 
   final PackingLocationSource _locationSource;
   final PackingWeatherService _weatherService;
+  final PackingChecklistRepositoryContract _persistence;
   final Set<String> packedIds = {};
   List<PackingChecklistSection> sections = const [];
   List<PackingChecklistItem> customItems = const [];
@@ -78,8 +78,7 @@ class PackingChecklistController extends ChangeNotifier {
     isLoading = true;
     notifyListeners();
     locationOptions = await _locationSource.load();
-    final preferences = await SharedPreferences.getInstance();
-    final savedSelection = preferences.getString(_selectionStorageKey);
+    final savedSelection = await _persistence.loadSelection();
     selectedLocationId =
         locationOptions.any((option) => option.id == savedSelection)
         ? savedSelection
@@ -99,8 +98,7 @@ class PackingChecklistController extends ChangeNotifier {
     isLoading = true;
     notifyListeners();
     selectedLocationId = id;
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_selectionStorageKey, id);
+    await _persistence.saveSelection(id);
     await _rebuildForSelectedLocation();
     await _loadPackedState();
     isLoading = false;
@@ -148,8 +146,7 @@ class PackingChecklistController extends ChangeNotifier {
   Future<void> toggleItem(String id, bool packed) async {
     packed ? packedIds.add(id) : packedIds.remove(id);
     notifyListeners();
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_storageKey, jsonEncode(packedIds.toList()));
+    await _savePackedState();
   }
 
   Future<void> addCustomItem(String name, String note) async {
@@ -173,15 +170,10 @@ class PackingChecklistController extends ChangeNotifier {
   }
 
   Future<void> _loadPackedState() async {
-    final preferences = await SharedPreferences.getInstance();
-    final raw = preferences.getString(_storageKey);
     packedIds.clear();
-    if (raw == null) return;
-    try {
-      packedIds.addAll((jsonDecode(raw) as List).map((value) => '$value'));
-    } catch (_) {
-      // Ignore invalid legacy progress and start this checklist unchecked.
-    }
+    packedIds.addAll(
+      await _persistence.loadPackedIds(selectedLocationId ?? 'essentials'),
+    );
     final validIds =
         sections
             .expand((section) => section.items)
@@ -192,66 +184,18 @@ class PackingChecklistController extends ChangeNotifier {
   }
 
   Future<void> _loadCustomItems() async {
-    final preferences = await SharedPreferences.getInstance();
-    final raw = preferences.getString(_customStorageKey);
-    if (raw == null) return;
-    try {
-      customItems = (jsonDecode(raw) as List)
-          .whereType<Map>()
-          .map(
-            (value) => PackingChecklistItem(
-              id: '${value['id']}',
-              name: '${value['name'] ?? ''}',
-              reason: '${value['reason'] ?? 'Added by you'}',
-            ),
-          )
-          .where((item) => item.name.isNotEmpty)
-          .toList();
-    } catch (_) {
-      customItems = const [];
-    }
+    customItems = await _persistence.loadCustomItems();
   }
 
   Future<void> _saveCustomItems() async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(
-      _customStorageKey,
-      jsonEncode(
-        customItems
-            .map(
-              (item) => {
-                'id': item.id,
-                'name': item.name,
-                'reason': item.reason,
-              },
-            )
-            .toList(),
-      ),
-    );
+    await _persistence.saveCustomItems(customItems);
   }
 
   Future<void> _savePackedState() async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_storageKey, jsonEncode(packedIds.toList()));
-  }
-
-  String get _storageKey {
-    final locationKey = selectedLocationId ?? 'essentials';
-    return 'packing_checklist_${_userId}_$locationKey';
-  }
-
-  String get _customStorageKey {
-    return 'packing_custom_items_$_userId';
-  }
-
-  String get _selectionStorageKey => 'packing_location_$_userId';
-
-  String get _userId {
-    try {
-      return Supabase.instance.client.auth.currentUser?.id ?? 'guest';
-    } catch (_) {
-      return 'guest';
-    }
+    await _persistence.savePackedIds(
+      selectedLocationId ?? 'essentials',
+      packedIds,
+    );
   }
 
   static List<PackingChecklistSection> _buildSections(

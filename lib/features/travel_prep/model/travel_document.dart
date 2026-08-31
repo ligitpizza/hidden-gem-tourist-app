@@ -10,6 +10,7 @@ class TravelDocument {
     required this.extension,
     required this.fileSize,
     required this.createdAt,
+    this.storagePath,
   });
 
   final String id;
@@ -20,6 +21,7 @@ class TravelDocument {
   final String extension;
   final int fileSize;
   final DateTime createdAt;
+  final String? storagePath;
 
   bool get isPdf => extension.toLowerCase() == 'pdf';
 
@@ -31,16 +33,22 @@ class TravelDocument {
     'gif',
   }.contains(extension.toLowerCase());
 
-  TravelDocument copyWith({String? displayName, String? category}) {
+  TravelDocument copyWith({
+    String? displayName,
+    String? category,
+    String? storedPath,
+    String? storagePath,
+  }) {
     return TravelDocument(
       id: id,
       displayName: displayName ?? this.displayName,
       category: category ?? this.category,
       originalFileName: originalFileName,
-      storedPath: storedPath,
+      storedPath: storedPath ?? this.storedPath,
       extension: extension,
       fileSize: fileSize,
       createdAt: createdAt,
+      storagePath: storagePath ?? this.storagePath,
     );
   }
 
@@ -53,6 +61,7 @@ class TravelDocument {
     'extension': extension,
     'fileSize': fileSize,
     'createdAt': createdAt.toIso8601String(),
+    'storagePath': storagePath,
   };
 
   factory TravelDocument.fromJson(Map<String, dynamic> json) {
@@ -65,6 +74,7 @@ class TravelDocument {
       extension: json['extension'] as String? ?? '',
       fileSize: json['fileSize'] as int? ?? 0,
       createdAt: DateTime.parse(json['createdAt'] as String),
+      storagePath: json['storagePath'] as String?,
     );
   }
 

@@ -15,6 +15,7 @@ void main() {
     extension: 'pdf',
     fileSize: 2048,
     createdAt: DateTime.utc(2026, 8, 4),
+    storagePath: 'user-a/doc-1/doc-1.pdf',
   );
 
   test('serializes and restores persistent document metadata', () {
@@ -29,6 +30,7 @@ void main() {
     expect(restored.storedPath, document.storedPath);
     expect(restored.fileSize, document.fileSize);
     expect(restored.createdAt, document.createdAt);
+    expect(restored.storagePath, document.storagePath);
   });
 
   test('recognizes internal viewer file types', () {
@@ -97,5 +99,11 @@ void main() {
     );
 
     await temporaryDirectory.delete(recursive: true);
+  });
+
+  test('free-tier safeguards remain conservative', () {
+    expect(TravelDocumentRepository.maxFileSizeBytes, 10 * 1024 * 1024);
+    expect(TravelDocumentRepository.maxUserStorageBytes, 50 * 1024 * 1024);
+    expect(TravelDocumentRepository.maxVaultStorageBytes, 250 * 1024 * 1024);
   });
 }

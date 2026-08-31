@@ -1784,24 +1784,24 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
   }
 
   Future<void> _viewDocument(TravelDocument document) async {
-    if (!await File(document.storedPath).exists()) {
-      if (mounted) {
-        _showMessage(
-          'The stored file is missing. Delete this record and upload it again.',
-        );
-      }
+    File localFile;
+    try {
+      localFile = await _repository.ensureLocalFile(document);
+    } on Object catch (error) {
+      if (mounted) _showMessage('Document unavailable: $error');
       return;
     }
-    if (document.isPdf || document.isImage) {
+    final localDocument = document.copyWith(storedPath: localFile.path);
+    if (localDocument.isPdf || localDocument.isImage) {
       if (!mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => TravelDocumentViewerScreen(document: document),
+          builder: (_) => TravelDocumentViewerScreen(document: localDocument),
         ),
       );
       return;
     }
-    final result = await OpenFilex.open(document.storedPath);
+    final result = await OpenFilex.open(localFile.path);
     if (result.type != ResultType.done && mounted) {
       _showMessage(
         result.message.isEmpty
