@@ -50,7 +50,12 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                 onPressed: () => Navigator.of(context).maybePop(),
               )
             : null,
-        title: Text(title, style: AppTypography.headlineSm),
+        title: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.headlineSm,
+        ),
         actions: actions,
       ),
     );

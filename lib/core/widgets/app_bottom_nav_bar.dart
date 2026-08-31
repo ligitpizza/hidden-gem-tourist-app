@@ -27,6 +27,7 @@ const _destinations = [
   _NavDestination(icon: Icons.luggage_outlined, selectedIcon: Icons.luggage, label: 'Travel Prep'), // 4
   _NavDestination(icon: Icons.auto_stories_outlined, selectedIcon: Icons.auto_stories, label: 'Journal'), // 5
   _NavDestination(icon: Icons.person_outline, selectedIcon: Icons.person, label: 'Profile'), // 6
+  _NavDestination(icon: Icons.public_outlined, selectedIcon: Icons.public, label: 'Culture'), // 7
 ];
 
 /// Always-visible tabs, either side of the center "More" button.
@@ -35,7 +36,7 @@ const _primaryRight = [5, 6]; // Journal, Profile
 
 /// Tucked behind "More" — real shell branches selected the same way as the
 /// primary tabs.
-const _secondaryBranches = [1, 3, 4]; // Explore, Saved, Travel Prep
+const _secondaryBranches = [1, 3, 4, 7]; // Explore, Saved, Travel Prep, culture
 
 /// A "More" menu entry that isn't a shell branch — it pushes a route
 /// instead of switching tabs. [indicatorKey] is looked up against live

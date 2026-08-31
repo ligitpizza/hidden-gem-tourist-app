@@ -6,6 +6,8 @@ import '../model/eco_partner_repository.dart';
 
 enum EcoPartnerLayout { list, grid2, grid4 }
 
+enum EcoPartnerSort { recommended, nameAscending, nameDescending }
+
 /// Coordinates Eco Partner searches and exposes presentation-ready state.
 class EcoPartnerController extends ChangeNotifier {
   EcoPartnerController({EcoPartnerRepository? repository})
@@ -15,6 +17,8 @@ class EcoPartnerController extends ChangeNotifier {
 
   EcoPartnerSearchResult? result;
   String filter = 'All';
+  String stateFilter = 'All states';
+  EcoPartnerSort sort = EcoPartnerSort.recommended;
   double radiusSelection = 10;
   String? error;
   bool isLoading = false;
@@ -29,8 +33,62 @@ class EcoPartnerController extends ChangeNotifier {
       ? 'across Malaysia'
       : 'within ${radiusSelection.round()} km';
 
-  List<EcoPartner> get filteredPartners =>
-      (result?.partners ?? const <EcoPartner>[]).where(_matchesFilter).toList();
+  static const malaysiaStates = [
+    'Johor',
+    'Kedah',
+    'Kelantan',
+    'Kuala Lumpur',
+    'Labuan',
+    'Melaka',
+    'Negeri Sembilan',
+    'Pahang',
+    'Penang',
+    'Perak',
+    'Perlis',
+    'Putrajaya',
+    'Sabah',
+    'Sarawak',
+    'Selangor',
+    'Terengganu',
+  ];
+
+  List<String> get availableStates {
+    final states =
+        (result?.partners ?? const <EcoPartner>[])
+            .map(_stateFor)
+            .whereType<String>()
+            .toSet()
+            .toList()
+          ..sort();
+    return states;
+  }
+
+  List<EcoPartner> get filteredPartners {
+    final values = (result?.partners ?? const <EcoPartner>[])
+        .where(_matchesFilter)
+        .where(
+          (partner) =>
+              stateFilter == 'All states' || _stateFor(partner) == stateFilter,
+        )
+        .toList();
+    switch (sort) {
+      case EcoPartnerSort.recommended:
+        break;
+      case EcoPartnerSort.nameAscending:
+        values.sort(
+          (first, second) =>
+              first.name.toLowerCase().compareTo(second.name.toLowerCase()),
+        );
+        break;
+      case EcoPartnerSort.nameDescending:
+        values.sort(
+          (first, second) =>
+              second.name.toLowerCase().compareTo(first.name.toLowerCase()),
+        );
+        break;
+    }
+    return values;
+  }
 
   List<EcoPartner> get visiblePartners {
     final values = filteredPartners;
@@ -97,7 +155,9 @@ class EcoPartnerController extends ChangeNotifier {
         throw const EcoSearchException('Location permission is required.');
       }
       final position = await Geolocator.getCurrentPosition(
-        timeLimit: const Duration(seconds: 3),
+        locationSettings: const LocationSettings(
+          timeLimit: Duration(seconds: 3),
+        ),
       );
       result = await _repository.searchCoordinates(
         EcoDestination(
@@ -157,6 +217,20 @@ class EcoPartnerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void selectState(String value) {
+    if (stateFilter == value) return;
+    stateFilter = value;
+    currentPage = 0;
+    notifyListeners();
+  }
+
+  void selectSort(EcoPartnerSort value) {
+    if (sort == value) return;
+    sort = value;
+    currentPage = 0;
+    notifyListeners();
+  }
+
   void selectLayout(EcoPartnerLayout value) {
     if (layout == value) return;
     layout = value;
@@ -201,5 +275,15 @@ class EcoPartnerController extends ChangeNotifier {
     result = enriched;
     isLoadingImages = false;
     notifyListeners();
+  }
+
+  static String? _stateFor(EcoPartner partner) {
+    final address = partner.address.toLowerCase();
+    if (address.contains('pulau pinang')) return 'Penang';
+    if (address.contains('malacca')) return 'Melaka';
+    for (final state in malaysiaStates) {
+      if (address.contains(state.toLowerCase())) return state;
+    }
+    return null;
   }
 }

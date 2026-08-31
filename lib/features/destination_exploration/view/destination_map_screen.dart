@@ -376,18 +376,23 @@ class _MapBodyState extends State<_MapBody> {
               child: _MapActionsFab(onPressed: _viewThemedTrail),
             ),
           if (controller.clusterAnchor != null || controller.clusterMessage != null)
-            // right is inset past the zoom/locate control column (see
-            // _MapZoomControls, right:16 + 40 wide) so the card's own close
-            // button in its header never sits underneath those buttons —
-            // previously the card spanned right:16 like everything else,
-            // and since the zoom controls paint after it in the Stack, they
-            // covered the close button entirely, leaving no way to dismiss
-            // the card once it was showing.
-            Positioned(
-              left: 16,
-              right: 72,
-              bottom: 84,
-              child: _ClusterCard(controller: controller, onStopTap: _openStopDetail),
+            // A drag-up-to-expand bottom sheet rather than a fixed-height
+            // card: the fixed card was both fighting the zoom/locate
+            // control column for the same top-right space (previously
+            // patched by insetting its right edge — cramped enough to
+            // overflow a row by 12px) and had no way to show more than a
+            // couple of stops without scrolling inside a capped box. A
+            // sheet starts small (clear of the zoom controls entirely),
+            // and the traveller can drag it up to see the whole trail.
+            DraggableScrollableSheet(
+              initialChildSize: 0.32,
+              minChildSize: 0.16,
+              maxChildSize: 0.92,
+              builder: (context, scrollController) => _ClusterCard(
+                controller: controller,
+                onStopTap: _openStopDetail,
+                scrollController: scrollController,
+              ),
             ),
         ],
         if (controller.mode == MapViewMode.comparison)
@@ -642,10 +647,15 @@ String _formatTrailTime(DateTime time) {
 int _estimateTrailDriveMinutes(double km) => (km / 35 * 60).round();
 
 class _ClusterCard extends StatelessWidget {
-  const _ClusterCard({required this.controller, required this.onStopTap});
+  const _ClusterCard({
+    required this.controller,
+    required this.onStopTap,
+    required this.scrollController,
+  });
 
   final DestinationMapController controller;
   final ValueChanged<MapDestination> onStopTap;
+  final ScrollController scrollController;
 
   @override
   Widget build(BuildContext context) {
@@ -654,20 +664,27 @@ class _ClusterCard extends StatelessWidget {
 
     if (anchor == null) {
       // Loading/error/empty states — no trail data to show yet.
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  controller.clusterMessage ?? 'Suggested Trail',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
+      return _DrawerSurface(
+        child: ListView(
+          controller: scrollController,
+          padding: EdgeInsets.zero,
+          children: [
+            const _DragHandle(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 8, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      controller.clusterMessage ?? 'Suggested Trail',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  IconButton(icon: const Icon(Icons.close), onPressed: controller.clearCluster),
+                ],
               ),
-              IconButton(icon: const Icon(Icons.close), onPressed: controller.clearCluster),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
@@ -685,116 +702,153 @@ class _ClusterCard extends StatelessWidget {
 
     final stops = [anchor, ...controller.clusterStops];
 
-    // Positioned(left, right, bottom) with no top constraint lets this card
-    // grow upward without bound — with a header, up to 4 stops, and a
-    // footer, that easily exceeds the visible screen height, pushing the
-    // header (and its close button) off the top of the screen entirely.
-    // Capping the card and letting only the stop list scroll keeps the
-    // header/footer always reachable.
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      margin: EdgeInsets.zero,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '$flavor Trail',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: colorScheme.onSurface,
-                      ),
+    // A drag-up-to-expand sheet (see DraggableScrollableSheet in
+    // destination_map_screen.dart's build) rather than a height-capped
+    // card — everything lives in one ListView bound to the sheet's own
+    // scrollController, so dragging the handle resizes the sheet and, once
+    // fully expanded, scrolling takes over to reach stops further down.
+    return _DrawerSurface(
+      child: ListView(
+        controller: scrollController,
+        padding: EdgeInsets.zero,
+        children: [
+          const _DragHandle(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 8, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '$flavor Trail',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.onSurface,
                     ),
                   ),
-                  Text(
-                    '${controller.totalDistanceKm.toStringAsFixed(1)}km total',
-                    style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 20),
-                    onPressed: controller.clearCluster,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                  ),
-                ],
-              ),
-            ),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                child: Column(
-                  children: [
-                    for (var i = 0; i < stops.length; i++)
-                      _TrailTimelineEntry(
-                        isAnchor: i == 0,
-                        isLast: i == stops.length - 1,
-                        time: _formatTrailTime(arrivalTimes[i]),
-                        title: stops[i].name,
-                        meta: stops[i].category.label,
-                        description: i == 0
-                            ? 'Starting point of your journey.'
-                            : _shortHighlight(stops[i].description),
-                        travelToNext: i < legs.length
-                            ? '~${_estimateTrailDriveMinutes(legs[i])} min drive'
-                            : null,
-                        onTap: () => onStopTap(stops[i]),
-                      ),
-                  ],
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              child: SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    final itineraryController = ProviderScope.containerOf(context, listen: false)
-                        .read(itineraryPlannerControllerProvider);
-                    final added = controller.addTrailToItinerary(itineraryController);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          added == 0
-                              ? 'This trail is already in your itinerary'
-                              : 'Added $added stop${added == 1 ? '' : 's'} to your itinerary',
-                        ),
-                        action: SnackBarAction(
-                          label: 'View',
-                          onPressed: () => context.push(ItineraryRoutes.planRoute),
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.card_travel),
-                  label: const Text('Add Trail to Itinerary'),
+                Text(
+                  '${controller.totalDistanceKm.toStringAsFixed(1)}km total',
+                  style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
                 ),
-              ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 20),
+                  onPressed: controller.clearCluster,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
+              ],
             ),
-            Container(
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: Column(
+              children: [
+                for (var i = 0; i < stops.length; i++)
+                  _TrailTimelineEntry(
+                    isAnchor: i == 0,
+                    isLast: i == stops.length - 1,
+                    time: _formatTrailTime(arrivalTimes[i]),
+                    title: stops[i].name,
+                    meta: stops[i].category.label,
+                    description: i == 0
+                        ? 'Starting point of your journey.'
+                        : _shortHighlight(stops[i].description),
+                    travelToNext: i < legs.length
+                        ? '~${_estimateTrailDriveMinutes(legs[i])} min drive'
+                        : null,
+                    onTap: () => onStopTap(stops[i]),
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: SizedBox(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              color: colorScheme.surfaceContainerHighest,
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, size: 14, color: colorScheme.outline),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Suggested path only — not a navigable route',
-                    style: TextStyle(fontSize: 11, color: colorScheme.outline),
-                  ),
-                ],
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  final itineraryController = ProviderScope.containerOf(context, listen: false)
+                      .read(itineraryPlannerControllerProvider);
+                  final added = controller.addTrailToItinerary(itineraryController);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        added == 0
+                            ? 'This trail is already in your itinerary'
+                            : 'Added $added stop${added == 1 ? '' : 's'} to your itinerary',
+                      ),
+                      action: SnackBarAction(
+                        label: 'View',
+                        onPressed: () => context.push(ItineraryRoutes.planRoute),
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.card_travel),
+                label: const Text('Add Trail to Itinerary'),
               ),
             ),
-          ],
+          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: colorScheme.surfaceContainerHighest,
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 14, color: colorScheme.outline),
+                const SizedBox(width: 6),
+                Text(
+                  'Suggested path only — not a navigable route',
+                  style: TextStyle(fontSize: 11, color: colorScheme.outline),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Rounded-top, elevated backing for the drawer's content — visually
+/// separates it from the map without a full opaque Card, matching the
+/// bottom-sheet convention (see day_trip_screen.dart's map/legend cards for
+/// the same rounded-corner language elsewhere in this module).
+class _DrawerSurface extends StatelessWidget {
+  const _DrawerSurface({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      elevation: 8,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+}
+
+/// The visual affordance signalling the sheet can be dragged — purely
+/// decorative (DraggableScrollableSheet's drag handling comes from the
+/// scrollable content itself), but without it nothing here reads as
+/// draggable at a glance.
+class _DragHandle extends StatelessWidget {
+  const _DragHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 36,
+        height: 4,
+        margin: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.outlineVariant,
+          borderRadius: BorderRadius.circular(2),
         ),
       ),
     );

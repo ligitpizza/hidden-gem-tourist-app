@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/router/shell_routes.dart';
 import '../../../shared/models/destination.dart';
+import '../../../shared/widgets/app_header.dart';
 import '../controller/packing_checklist_controller.dart';
 import '../model/packing_checklist.dart';
 import '../model/travel_document.dart';
@@ -19,13 +20,48 @@ import 'emergency_contacts_screen.dart';
 
 export 'eco_partner_screen.dart';
 
-class TravelPrepDashboardScreen extends StatelessWidget {
+class TravelPrepDashboardScreen extends StatefulWidget {
   const TravelPrepDashboardScreen({super.key});
 
   @override
+  State<TravelPrepDashboardScreen> createState() =>
+      _TravelPrepDashboardScreenState();
+}
+
+class _TravelPrepDashboardScreenState
+    extends State<TravelPrepDashboardScreen> {
+  final _checklistController = PackingChecklistController();
+
+  @override
+  void initState() {
+    super.initState();
+    _checklistController.addListener(_refresh);
+    _checklistController.load();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openChecklist() async {
+    await context.push(ShellRoutes.checklist);
+    if (mounted) await _checklistController.load();
+  }
+
+  @override
+  void dispose() {
+    _checklistController.removeListener(_refresh);
+    _checklistController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final readinessScore = _checklistController.readinessScore;
+    final checklistProgress = readinessScore / 100;
+
     return Scaffold(
-      appBar: const _TravelAssistantAppBar(),
+      appBar: const AppHeader.tabRoot(title: 'Travel Prep'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
@@ -40,15 +76,15 @@ class TravelPrepDashboardScreen extends StatelessWidget {
                 colors: [Color(0xFF315E48), Color(0xFF0D3528)],
               ),
             ),
-            child: const Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Spacer(),
-                Text(
+                const Spacer(),
+                const Text(
                   'NEXT TRIP',
                   style: TextStyle(color: Colors.white70, letterSpacing: 2),
                 ),
-                Text(
+                const Text(
                   'Emerald\nFalls',
                   style: TextStyle(
                     color: Colors.white,
@@ -56,24 +92,28 @@ class TravelPrepDashboardScreen extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                Spacer(),
+                const Spacer(),
                 Row(
                   children: [
-                    Text(
+                    const Text(
                       'Readiness Score',
                       style: TextStyle(color: Colors.white70),
                     ),
-                    Spacer(),
+                    const Spacer(),
                     Text(
-                      '85% Ready',
-                      style: TextStyle(color: Color(0xFFFFE5A5)),
+                      _checklistController.isLoading
+                          ? 'Loading...'
+                          : '$readinessScore% Ready',
+                      style: const TextStyle(color: Color(0xFFFFE5A5)),
                     ),
                   ],
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 LinearProgressIndicator(
-                  value: .85,
-                  color: Color(0xFFFFD98B),
+                  value: _checklistController.isLoading
+                      ? null
+                      : checklistProgress,
+                  color: const Color(0xFFFFD98B),
                   backgroundColor: Colors.white24,
                 ),
               ],
@@ -86,8 +126,13 @@ class TravelPrepDashboardScreen extends StatelessWidget {
             description:
                 'Personalized list based on Emerald Falls weather and activities.',
             button: 'Open Checklist',
-            progress: .65,
-            onTap: () => context.push(ShellRoutes.checklist),
+            progress: _checklistController.isLoading
+                ? null
+                : checklistProgress,
+            progressLabel: _checklistController.isLoading
+                ? null
+                : '${_checklistController.packedItems}/${_checklistController.totalItems} packed',
+            onTap: _openChecklist,
           ),
           _DashboardCard(
             icon: Icons.eco_outlined,
@@ -124,6 +169,7 @@ class _DashboardCard extends StatelessWidget {
     required this.button,
     required this.onTap,
     this.progress,
+    this.progressLabel,
     this.secondaryButton,
     this.onSecondaryTap,
   });
@@ -133,6 +179,7 @@ class _DashboardCard extends StatelessWidget {
   final String button;
   final VoidCallback onTap;
   final double? progress;
+  final String? progressLabel;
   final String? secondaryButton;
   final VoidCallback? onSecondaryTap;
 
@@ -173,7 +220,7 @@ class _DashboardCard extends StatelessWidget {
                 children: [
                   const Text('Progress'),
                   const Spacer(),
-                  Text('${(progress! * 100).round()}%'),
+                  Text(progressLabel ?? '${(progress! * 100).round()}%'),
                 ],
               ),
               const SizedBox(height: 6),
@@ -242,7 +289,7 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
   Widget build(BuildContext context) {
     final score = _controller.readinessScore;
     return Scaffold(
-      appBar: const _TravelAssistantAppBar(),
+      appBar: const AppHeader.pushed(title: 'Packing Checklist'),
       body: _controller.isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -644,7 +691,7 @@ class _EcoPartnersScreenState extends State<_LegacyEcoPartnersScreen> {
         ? partners
         : partners.where((item) => item.type == filter).toList();
     return Scaffold(
-      appBar: const _TravelAssistantAppBar(),
+      appBar: const AppHeader.pushed(title: 'Eco Partners'),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -956,14 +1003,14 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        appBar: _TravelAssistantAppBar(),
+        appBar: AppHeader.pushed(title: 'Document Vault'),
         body: Center(child: CircularProgressIndicator()),
       );
     }
     if (_unlocked) return _UnlockedDocumentVault(onLock: _lockVault);
 
     return Scaffold(
-      appBar: const _TravelAssistantAppBar(),
+      appBar: const AppHeader.pushed(title: 'Document Vault'),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -1401,7 +1448,16 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
     };
 
     return Scaffold(
-      appBar: _TravelAssistantAppBar(onLock: widget.onLock),
+      appBar: AppHeader.pushed(
+        title: 'Document Vault',
+        actions: [
+          IconButton(
+            tooltip: 'Lock vault',
+            icon: const Icon(Icons.lock_outline),
+            onPressed: widget.onLock,
+          ),
+        ],
+      ),
       bottomNavigationBar: _VaultActionBar(
         selectionCount: _selectedIds.length,
         busy: _busy,
@@ -2231,51 +2287,6 @@ class _PinCodeFieldState extends State<_PinCodeField> {
           ),
         ],
       ],
-    );
-  }
-}
-
-class _TravelAssistantAppBar extends StatelessWidget
-    implements PreferredSizeWidget {
-  const _TravelAssistantAppBar({this.onLock});
-  final VoidCallback? onLock;
-
-  @override
-  Size get preferredSize => const Size.fromHeight(64);
-
-  @override
-  Widget build(BuildContext context) {
-    return AppBar(
-      toolbarHeight: 64,
-      leading: IconButton(icon: const Icon(Icons.menu), onPressed: () {}),
-      title: const Text(
-        'Travel Assistant',
-        style: TextStyle(
-          fontSize: 22,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF003B2B),
-        ),
-      ),
-      actions: [
-        if (onLock != null)
-          IconButton(
-            tooltip: 'Lock vault',
-            icon: const Icon(Icons.lock_outline),
-            onPressed: onLock,
-          ),
-        const Padding(
-          padding: EdgeInsets.only(right: 14),
-          child: CircleAvatar(
-            radius: 19,
-            backgroundColor: Color(0xFFDDE8E1),
-            child: Icon(Icons.person, color: Color(0xFF285A48)),
-          ),
-        ),
-      ],
-      bottom: const PreferredSize(
-        preferredSize: Size.fromHeight(1),
-        child: Divider(height: 1),
-      ),
     );
   }
 }

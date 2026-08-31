@@ -14,6 +14,7 @@ import '../controller/itinerary_planner_controller.dart';
 import '../model/route_path.dart';
 import 'itinerary_routes.dart';
 import 'widgets/route_map_view.dart';
+import 'widgets/shareable_timeline_list.dart';
 import 'widgets/stat_card.dart';
 
 /// Near-black — the map's own greens/beiges made a themed path color hard
@@ -587,7 +588,10 @@ class _CircleIconButton extends StatelessWidget {
 }
 
 /// The actual content captured for "Download as image" / "Share" — a
-/// clean, branded summary card, not a screenshot of the interactive page.
+/// clean, branded summary card followed by the full stop-by-stop timeline
+/// (same [ShareableTimelineList] Day Trip's export uses), not just a route
+/// summary, so the exported image is a standalone itinerary someone can
+/// read without the app.
 class _ShareableItineraryCard extends StatelessWidget {
   final ItineraryPlannerController controller;
   const _ShareableItineraryCard({required this.controller});
@@ -599,64 +603,78 @@ class _ShareableItineraryCard extends StatelessWidget {
     final metrics = path.metricsFor(controller.selectedTravelMode);
 
     return Material(
-      color: AppTheme.primarySeed,
-      child: Container(
-        width: 360,
-        padding: const EdgeInsets.all(24),
+      color: Colors.white,
+      child: SizedBox(
+        width: 380,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.diamond, color: Colors.white, size: 20),
-                const SizedBox(width: 8),
-                const Text(
-                  'Hidden Gems of Malaysia',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Text(
-              plan.destinations.map((d) => d.name).join('  →  '),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                height: 1.3,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                _CardStat(label: 'Distance', value: metrics.formattedDistance),
-                _CardStat(label: 'Time', value: metrics.formattedDuration),
-                _CardStat(label: 'Cost', value: metrics.formattedCost),
-              ],
-            ),
-            if (path.hiddenGems.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(30),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.diamond_outlined, color: Color(0xFFE8D9A0), size: 14),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '${path.hiddenGems.length} hidden gems along this route',
-                        style: const TextStyle(color: Color(0xFFE8D9A0), fontSize: 12),
+            Container(
+              width: double.infinity,
+              color: AppTheme.primarySeed,
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.diamond, color: Colors.white, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'Hidden Gems of Malaysia',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    plan.destinations.map((d) => d.name).join('  →  '),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      height: 1.3,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      _CardStat(label: 'Distance', value: metrics.formattedDistance),
+                      _CardStat(label: 'Time', value: metrics.formattedDuration),
+                      _CardStat(label: 'Cost', value: metrics.formattedCost),
+                    ],
+                  ),
+                  if (path.hiddenGems.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withAlpha(30),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.diamond_outlined, color: Color(0xFFE8D9A0), size: 14),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              '${path.hiddenGems.length} hidden gems along this route',
+                              style: const TextStyle(color: Color(0xFFE8D9A0), fontSize: 12),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
-                ),
+                ],
               ),
-            ],
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+              child: ShareableTimelineList(timeline: plan.timeline),
+            ),
           ],
         ),
       ),

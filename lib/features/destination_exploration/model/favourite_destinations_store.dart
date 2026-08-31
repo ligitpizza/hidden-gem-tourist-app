@@ -1,33 +1,89 @@
 import 'package:flutter/foundation.dart';
 
 import 'comparison_destination.dart';
+import 'favourite_destination_repository.dart';
 
-/// In-memory holding pen for favourited destinations until a real
-/// persistence layer is agreed on for this module.
-///
-/// A [ChangeNotifier] (rather than a plain singleton) so the Saved screen's
-/// favourites section can rebuild live via [ListenableBuilder] when
-/// something is added from the comparison screen.
+/// Live view over the traveller's favourited destinations, backed by
+/// Supabase (`destination_favourites` table, user-scoped via RLS). A
+/// [ChangeNotifier] singleton so the Saved screen can rebuild via
+/// [ListenableBuilder] the moment something is saved from the Comparison
+/// screen, without either screen owning the state — mirrors
+/// SavedItinerariesStore's shape (lib/features/itinerary_planning/model/
+/// saved_itineraries_store.dart).
 class FavouriteDestinationsStore extends ChangeNotifier {
-  FavouriteDestinationsStore._internal();
+  FavouriteDestinationsStore({FavouriteDestinationRepository? repository})
+      : _repository = repository ?? FavouriteDestinationRepository();
 
-  static final FavouriteDestinationsStore instance = FavouriteDestinationsStore._internal();
+  // Mutable (not `final`) so tests can swap in a fake-repository-backed
+  // instance instead of hitting real Supabase through the default —
+  // ComparisonController.saveToFavourites always goes through this
+  // singleton rather than an injected store.
+  static FavouriteDestinationsStore instance = FavouriteDestinationsStore();
 
-  final List<ComparisonDestination> _favourites = [];
+  final FavouriteDestinationRepository _repository;
+
+  List<ComparisonDestination> _favourites = [];
+  bool isLoading = false;
+  String? error;
+  bool _loadedOnce = false;
 
   List<ComparisonDestination> get favourites => List.unmodifiable(_favourites);
 
   bool contains(String id) => _favourites.any((d) => d.id == id);
 
-  void add(ComparisonDestination destination) {
-    if (contains(destination.id)) return;
-    _favourites.add(destination);
+  /// Loads from Supabase the first time this is called; a no-op afterwards
+  /// unless [refresh] is called explicitly (e.g. pull-to-refresh).
+  Future<void> ensureLoaded() async {
+    if (_loadedOnce || isLoading) return;
+    await refresh();
+  }
+
+  Future<void> refresh() async {
+    isLoading = true;
+    error = null;
     notifyListeners();
+    try {
+      _favourites = await _repository.fetchAll();
+      _loadedOnce = true;
+    } catch (_) {
+      error = 'Could not load your favourite destinations. Check your connection and try again.';
+    }
+    isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> add(ComparisonDestination destination) async {
+    if (contains(destination.id)) return;
+    _favourites = [destination, ..._favourites];
+    _loadedOnce = true;
+    notifyListeners();
+    try {
+      await _repository.add(destination.id);
+    } catch (_) {
+      _favourites = _favourites.where((d) => d.id != destination.id).toList(); // rollback
+      error = 'Could not save this destination. Check your connection and try again.';
+      notifyListeners();
+    }
+  }
+
+  Future<void> remove(String id) async {
+    final previous = _favourites;
+    _favourites = _favourites.where((d) => d.id != id).toList();
+    notifyListeners();
+    try {
+      await _repository.remove(id);
+    } catch (_) {
+      _favourites = previous; // rollback — the delete didn't actually go through
+      error = 'Could not remove this favourite. Check your connection and try again.';
+      notifyListeners();
+    }
   }
 
   /// Test-only reset — the singleton otherwise persists state across tests.
   void clearForTesting() {
-    _favourites.clear();
-    notifyListeners();
+    _favourites = [];
+    isLoading = false;
+    error = null;
+    _loadedOnce = false;
   }
 }

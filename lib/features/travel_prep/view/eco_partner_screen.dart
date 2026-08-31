@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../shared/widgets/app_header.dart';
 import '../controller/eco_partner_controller.dart';
 import '../model/eco_partner.dart';
 import 'eco_partner_detail_screen.dart';
@@ -59,7 +60,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
   Widget build(BuildContext context) {
     final shown = _controller.visiblePartners;
     return Scaffold(
-      appBar: AppBar(title: const Text('Travel Assistant')),
+      appBar: const AppHeader.pushed(title: 'Eco Partners'),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -104,9 +105,16 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
                   onPressed: _controller.isLoading ? null : _showFilters,
                   icon: const Icon(Icons.tune, size: 19),
                   label: Text(
-                    _controller.filter == 'All'
-                        ? 'Filters · ${_controller.scopeLabel}'
-                        : '${_controller.filter} · ${_controller.scopeLabel}',
+                    [
+                      if (_controller.filter != 'All') _controller.filter,
+                      if (_controller.stateFilter != 'All states')
+                        _controller.stateFilter,
+                      if (_controller.sort == EcoPartnerSort.nameAscending)
+                        'A → Z',
+                      if (_controller.sort == EcoPartnerSort.nameDescending)
+                        'Z → A',
+                      _controller.scopeLabel,
+                    ].join(' · '),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -169,7 +177,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
             if (shown.isEmpty)
               _Message(
                 Icons.eco_outlined,
-                'No ${_controller.filter == 'All' ? 'eco partners' : _controller.filter.toLowerCase()} found ${_controller.scopeLabel}.',
+                'No ${_controller.filter == 'All' ? 'eco partners' : _controller.filter.toLowerCase()} found${_controller.stateFilter == 'All states' ? '' : ' in ${_controller.stateFilter}'} ${_controller.scopeLabel}.',
               ),
             if (shown.isNotEmpty) _resultsView(shown),
             if (_controller.totalPages > 1) ...[
@@ -247,6 +255,13 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
   Future<void> _showFilters() async {
     var selectedFilter = _controller.filter;
     var selectedRadius = _controller.radiusSelection;
+    var selectedState = _controller.stateFilter;
+    var selectedSort = _controller.sort;
+    final stateOptions = <String>{
+      'All states',
+      ..._controller.availableStates,
+      if (_controller.stateFilter != 'All states') _controller.stateFilter,
+    }.toList();
     final value = await showModalBottomSheet<_EcoFilterValue>(
       context: context,
       showDragHandle: true,
@@ -292,6 +307,68 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
                 ),
                 const SizedBox(height: 20),
                 const Text(
+                  'State',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedState,
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.location_on_outlined),
+                    border: OutlineInputBorder(),
+                  ),
+                  items: stateOptions
+                      .map(
+                        (state) =>
+                            DropdownMenuItem(value: state, child: Text(state)),
+                      )
+                      .toList(),
+                  onChanged: (value) => setSheetState(
+                    () => selectedState = value ?? 'All states',
+                  ),
+                ),
+                if (_controller.availableStates.isEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Search first to discover states from the available results.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+                const SizedBox(height: 20),
+                const Text(
+                  'Alphabetical order',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Recommended'),
+                      selected: selectedSort == EcoPartnerSort.recommended,
+                      onSelected: (_) => setSheetState(
+                        () => selectedSort = EcoPartnerSort.recommended,
+                      ),
+                    ),
+                    ChoiceChip(
+                      label: const Text('A → Z'),
+                      selected: selectedSort == EcoPartnerSort.nameAscending,
+                      onSelected: (_) => setSheetState(
+                        () => selectedSort = EcoPartnerSort.nameAscending,
+                      ),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Z → A'),
+                      selected: selectedSort == EcoPartnerSort.nameDescending,
+                      onSelected: (_) => setSheetState(
+                        () => selectedSort = EcoPartnerSort.nameDescending,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                const Text(
                   'Distance',
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
@@ -324,7 +401,12 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
                   child: FilledButton(
                     onPressed: () => Navigator.pop(
                       sheetContext,
-                      _EcoFilterValue(selectedFilter, selectedRadius),
+                      _EcoFilterValue(
+                        selectedFilter,
+                        selectedRadius,
+                        selectedState,
+                        selectedSort,
+                      ),
                     ),
                     child: const Text('Apply filters'),
                   ),
@@ -337,6 +419,8 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
     );
     if (value == null || !mounted) return;
     _controller.selectFilter(value.filter);
+    _controller.selectState(value.state);
+    _controller.selectSort(value.sort);
     await _controller.selectRadius(value.radius, fallbackQuery: _search.text);
   }
 
@@ -377,7 +461,7 @@ class _PartnerCard extends StatelessWidget {
                     child: Image.network(
                       partner.imageUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
+                      errorBuilder: (_, _, _) =>
                           _PartnerMapPreview(partner, icon: _icon),
                     ),
                   )
@@ -484,7 +568,7 @@ class _PartnerGridCard extends StatelessWidget {
                         child: Image.network(
                           partner.imageUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Icon(
+                          errorBuilder: (_, _, _) => Icon(
                             _icon,
                             color: const Color(0xFF07513C),
                             size: dense ? 20 : 34,
@@ -622,10 +706,12 @@ class _Message extends StatelessWidget {
 }
 
 class _EcoFilterValue {
-  const _EcoFilterValue(this.filter, this.radius);
+  const _EcoFilterValue(this.filter, this.radius, this.state, this.sort);
 
   final String filter;
   final double radius;
+  final String state;
+  final EcoPartnerSort sort;
 }
 
 String _label(EcoPartnerCategory category) => switch (category) {

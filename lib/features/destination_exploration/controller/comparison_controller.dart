@@ -157,8 +157,8 @@ class ComparisonController extends ChangeNotifier {
     ));
   }
 
-  void saveToFavourites(ComparisonDestination destination) {
-    FavouriteDestinationsStore.instance.add(destination);
+  Future<void> saveToFavourites(ComparisonDestination destination) {
+    return FavouriteDestinationsStore.instance.add(destination);
   }
 
   /// A per-destination breakdown (category, rating, Hidden Gem score,
