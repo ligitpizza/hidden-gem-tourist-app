@@ -158,7 +158,12 @@ $$;
 -- ---------------------------------------------------------------------
 create or replace function public.get_personalized_recommendations(
   p_limit int default 20,
-  p_month smallint default null
+  -- Plain int, not smallint: Postgres won't implicitly narrow a bare
+  -- integer literal/PostgREST-supplied number to match a smallint
+  -- parameter when resolving which overload to call -- callers passing
+  -- an ordinary int (which is what both a SQL literal and Dart's `int`
+  -- naturally are) would hit "function ... does not exist".
+  p_month int default null
 )
 returns table (
   id uuid,
@@ -228,7 +233,7 @@ as $$
   limit p_limit;
 $$;
 
-grant execute on function public.get_personalized_recommendations(int, smallint) to authenticated;
+grant execute on function public.get_personalized_recommendations(int, int) to authenticated;
 
 -- ---------------------------------------------------------------------
 -- System Timer — schedule both engine functions via pg_cron, if the

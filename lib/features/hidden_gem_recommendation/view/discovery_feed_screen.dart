@@ -51,11 +51,12 @@ class DiscoveryFeedScreen extends ConsumerWidget {
               else
                 _TopMatchCard(
                   item: controller.topMatches.first,
-                  onExplore: () {
-                    final item = controller.topMatches.first;
-                    InteractionRepository().logView(item.id);
-                    context.push(HiddenGemRecommendationRoutes.scoreDetail, extra: item);
-                  },
+                  // "view" is logged centrally by ScoreDetailScreen itself,
+                  // not here — see its doc comment.
+                  onExplore: () => context.push(
+                    HiddenGemRecommendationRoutes.scoreDetail,
+                    extra: controller.topMatches.first,
+                  ),
                 ),
               const SizedBox(height: 28),
               _SectionHeader(
@@ -81,10 +82,8 @@ class DiscoveryFeedScreen extends ConsumerWidget {
                       final item = controller.trending[index];
                       return _TrendingCard(
                         item: item,
-                        onTap: () {
-                          InteractionRepository().logView(item.id);
-                          context.push(HiddenGemRecommendationRoutes.scoreDetail, extra: item);
-                        },
+                        onTap: () =>
+                            context.push(HiddenGemRecommendationRoutes.scoreDetail, extra: item),
                       );
                     },
                   ),

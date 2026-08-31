@@ -23,6 +23,13 @@ class _HiddenGemSearchScreenState extends ConsumerState<HiddenGemSearchScreen> {
   @override
   void initState() {
     super.initState();
+    // The controller is deliberately not autoDispose (see its provider's
+    // doc comment) so recentSearches survives closing and reopening this
+    // screen — but that means the *previous* query/results would also
+    // survive unless explicitly reset here, showing stale results under
+    // a freshly-blank search field. clearQuery() resets exactly that,
+    // leaving recentSearches untouched.
+    ref.read(hiddenGemSearchControllerProvider).clearQuery();
     WidgetsBinding.instance.addPostFrameCallback((_) => _focusNode.requestFocus());
   }
 

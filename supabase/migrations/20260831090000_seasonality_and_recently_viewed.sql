@@ -40,10 +40,21 @@ on conflict (place_id, month) do nothing;
 -- 3. get_personalized_recommendations now defaults to the tourist's own
 --    stored intended_travel_month (if set) instead of always assuming
 --    "right now" -- an explicit p_month argument still overrides both.
+--
+--    Also fixes p_month's type from smallint to int (see the parameter
+--    comment below). Changing a parameter's type is a different function
+--    signature as far as Postgres is concerned, so `create or replace`
+--    alone would leave the old (int, smallint) overload sitting
+--    alongside this one instead of actually replacing it -- drop it
+--    explicitly first.
 -- ---------------------------------------------------------------------
+drop function if exists public.get_personalized_recommendations(int, smallint);
+
 create or replace function public.get_personalized_recommendations(
   p_limit int default 20,
-  p_month smallint default null
+  -- Plain int, not smallint -- see the same fix in the original
+  -- 20260825120500 migration's function comment for why.
+  p_month int default null
 )
 returns table (
   id uuid,
@@ -104,7 +115,7 @@ as $$
   limit p_limit;
 $$;
 
-grant execute on function public.get_personalized_recommendations(int, smallint) to authenticated;
+grant execute on function public.get_personalized_recommendations(int, int) to authenticated;
 
 -- ---------------------------------------------------------------------
 -- 4. "Recently Viewed" (Travel Pulse mockup) -- the caller's own most

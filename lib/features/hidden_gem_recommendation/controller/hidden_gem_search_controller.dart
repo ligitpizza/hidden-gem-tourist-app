@@ -90,7 +90,14 @@ class HiddenGemSearchController extends ChangeNotifier {
   }
 }
 
-final hiddenGemSearchControllerProvider =
-    ChangeNotifierProvider.autoDispose<HiddenGemSearchController>((ref) {
+// Deliberately NOT autoDispose — DestinationSearchController
+// (destination_exploration/controller) uses a plain, non-autoDispose
+// provider for the same reason: closing and reopening the search screen
+// should keep [recentSearches] around, the same way Module 2's search
+// already behaves. autoDispose would tear the whole controller down
+// (recent searches included) the instant the screen isn't watched, which
+// is exactly the "recent searches disappeared" behaviour found during
+// manual testing.
+final hiddenGemSearchControllerProvider = ChangeNotifierProvider<HiddenGemSearchController>((ref) {
   return HiddenGemSearchController();
 });
