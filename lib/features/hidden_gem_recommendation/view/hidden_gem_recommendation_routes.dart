@@ -16,6 +16,9 @@ class HiddenGemRecommendationRoutes {
 
   static const trending = '/recommendations/trending';
 
+  /// "Search For Gem" (UC diagram).
+  static const search = '/recommendations/search';
+
   /// Pushed with `extra:` set to the already-loaded `List<HiddenGemFeedItem>`
   /// from [RecommendationController.topMatches].
   static const topMatchesList = '/recommendations/top-matches';

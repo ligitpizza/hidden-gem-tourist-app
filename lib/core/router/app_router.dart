@@ -29,6 +29,7 @@ import '../../features/hidden_gem_recommendation/model/preference_onboarding_gat
 import '../../features/hidden_gem_recommendation/view/discovery_feed_screen.dart';
 import '../../features/hidden_gem_recommendation/view/hidden_gem_list_screen.dart';
 import '../../features/hidden_gem_recommendation/view/hidden_gem_recommendation_routes.dart';
+import '../../features/hidden_gem_recommendation/view/hidden_gem_search_screen.dart';
 import '../../features/hidden_gem_recommendation/view/preference_setup_screen.dart';
 import '../../features/hidden_gem_recommendation/view/score_detail_screen.dart';
 import '../../features/hidden_gem_recommendation/view/travel_pulse_screen.dart';
@@ -143,6 +144,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: HiddenGemRecommendationRoutes.trending,
         builder: (context, state) => const TrendingScreen(),
+      ),
+      GoRoute(
+        path: HiddenGemRecommendationRoutes.search,
+        builder: (context, state) => const HiddenGemSearchScreen(),
       ),
       GoRoute(
         path: HiddenGemRecommendationRoutes.topMatchesList,

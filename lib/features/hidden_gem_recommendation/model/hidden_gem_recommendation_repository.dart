@@ -84,6 +84,28 @@ class HiddenGemRecommendationRepository {
     }
   }
 
+  /// "Search For Gem" (UC diagram) / FR2.3's "... and search results" —
+  /// name match, ranked by the same persisted Hidden Gem Score as
+  /// everything else in this module rather than raw text relevance, so a
+  /// search result is exactly as trustworthy as a recommendation.
+  Future<List<HiddenGemFeedItem>> search(String query, {int limit = 30}) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return const [];
+
+    try {
+      final rows = await _client
+          .from('place_hidden_gem_candidates')
+          .select()
+          .ilike('name', '%$trimmed%')
+          .order('hidden_gem_score', ascending: false, nullsFirst: false)
+          .order('name', ascending: true) // tiebreaker, matches the ranking use cases
+          .limit(limit);
+      return (rows as List).map((row) => _itemFromRow(row as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<List<HiddenGemFeedItem>> _globalTopMatches({int limit = 20}) async {
     final items = await _loadCandidates();
     items.sort((a, b) => b.matchScore != a.matchScore

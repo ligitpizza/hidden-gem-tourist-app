@@ -28,7 +28,10 @@ class DiscoveryFeedScreen extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             children: [
-              _SearchBar(onTunePressed: () => context.push(HiddenGemRecommendationRoutes.travelStyle)),
+              _SearchBar(
+                onSearchTap: () => context.push(HiddenGemRecommendationRoutes.search),
+                onTunePressed: () => context.push(HiddenGemRecommendationRoutes.travelStyle),
+              ),
               const SizedBox(height: 10),
               _TravelPulseLink(onTap: () => context.push(HiddenGemRecommendationRoutes.travelPulse)),
               const SizedBox(height: 20),
@@ -95,26 +98,40 @@ class DiscoveryFeedScreen extends ConsumerWidget {
 }
 
 class _SearchBar extends StatelessWidget {
+  final VoidCallback onSearchTap;
   final VoidCallback onTunePressed;
-  const _SearchBar({required this.onTunePressed});
+  const _SearchBar({required this.onSearchTap, required this.onTunePressed});
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withAlpha(140),
         borderRadius: BorderRadius.circular(28),
       ),
       child: Row(
         children: [
-          Icon(Icons.search, color: colorScheme.onSurfaceVariant),
-          const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              'Discover your next hidden gem.',
-              style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(28),
+              onTap: onSearchTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  children: [
+                    Icon(Icons.search, color: colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Discover your next hidden gem.',
+                        style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
           IconButton(
