@@ -136,7 +136,7 @@ class PreferenceSetupScreen extends ConsumerWidget {
                 Text('When are you planning to visit?', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 4),
                 Text(
-                  'Optional — helps us favour destinations that suit that time of year (FR3.4).',
+                  'Optional — helps us favour destinations that suit that time of year.',
                   style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 10),
