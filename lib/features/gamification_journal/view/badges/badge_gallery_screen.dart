@@ -360,30 +360,58 @@ class _BadgeGrid extends StatelessWidget {
   final Map<String, UserBadgeModel> userBadgeByBadgeId;
   final void Function(BadgeModel badge, bool isUnlocked) onTapBadge;
 
+  static const _crossAxisCount = 3;
+  static const _spacing = 10.0;
+
+  Widget _buildCard(BadgeModel badge) {
+    final isUnlocked = badgeController.isUnlocked(badge.id);
+    return BadgeCard(
+      badge: badge,
+      isUnlocked: isUnlocked,
+      progress: progressByBadgeId[badge.id],
+      isHidden: userBadgeByBadgeId[badge.id]?.isHidden ?? false,
+      isPinned: badgeController.isPinned(badge.id),
+      onTap: () => onTapBadge(badge, isUnlocked),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-        childAspectRatio: 1,
-      ),
-      itemCount: badges.length,
-      itemBuilder: (context, index) {
-        final badge = badges[index];
-        final isUnlocked = badgeController.isUnlocked(badge.id);
+    // Built as rows rather than a plain GridView purely so every row (full
+    // or not) is guaranteed the same card size — a trailing, not-fully-
+    // filled row (e.g. 7 badges into 3 columns leaves one badge alone in
+    // the last row) still reads left to right, in the same top-left
+    // starting slot as every other row.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cardSize = (constraints.maxWidth - _spacing * (_crossAxisCount - 1)) / _crossAxisCount;
+        final rows = <Widget>[];
 
-        return BadgeCard(
-          badge: badge,
-          isUnlocked: isUnlocked,
-          progress: progressByBadgeId[badge.id],
-          isHidden: userBadgeByBadgeId[badge.id]?.isHidden ?? false,
-          isPinned: badgeController.isPinned(badge.id),
-          onTap: () => onTapBadge(badge, isUnlocked),
-        );
+        for (var i = 0; i < badges.length; i += _crossAxisCount) {
+          final rowBadges = badges.skip(i).take(_crossAxisCount).toList();
+          final isLastRow = i + _crossAxisCount >= badges.length;
+
+          rows.add(
+            Padding(
+              padding: EdgeInsets.only(bottom: isLastRow ? 0 : _spacing),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  for (var j = 0; j < rowBadges.length; j++) ...[
+                    if (j > 0) const SizedBox(width: _spacing),
+                    SizedBox(
+                      width: cardSize,
+                      height: cardSize,
+                      child: _buildCard(rowBadges[j]),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        }
+
+        return Column(children: rows);
       },
     );
   }

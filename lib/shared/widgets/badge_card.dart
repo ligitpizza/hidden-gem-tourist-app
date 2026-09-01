@@ -131,6 +131,14 @@ class BadgeCard extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.xl),
       child: Stack(
+        // Stack's default fit only sizes a non-positioned child to hug its
+        // own content, not fill the cell it's given — so a card's visible
+        // bordered box was hugging its icon+text (a short name like
+        // "First Steps" came out narrower than "Getting Started"), while
+        // the corner markers below stayed positioned relative to the full
+        // cell, floating outside the narrower cards. .expand forces the
+        // main content to fill the whole cell like every other card.
+        fit: StackFit.expand,
         children: [
           showHiddenMarker ? Opacity(opacity: 0.5, child: content) : content,
           if (showPinnedMarker)
