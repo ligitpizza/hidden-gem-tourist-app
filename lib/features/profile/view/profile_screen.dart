@@ -125,7 +125,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       // Photos only, paired with the destination they were taken at —
       // videos don't make sense as a still-image share card. Entries
       // without a matching destination (shouldn't normally happen) fall
-      // back to a generic label rather than being silently dropped.
+      // back to a generic label rather than being silently dropped. Every
+      // photo is handed to the share sheet (not just the latest 3) so the
+      // Tourist can pick which ones actually go on the card.
       final photos = journalController.entries
           .expand(
             (e) => e.media
@@ -138,7 +140,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                 ),
           )
-          .take(3)
           .toList();
 
       showProfileShareSheet(

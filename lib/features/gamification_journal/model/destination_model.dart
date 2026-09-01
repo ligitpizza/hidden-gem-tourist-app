@@ -26,6 +26,7 @@ const Map<String, String> _cityToState = {
   'balik pulau': 'Penang',
   'bayan lepas': 'Penang',
   'butterworth': 'Penang',
+  'tanjong bungah': 'Penang',
   // Added with the nationwide destination set (see
   // supabase/migrations/20260813130000_nationwide_destinations.sql).
   'kuala lumpur': 'Kuala Lumpur',

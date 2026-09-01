@@ -380,6 +380,8 @@ class _BadgeGrid extends StatelessWidget {
           badge: badge,
           isUnlocked: isUnlocked,
           progress: progressByBadgeId[badge.id],
+          isHidden: userBadgeByBadgeId[badge.id]?.isHidden ?? false,
+          isPinned: badgeController.isPinned(badge.id),
           onTap: () => onTapBadge(badge, isUnlocked),
         );
       },

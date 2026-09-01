@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -151,6 +152,54 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
     });
   }
 
+  /// Resolves the Tourist's real device location for the check-in's
+  /// distance check — same permission-request flow as the map's own
+  /// "locate me" (destination_map_screen.dart), so failures are surfaced
+  /// consistently across the app. Returns null (after showing a clear
+  /// reason) if a position couldn't be determined, rather than silently
+  /// falling back to some other coordinate that would make the distance
+  /// check meaningless.
+  Future<Position?> _resolveCurrentPosition() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Turn on location services to check in.')),
+          );
+        }
+        return null;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permission is required to check in.')),
+          );
+        }
+        return null;
+      }
+
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+    } catch (e) {
+      debugPrint('DestinationDetailScreen: could not resolve location: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't determine your location. Please try again.")),
+        );
+      }
+      return null;
+    }
+  }
+
   /// Runs the check-in, then feeds the result into Journal (auto-draft),
   /// Badges (unlock evaluation), and starts the destination's quiz.
   Future<void> _handleCheckIn() async {
@@ -158,13 +207,13 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
     final journalController = context.read<JournalController>();
     final badgeController = context.read<BadgeController>();
 
+    final position = await _resolveCurrentPosition();
+    if (position == null || !mounted) return;
+
     await checkInController.checkIn(
       destinationId: widget.destination.id,
-      // TODO(phase1): swap for a real geolocator reading once GPS is wired
-      // in. Using the destination's own coordinates here lets the UI flow
-      // be tested end-to-end before device location is available.
-      userLat: widget.destination.latitude,
-      userLng: widget.destination.longitude,
+      userLat: position.latitude,
+      userLng: position.longitude,
     );
 
     if (!mounted) return;

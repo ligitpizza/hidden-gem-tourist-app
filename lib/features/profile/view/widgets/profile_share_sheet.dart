@@ -85,8 +85,38 @@ class _ProfileShareSheet extends StatefulWidget {
 }
 
 class _ProfileShareSheetState extends State<_ProfileShareSheet> {
+  static const _maxPhotos = 3;
+
   final _cardKey = GlobalKey();
   bool _sharing = false;
+  late Set<int> _selectedIndices;
+
+  @override
+  void initState() {
+    super.initState();
+    // Defaults to the first _maxPhotos (most recent, since entries come in
+    // newest-first) — the old automatic behaviour, but now just a starting
+    // point the Tourist can change below.
+    _selectedIndices = {
+      for (var i = 0; i < widget.photos.length && i < _maxPhotos; i++) i,
+    };
+  }
+
+  void _toggleSelection(int index) {
+    setState(() {
+      if (_selectedIndices.contains(index)) {
+        _selectedIndices.remove(index);
+        return;
+      }
+      if (_selectedIndices.length >= _maxPhotos) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You can feature up to 3 photos — remove one first.')),
+        );
+        return;
+      }
+      _selectedIndices.add(index);
+    });
+  }
 
   Future<void> _share() async {
     setState(() => _sharing = true);
@@ -132,6 +162,11 @@ class _ProfileShareSheetState extends State<_ProfileShareSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final selectedPhotos = [
+      for (var i = 0; i < widget.photos.length; i++)
+        if (_selectedIndices.contains(i)) widget.photos[i],
+    ];
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
@@ -157,11 +192,32 @@ class _ProfileShareSheetState extends State<_ProfileShareSheet> {
                     statesExplored: widget.statesExplored,
                     totalMalaysianRegions: widget.totalMalaysianRegions,
                     economicImpactTotalRM: widget.economicImpactTotalRM,
-                    photos: widget.photos,
+                    photos: selectedPhotos,
                     topBadges: widget.topBadges,
                   ),
                 ),
               ),
+              if (widget.photos.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                Text(
+                  'Choose up to $_maxPhotos photos to feature',
+                  style: AppTypography.labelMd.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 92,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: widget.photos.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) => _SelectablePhotoTile(
+                      photo: widget.photos[index],
+                      selected: _selectedIndices.contains(index),
+                      onTap: () => _toggleSelection(index),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
@@ -352,6 +408,81 @@ class _SharePhotoTile extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One photo in the "choose which photos to feature" picker — same
+/// destination-name caption as [_SharePhotoTile], plus a selection
+/// checkmark and a dimmed, unselected look for photos not currently
+/// chosen for the card.
+class _SelectablePhotoTile extends StatelessWidget {
+  const _SelectablePhotoTile({required this.photo, required this.selected, required this.onTap});
+
+  final SharePhoto photo;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 92,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.network(
+                photo.url,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Container(color: colors.surfaceContainerHigh),
+              ),
+              if (!selected) Container(color: Colors.black.withValues(alpha: 0.45)),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(6, 14, 6, 5),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.black.withValues(alpha: 0), Colors.black.withValues(alpha: 0.75)],
+                    ),
+                  ),
+                  child: Text(
+                    photo.destinationName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: selected ? colors.primary : Colors.black.withValues(alpha: 0.4),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.2),
+                  ),
+                  child: selected
+                      ? Icon(Icons.check, size: 12, color: colors.onPrimary)
+                      : null,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
