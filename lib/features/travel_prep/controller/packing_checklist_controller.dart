@@ -76,6 +76,9 @@ class PackingChecklistController extends ChangeNotifier {
   ].where((item) => packedIds.contains(item.id)).length;
   int get readinessScore =>
       totalItems == 0 ? 0 : (packedItems * 100 / totalItems).round();
+  PackingLocationOption? get selectedLocation => locationOptions
+      .where((option) => option.id == selectedLocationId)
+      .firstOrNull;
   String get readinessStatus => switch (readinessScore) {
     >= 85 => 'READY TO WANDER',
     >= 60 => 'ALMOST READY',

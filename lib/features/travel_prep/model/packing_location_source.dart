@@ -12,6 +12,14 @@ class PackingLocationOption {
     required this.longitude,
     required this.categories,
     this.ecoPartnerCategory,
+    this.dashboardTitle,
+    this.dashboardSubtitle,
+    this.lookupName,
+    this.destinationId,
+    this.primaryCategory,
+    this.trustedImageUrl,
+    this.trustedImageAttribution,
+    this.trustedImageSourceUrl,
   });
 
   final String id;
@@ -21,6 +29,25 @@ class PackingLocationOption {
   final double longitude;
   final Set<DestinationCategory> categories;
   final EcoPartnerCategory? ecoPartnerCategory;
+  final String? dashboardTitle;
+  final String? dashboardSubtitle;
+  final String? lookupName;
+  final String? destinationId;
+  final DestinationCategory? primaryCategory;
+  final String? trustedImageUrl;
+  final String? trustedImageAttribution;
+  final String? trustedImageSourceUrl;
+
+  String get heroTitle => dashboardTitle?.trim().isNotEmpty == true
+      ? dashboardTitle!.trim()
+      : label;
+
+  String get heroSubtitle => dashboardSubtitle?.trim().isNotEmpty == true
+      ? dashboardSubtitle!.trim()
+      : subtitle;
+
+  String get coverLookupName =>
+      lookupName?.trim().isNotEmpty == true ? lookupName!.trim() : heroTitle;
 }
 
 abstract interface class PackingLocationSource {
@@ -57,6 +84,15 @@ class SavedPackingLocationSource implements PackingLocationSource {
             categories: saved.plan.destinations
                 .map((destination) => destination.category)
                 .toSet(),
+            dashboardTitle: saved.plan.destinations.length == 1
+                ? saved.plan.destinations.first.name
+                : '${saved.plan.destinations.first.name} → ${saved.plan.destinations.last.name}',
+            dashboardSubtitle: saved.plan.destinations.length == 1
+                ? 'Saved itinerary'
+                : '${saved.plan.destinations.length}-stop saved itinerary',
+            lookupName: saved.plan.destinations.first.name,
+            destinationId: saved.plan.destinations.first.id,
+            primaryCategory: saved.plan.destinations.first.category,
           ),
       for (final saved in _ecoPartners.saved)
         if (supportsEcoPartner(saved.partner.category))
@@ -68,6 +104,15 @@ class SavedPackingLocationSource implements PackingLocationSource {
             longitude: saved.partner.longitude,
             categories: {_packingCategory(saved.partner.category)},
             ecoPartnerCategory: saved.partner.category,
+            dashboardTitle: saved.partner.name,
+            dashboardSubtitle: 'Saved Eco Partner · ${saved.partner.subtype}',
+            lookupName: saved.partner.name,
+            primaryCategory: _packingCategory(saved.partner.category),
+            trustedImageUrl: saved.partner.imageUrl,
+            trustedImageAttribution:
+                saved.partner.imageSourceName ?? saved.partner.sourceName,
+            trustedImageSourceUrl:
+                saved.partner.imageSourceUrl ?? saved.partner.sourceUrl,
           ),
     ];
   }

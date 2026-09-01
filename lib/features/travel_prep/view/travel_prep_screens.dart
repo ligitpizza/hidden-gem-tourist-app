@@ -6,13 +6,18 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/router/shell_routes.dart';
+import '../../../shared/models/destination.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../controller/packing_checklist_controller.dart';
+import '../controller/travel_prep_dashboard_controller.dart';
 import '../model/packing_checklist.dart';
+import '../model/packing_location_source.dart';
 import '../model/travel_document.dart';
 import '../model/travel_document_repository.dart';
+import '../model/travel_prep_cover_image.dart';
 import '../model/vault_pin_service.dart';
 import 'travel_document_viewer_screen.dart';
 import 'emergency_contacts_screen.dart';
@@ -20,7 +25,9 @@ import 'emergency_contacts_screen.dart';
 export 'eco_partner_screen.dart';
 
 class TravelPrepDashboardScreen extends StatefulWidget {
-  const TravelPrepDashboardScreen({super.key});
+  const TravelPrepDashboardScreen({super.key, this.controller});
+
+  final TravelPrepDashboardController? controller;
 
   @override
   State<TravelPrepDashboardScreen> createState() =>
@@ -28,13 +35,61 @@ class TravelPrepDashboardScreen extends StatefulWidget {
 }
 
 class _TravelPrepDashboardScreenState extends State<TravelPrepDashboardScreen> {
-  final _checklistController = PackingChecklistController();
+  TravelPrepDashboardController? _dashboardController;
+  bool _ownsController = false;
+
+  TravelPrepDashboardController get _controller {
+    _ensureControllerInitialized();
+    return _dashboardController!;
+  }
 
   @override
   void initState() {
     super.initState();
-    _checklistController.addListener(_refresh);
-    _checklistController.load();
+    _ensureControllerInitialized();
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    // New fields are not initialized by initState when Flutter retains this
+    // State object during a hot reload.
+    _ensureControllerInitialized();
+  }
+
+  @override
+  void didUpdateWidget(covariant TravelPrepDashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.controller, widget.controller)) {
+      _releaseController();
+      _ensureControllerInitialized();
+    }
+  }
+
+  void _ensureControllerInitialized() {
+    if (_dashboardController != null) return;
+
+    final controller = widget.controller ?? TravelPrepDashboardController();
+    _dashboardController = controller;
+    _ownsController = widget.controller == null;
+    controller.addListener(_refresh);
+
+    // Deferring the load also makes this safe when the fallback is reached
+    // from build immediately after a hot reload.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !identical(_dashboardController, controller)) return;
+      controller.load();
+    });
+  }
+
+  void _releaseController() {
+    final controller = _dashboardController;
+    if (controller == null) return;
+
+    controller.removeListener(_refresh);
+    if (_ownsController) controller.dispose();
+    _dashboardController = null;
+    _ownsController = false;
   }
 
   void _refresh() {
@@ -43,107 +98,61 @@ class _TravelPrepDashboardScreenState extends State<TravelPrepDashboardScreen> {
 
   Future<void> _openChecklist() async {
     await context.push(ShellRoutes.checklist);
-    if (mounted) await _checklistController.load();
+    if (mounted) await _controller.refreshChecklist();
+  }
+
+  Future<void> _openVault() async {
+    await context.push(ShellRoutes.documentVault);
+    if (mounted) await _controller.refreshDocuments();
   }
 
   @override
   void dispose() {
-    _checklistController.removeListener(_refresh);
-    _checklistController.dispose();
+    _releaseController();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final readinessScore = _checklistController.readinessScore;
-    final checklistProgress = readinessScore / 100;
+    final checklist = _controller.checklist;
 
     return Scaffold(
       appBar: const AppHeader.tabRoot(title: 'Travel Prep'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          Container(
-            height: 235,
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF315E48), Color(0xFF0D3528)],
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Spacer(),
-                const Text(
-                  'NEXT TRIP',
-                  style: TextStyle(color: Colors.white70, letterSpacing: 2),
-                ),
-                const Text(
-                  'Emerald\nFalls',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 29,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const Spacer(),
-                Row(
-                  children: [
-                    const Text(
-                      'Readiness Score',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                    const Spacer(),
-                    Text(
-                      _checklistController.isLoading
-                          ? 'Loading...'
-                          : '$readinessScore% Ready',
-                      style: const TextStyle(color: Color(0xFFFFE5A5)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                LinearProgressIndicator(
-                  value: _checklistController.isLoading
-                      ? null
-                      : checklistProgress,
-                  color: const Color(0xFFFFD98B),
-                  backgroundColor: Colors.white24,
-                ),
-              ],
-            ),
+          _TravelPrepHeroCard(
+            controller: _controller,
+            onChooseDestination: _openChecklist,
           ),
           const SizedBox(height: 20),
           _DashboardCard(
             icon: Icons.assignment_turned_in_outlined,
             title: 'Smart Packing & Checklist',
-            description:
-                'Personalized list based on Emerald Falls weather and activities.',
+            description: _controller.packingDescription,
             button: 'Open Checklist',
-            progress: _checklistController.isLoading ? null : checklistProgress,
-            progressLabel: _checklistController.isLoading
+            progress: checklist.isLoading
                 ? null
-                : '${_checklistController.packedItems}/${_checklistController.totalItems} packed',
+                : _controller.checklistProgress,
+            progressLabel: checklist.isLoading
+                ? null
+                : '${checklist.packedItems}/${checklist.totalItems} packed',
             onTap: _openChecklist,
           ),
           _DashboardCard(
             icon: Icons.eco_outlined,
             title: 'Eco Recommendations',
             description:
-                'Sustainable stays, local dining and low-impact transport partners.',
+                'Discover sustainable hotels, dining, public transport and EV charging partners across Malaysia.',
             button: 'Browse Eco Partners',
             onTap: () => context.push(ShellRoutes.ecoPartners),
           ),
           _DashboardCard(
             icon: Icons.folder_copy_outlined,
             title: 'Document Vault',
-            description: '6 documents stored securely for your next journey.',
+            description: _controller.documentDescription,
             button: 'Manage Documents',
-            onTap: () => context.push(ShellRoutes.documentVault),
+            onTap: _openVault,
             secondaryButton: 'Emergency Contacts',
             onSecondaryTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
@@ -156,6 +165,202 @@ class _TravelPrepDashboardScreenState extends State<TravelPrepDashboardScreen> {
     );
   }
 }
+
+class _TravelPrepHeroCard extends StatelessWidget {
+  const _TravelPrepHeroCard({
+    required this.controller,
+    required this.onChooseDestination,
+  });
+
+  final TravelPrepDashboardController controller;
+  final VoidCallback onChooseDestination;
+
+  @override
+  Widget build(BuildContext context) {
+    final cover = controller.coverImage;
+    final selectedLocation = controller.selectedLocation;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: SizedBox(
+        height: 255,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF315E48), Color(0xFF0D3528)],
+                ),
+              ),
+            ),
+            if (cover != null)
+              Image.network(
+                cover.imageUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              )
+            else
+              Align(
+                alignment: const Alignment(0.72, -0.15),
+                child: Icon(
+                  _heroFallbackIcon(selectedLocation),
+                  size: 108,
+                  color: Colors.white.withValues(alpha: 0.10),
+                ),
+              ),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x55001810), Color(0xE600241A)],
+                  stops: [0, 1],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        'PACKING FOR',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          letterSpacing: 2,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (controller.isLoadingCover)
+                        const SizedBox(
+                          width: 15,
+                          height: 15,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white70,
+                          ),
+                        )
+                      else if (cover != null)
+                        Flexible(child: _CoverAttribution(image: cover)),
+                    ],
+                  ),
+                  const Spacer(),
+                  Text(
+                    controller.heroTitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      height: 1.05,
+                      fontWeight: FontWeight.w800,
+                      shadows: [Shadow(blurRadius: 8, color: Colors.black54)],
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    controller.heroSubtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                  if (!controller.hasSelectedLocation) ...[
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: onChooseDestination,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.white70),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: const Icon(Icons.add_location_alt_outlined),
+                      label: const Text('Choose in checklist'),
+                    ),
+                  ],
+                  const Spacer(),
+                  Row(
+                    children: [
+                      const Text(
+                        'Readiness Score',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      const Spacer(),
+                      Text(
+                        controller.checklist.isLoading
+                            ? 'Loading…'
+                            : '${controller.readinessScore}% Ready',
+                        style: const TextStyle(color: Color(0xFFFFE5A5)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 7),
+                  LinearProgressIndicator(
+                    value: controller.checklist.isLoading
+                        ? null
+                        : controller.checklistProgress,
+                    color: const Color(0xFFFFD98B),
+                    backgroundColor: Colors.white24,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CoverAttribution extends StatelessWidget {
+  const _CoverAttribution({required this.image});
+
+  final TravelPrepCoverImage image;
+
+  @override
+  Widget build(BuildContext context) {
+    final uri = Uri.tryParse(image.attributionUrl ?? '');
+    return Material(
+      color: Colors.black45,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: uri == null
+            ? null
+            : () => launchUrl(uri, mode: LaunchMode.externalApplication),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Text(
+            image.attribution,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+            style: const TextStyle(color: Colors.white, fontSize: 9),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+IconData _heroFallbackIcon(PackingLocationOption? location) =>
+    switch (location?.primaryCategory) {
+      DestinationCategory.beach ||
+      DestinationCategory.island => Icons.beach_access_outlined,
+      DestinationCategory.waterfall => Icons.water_outlined,
+      DestinationCategory.mountain ||
+      DestinationCategory.viewpoint => Icons.landscape_outlined,
+      DestinationCategory.restaurant ||
+      DestinationCategory.cafe => Icons.restaurant_outlined,
+      DestinationCategory.heritageSite ||
+      DestinationCategory.museum => Icons.account_balance_outlined,
+      DestinationCategory.park => Icons.park_outlined,
+      _ => Icons.travel_explore_outlined,
+    };
 
 class _DashboardCard extends StatelessWidget {
   const _DashboardCard({
