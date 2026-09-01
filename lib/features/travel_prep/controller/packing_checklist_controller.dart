@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../shared/models/destination.dart';
+import '../model/eco_partner.dart';
 import '../model/packing_checklist.dart';
 import '../model/packing_checklist_repository.dart';
 import '../model/packing_location_source.dart';
@@ -25,6 +26,7 @@ class PackingChecklistController extends ChangeNotifier {
   List<PackingLocationOption> locationOptions = const [];
   String? selectedLocationId;
   Set<DestinationCategory> destinationCategories = const {};
+  EcoPartnerCategory? ecoPartnerCategory;
   bool isLoading = true;
   PackingWeatherSummary? weather;
 
@@ -56,6 +58,12 @@ class PackingChecklistController extends ChangeNotifier {
   int get transitScore => _metricScore(_transitIds);
   String get weatherDetail =>
       weather?.shortDescription ?? 'Forecast unavailable';
+  List<String> get categoryLabels => switch (ecoPartnerCategory) {
+    EcoPartnerCategory.stay => const ['Hotel'],
+    EcoPartnerCategory.dining => const ['Dining'],
+    EcoPartnerCategory.transport => const [],
+    null => destinationCategories.map((category) => category.label).toList(),
+  };
   String get healthDetail => _metricDetail(_healthIds);
   String get transitDetail => _metricDetail(_transitIds);
 
@@ -111,13 +119,20 @@ class PackingChecklistController extends ChangeNotifier {
         .firstOrNull;
     tripLabel = selected?.label ?? 'Travel essentials';
     destinationCategories = selected?.categories ?? const {};
+    ecoPartnerCategory = selected?.ecoPartnerCategory;
     weather = selected == null
         ? null
         : await _weatherService.getForecast(
             latitude: selected.latitude,
             longitude: selected.longitude,
           );
-    sections = _buildSections(destinationCategories, weather);
+    sections = selected == null
+        ? const []
+        : _buildSections(
+            destinationCategories,
+            weather,
+            ecoPartnerCategory: selected.ecoPartnerCategory,
+          );
   }
 
   int _metricScore(Set<String> ids) {
@@ -200,8 +215,9 @@ class PackingChecklistController extends ChangeNotifier {
 
   static List<PackingChecklistSection> _buildSections(
     Set<DestinationCategory> categories,
-    PackingWeatherSummary? weather,
-  ) {
+    PackingWeatherSummary? weather, {
+    EcoPartnerCategory? ecoPartnerCategory,
+  }) {
     final groups = <String, Map<String, PackingChecklistItem>>{};
     void add(String section, String id, String name, String reason) {
       groups.putIfAbsent(section, () => {})[id] = PackingChecklistItem(
@@ -266,6 +282,60 @@ class PackingChecklistController extends ChangeNotifier {
       'Suitable for exploring destinations',
     );
 
+    if (ecoPartnerCategory == EcoPartnerCategory.stay) {
+      add(
+        'Hotel Stay',
+        'hotel_reservation',
+        'Hotel reservation and check-in details',
+        'Keep the Eco Partner booking reference and check-in time handy',
+      );
+      add(
+        'Hotel Stay',
+        'refillable_toiletries',
+        'Refillable toiletries',
+        'Use your own refillable containers to reduce single-use packaging',
+      );
+      add(
+        'Hotel Stay',
+        'sleepwear',
+        'Sleepwear',
+        'Pack for a comfortable overnight hotel stay',
+      );
+      add(
+        'Hotel Stay',
+        'reusable_slippers',
+        'Reusable slippers',
+        'Avoid disposable hotel slippers where possible',
+      );
+    }
+
+    if (ecoPartnerCategory == EcoPartnerCategory.dining) {
+      add(
+        'Dining Essentials',
+        'dietary_note',
+        'Dietary requirement note',
+        'Useful when communicating allergies or preferences',
+      );
+      add(
+        'Dining Essentials',
+        'cashless_payment',
+        'Cash or cashless payment method',
+        'Some dining venues have limited payment options',
+      );
+      add(
+        'Dining Essentials',
+        'reusable_container',
+        'Reusable food container',
+        'Bring leftovers home without single-use takeaway packaging',
+      );
+      add(
+        'Dining Essentials',
+        'reusable_cutlery',
+        'Reusable cutlery set',
+        'Helps avoid disposable utensils when dining on the go',
+      );
+    }
+
     if (weather != null) {
       if (weather.rainProbability >= 40) {
         add(
@@ -320,6 +390,15 @@ class PackingChecklistController extends ChangeNotifier {
     }
 
     for (final category in categories) {
+      if (ecoPartnerCategory == EcoPartnerCategory.stay &&
+          category == DestinationCategory.attraction) {
+        continue;
+      }
+      if (ecoPartnerCategory == EcoPartnerCategory.dining &&
+          (category == DestinationCategory.restaurant ||
+              category == DestinationCategory.cafe)) {
+        continue;
+      }
       switch (category) {
         case DestinationCategory.beach:
         case DestinationCategory.island:

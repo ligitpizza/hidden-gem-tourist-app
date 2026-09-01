@@ -1,12 +1,30 @@
 import 'package:collab/features/travel_prep/controller/packing_checklist_controller.dart';
-import 'package:collab/features/travel_prep/model/packing_location_source.dart';
+import 'package:collab/features/travel_prep/model/eco_partner.dart';
 import 'package:collab/features/travel_prep/model/packing_checklist_repository.dart';
+import 'package:collab/features/travel_prep/model/packing_location_source.dart';
 import 'package:collab/features/travel_prep/model/packing_weather_service.dart';
 import 'package:collab/shared/models/destination.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  test('only hotel and dining Eco Partners support packing checklists', () {
+    expect(
+      SavedPackingLocationSource.supportsEcoPartner(EcoPartnerCategory.stay),
+      isTrue,
+    );
+    expect(
+      SavedPackingLocationSource.supportsEcoPartner(EcoPartnerCategory.dining),
+      isTrue,
+    );
+    expect(
+      SavedPackingLocationSource.supportsEcoPartner(
+        EcoPartnerCategory.transport,
+      ),
+      isFalse,
+    );
+  });
+
   test(
     'switching saved locations keeps independent checklist progress',
     () async {
@@ -19,6 +37,13 @@ void main() {
       await controller.load();
       expect(controller.selectedLocationId, 'eco:1');
       expect(controller.tripLabel, 'Eco Lodge');
+      expect(controller.categoryLabels, ['Hotel']);
+      expect(
+        controller.sections
+            .expand((section) => section.items)
+            .map((item) => item.id),
+        contains('hotel_reservation'),
+      );
 
       await controller.toggleItem('passport', true);
       expect(controller.packedIds, contains('passport'));
@@ -29,6 +54,13 @@ void main() {
       expect(
         controller.destinationCategories,
         contains(DestinationCategory.restaurant),
+      );
+      expect(controller.categoryLabels, ['Dining']);
+      expect(
+        controller.sections
+            .expand((section) => section.items)
+            .map((item) => item.id),
+        containsAll(['dietary_note', 'reusable_container']),
       );
 
       await controller.selectLocation('eco:1');
@@ -61,6 +93,7 @@ class _FakePackingLocationSource implements PackingLocationSource {
       latitude: 5.98,
       longitude: 116.07,
       categories: {DestinationCategory.attraction},
+      ecoPartnerCategory: EcoPartnerCategory.stay,
     ),
     PackingLocationOption(
       id: 'eco:2',
@@ -69,6 +102,7 @@ class _FakePackingLocationSource implements PackingLocationSource {
       latitude: 5.99,
       longitude: 116.08,
       categories: {DestinationCategory.restaurant},
+      ecoPartnerCategory: EcoPartnerCategory.dining,
     ),
   ];
 }

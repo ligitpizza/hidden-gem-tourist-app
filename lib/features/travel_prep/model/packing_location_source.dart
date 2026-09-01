@@ -11,6 +11,7 @@ class PackingLocationOption {
     required this.latitude,
     required this.longitude,
     required this.categories,
+    this.ecoPartnerCategory,
   });
 
   final String id;
@@ -19,6 +20,7 @@ class PackingLocationOption {
   final double latitude;
   final double longitude;
   final Set<DestinationCategory> categories;
+  final EcoPartnerCategory? ecoPartnerCategory;
 }
 
 abstract interface class PackingLocationSource {
@@ -57,21 +59,27 @@ class SavedPackingLocationSource implements PackingLocationSource {
                 .toSet(),
           ),
       for (final saved in _ecoPartners.saved)
-        PackingLocationOption(
-          id: 'eco:${saved.id}',
-          label: saved.partner.name,
-          subtitle: 'Saved Eco Partner · ${saved.partner.subtype}',
-          latitude: saved.partner.latitude,
-          longitude: saved.partner.longitude,
-          categories: {_packingCategory(saved.partner.category)},
-        ),
+        if (supportsEcoPartner(saved.partner.category))
+          PackingLocationOption(
+            id: 'eco:${saved.id}',
+            label: saved.partner.name,
+            subtitle: 'Saved Eco Partner · ${saved.partner.subtype}',
+            latitude: saved.partner.latitude,
+            longitude: saved.partner.longitude,
+            categories: {_packingCategory(saved.partner.category)},
+            ecoPartnerCategory: saved.partner.category,
+          ),
     ];
   }
+
+  static bool supportsEcoPartner(EcoPartnerCategory category) =>
+      category == EcoPartnerCategory.stay ||
+      category == EcoPartnerCategory.dining;
 
   static DestinationCategory _packingCategory(EcoPartnerCategory category) =>
       switch (category) {
         EcoPartnerCategory.dining => DestinationCategory.restaurant,
-        EcoPartnerCategory.stay ||
+        EcoPartnerCategory.stay => DestinationCategory.attraction,
         EcoPartnerCategory.transport => DestinationCategory.attraction,
       };
 }

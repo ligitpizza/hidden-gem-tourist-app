@@ -15,10 +15,14 @@ class EcoPartnerDetailScreen extends StatelessWidget {
     super.key,
     required this.partner,
     required this.destinationLabel,
+    this.showDistance = false,
+    this.outsideRadiusKm,
   });
 
   final EcoPartner partner;
   final String destinationLabel;
+  final bool showDistance;
+  final double? outsideRadiusKm;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -54,10 +58,16 @@ class EcoPartnerDetailScreen extends StatelessWidget {
           children: [
             _Pill(_categoryLabel(partner.category), _categoryIcon),
             _Pill(partner.subtype, _categoryIcon),
-            _Pill(
-              '${partner.distanceKm.toStringAsFixed(1)} km away',
-              Icons.near_me_outlined,
-            ),
+            if (showDistance)
+              _Pill(
+                '${partner.distanceKm.toStringAsFixed(1)} km away',
+                Icons.near_me_outlined,
+              ),
+            if (outsideRadiusKm != null)
+              _Pill(
+                'Outside your ${outsideRadiusKm!.round()} km area',
+                Icons.location_off_outlined,
+              ),
             if (partner.priceBand?.isNotEmpty == true)
               _Pill(partner.priceBand!, Icons.payments_outlined),
           ],

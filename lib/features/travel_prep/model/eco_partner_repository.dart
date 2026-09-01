@@ -159,26 +159,9 @@ class EcoPartnerRepository implements EcoPartnerRepositoryContract {
         final matchOrder = queryB.compareTo(queryA);
         return matchOrder != 0 ? matchOrder : _rank(a, b);
       });
-    final best = partners.isEmpty ? null : partners.first;
-    final bestScore = best == null ? 0 : _nameMatchScore(best.name, clean);
-    final isDiningSearch = const {
-      'cafe',
-      'restaurant',
-    }.contains(first.category.name);
-    final focusCategory =
-        best != null &&
-            ((bestScore >= 80 && best.distanceKm <= .75) ||
-                (isDiningSearch && bestScore >= 10))
-        ? best.category
-        : null;
-    final focusedPartners = focusCategory == null
-        ? partners
-        : partners
-              .where((partner) => partner.category == focusCategory)
-              .toList();
     return EcoPartnerSearchResult(
       destination: result.destination,
-      partners: focusedPartners,
+      partners: partners,
       warnings: result.warnings,
     );
   }

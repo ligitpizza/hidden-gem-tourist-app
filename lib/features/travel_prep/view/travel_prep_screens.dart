@@ -8,7 +8,6 @@ import 'package:open_filex/open_filex.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/router/shell_routes.dart';
-import '../../../shared/models/destination.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../controller/packing_checklist_controller.dart';
 import '../model/packing_checklist.dart';
@@ -289,6 +288,10 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
       appBar: const AppHeader.pushed(title: 'Packing Checklist'),
       body: _controller.isLoading
           ? const Center(child: CircularProgressIndicator())
+          : _controller.locationOptions.isEmpty
+          ? _PackingChecklistEmptyState(
+              onBrowseEcoPartners: () => context.push(ShellRoutes.ecoPartners),
+            )
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
               children: [
@@ -304,6 +307,7 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
                   DropdownButtonFormField<String>(
                     initialValue: _controller.selectedLocationId,
                     isExpanded: true,
+                    itemHeight: 64,
                     decoration: const InputDecoration(
                       labelText: 'Packing location',
                       prefixIcon: Icon(Icons.luggage_outlined),
@@ -314,6 +318,7 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
                           (option) => DropdownMenuItem(
                             value: option.id,
                             child: Column(
+                              mainAxisSize: MainAxisSize.min,
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -324,9 +329,24 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
                                 ),
                                 Text(
                                   option.subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: Theme.of(context).textTheme.labelSmall,
                                 ),
                               ],
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    selectedItemBuilder: (context) => _controller
+                        .locationOptions
+                        .map(
+                          (option) => Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              option.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         )
@@ -341,16 +361,23 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
                   'Recommendations for ${_controller.tripLabel}',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
-                if (_controller.destinationCategories.isNotEmpty) ...[
+                if (_controller.categoryLabels.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 6,
                     runSpacing: 6,
-                    children: _controller.destinationCategories
+                    children: _controller.categoryLabels
                         .map(
                           (category) => Chip(
-                            avatar: const Icon(Icons.place_outlined, size: 16),
-                            label: Text(category.label),
+                            avatar: Icon(
+                              category == 'Hotel'
+                                  ? Icons.hotel_outlined
+                                  : category == 'Dining'
+                                  ? Icons.restaurant_outlined
+                                  : Icons.place_outlined,
+                              size: 16,
+                            ),
+                            label: Text(category),
                           ),
                         )
                         .toList(),
@@ -569,6 +596,48 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
   }
 }
 
+class _PackingChecklistEmptyState extends StatelessWidget {
+  const _PackingChecklistEmptyState({required this.onBrowseEcoPartners});
+
+  final VoidCallback onBrowseEcoPartners;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.luggage_outlined,
+            size: 64,
+            color: Color(0xFF315E48),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Choose a trip to start packing',
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Save a hotel or dining Eco Partner, or save an itinerary, to get a checklist tailored to that category and location.',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: onBrowseEcoPartners,
+            icon: const Icon(Icons.eco_outlined),
+            label: const Text('Browse Eco Partners'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class _ReadinessMetric extends StatelessWidget {
   const _ReadinessMetric(this.icon, this.label, this.value, this.detail);
   final IconData icon;
@@ -618,6 +687,8 @@ class _ChecklistCard extends StatelessWidget {
     'Cultural Visits' => Icons.account_balance_outlined,
     'Health & Personal Care' => Icons.health_and_safety_outlined,
     'Weather Essentials' => Icons.wb_sunny_outlined,
+    'Hotel Stay' => Icons.hotel_outlined,
+    'Dining Essentials' => Icons.restaurant_outlined,
     _ => Icons.backpack_outlined,
   };
 
@@ -928,14 +999,16 @@ class _EcoPartnerCard extends StatelessWidget {
 }
 
 class DocumentVaultScreen extends StatefulWidget {
-  const DocumentVaultScreen({super.key});
+  const DocumentVaultScreen({super.key, this.pinService});
+
+  final VaultPinServiceContract? pinService;
 
   @override
   State<DocumentVaultScreen> createState() => _DocumentVaultScreenState();
 }
 
 class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
-  final _pinService = VaultPinService();
+  late final VaultPinServiceContract _pinService;
   final _pinController = TextEditingController();
   final _confirmPinController = TextEditingController();
   bool _loading = true;
@@ -943,11 +1016,13 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
   bool _unlocked = false;
   bool _hidePin = true;
   bool _resettingPin = false;
+  int? _selectedPinLength;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    _pinService = widget.pinService ?? VaultPinService();
     _loadPinState();
   }
 
@@ -956,15 +1031,31 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
     if (!mounted) return;
     setState(() {
       _hasPin = savedPin != null;
+      _selectedPinLength = savedPin?.length;
       _loading = false;
+    });
+  }
+
+  void _selectPinLength(int length) {
+    if (_selectedPinLength == length) return;
+    setState(() {
+      _selectedPinLength = length;
+      _error = null;
+      _pinController.clear();
+      _confirmPinController.clear();
     });
   }
 
   Future<void> _submitPin() async {
     FocusScope.of(context).unfocus();
     final pin = _pinController.text;
-    if (!RegExp(r'^\d{4,6}$').hasMatch(pin)) {
-      setState(() => _error = 'Enter a PIN containing 4 to 6 digits.');
+    final pinLength = _selectedPinLength;
+    if (pinLength == null) {
+      setState(() => _error = 'Choose a 4 or 6 digit PIN length.');
+      return;
+    }
+    if (!RegExp('^\\d{$pinLength}\$').hasMatch(pin)) {
+      setState(() => _error = 'Enter a $pinLength-digit PIN.');
       return;
     }
 
@@ -1020,6 +1111,9 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
       _pinController.clear();
     });
     if (reset == true) {
+      final savedPin = await _pinService.readPin();
+      if (!mounted) return;
+      setState(() => _selectedPinLength = savedPin?.length);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Your vault PIN has been reset.')),
       );
@@ -1079,55 +1173,66 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
                   Text(
                     _hasPin
                         ? 'Enter your PIN to securely access your travel documents.'
-                        : 'Choose a 4 to 6 digit PIN to protect your travel documents.',
+                        : 'Choose either a 4-digit or 6-digit PIN to protect your travel documents.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 28),
-                  _PinCodeField(
-                    controller: _pinController,
-                    label: _hasPin ? 'Vault PIN' : 'Create PIN',
-                    autofocus: true,
-                    obscureText: _hidePin,
-                    errorText: _error,
-                    onSubmitted: _hasPin ? _submitPin : null,
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () => setState(() => _hidePin = !_hidePin),
-                      icon: Icon(
-                        _hidePin
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                        size: 18,
-                      ),
-                      label: Text(_hidePin ? 'Show PIN' : 'Hide PIN'),
-                    ),
-                  ),
                   if (!_hasPin) ...[
-                    const SizedBox(height: 6),
+                    _PinLengthSelector(
+                      selectedLength: _selectedPinLength,
+                      onSelected: _selectPinLength,
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                  if (_selectedPinLength != null) ...[
                     _PinCodeField(
-                      controller: _confirmPinController,
-                      label: 'Confirm PIN',
+                      controller: _pinController,
+                      label: _hasPin ? 'Vault PIN' : 'Create PIN',
+                      pinLength: _selectedPinLength!,
+                      autofocus: true,
                       obscureText: _hidePin,
-                      onSubmitted: _submitPin,
+                      errorText: _error,
+                      onSubmitted: _hasPin ? _submitPin : null,
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () => setState(() => _hidePin = !_hidePin),
+                        icon: Icon(
+                          _hidePin
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          size: 18,
+                        ),
+                        label: Text(_hidePin ? 'Show PIN' : 'Hide PIN'),
+                      ),
+                    ),
+                    if (!_hasPin) ...[
+                      const SizedBox(height: 6),
+                      _PinCodeField(
+                        controller: _confirmPinController,
+                        label: 'Confirm PIN',
+                        pinLength: _selectedPinLength!,
+                        obscureText: _hidePin,
+                        onSubmitted: _submitPin,
+                      ),
+                    ],
+                    const SizedBox(height: 22),
+                    ElevatedButton.icon(
+                      onPressed: _resettingPin ? null : _submitPin,
+                      icon: Icon(
+                        _hasPin
+                            ? Icons.lock_open_outlined
+                            : Icons.shield_outlined,
+                      ),
+                      label: Text(
+                        _hasPin ? 'Unlock Vault' : 'Create PIN & Continue',
+                      ),
                     ),
                   ],
-                  const SizedBox(height: 22),
-                  ElevatedButton.icon(
-                    onPressed: _resettingPin ? null : _submitPin,
-                    icon: Icon(
-                      _hasPin
-                          ? Icons.lock_open_outlined
-                          : Icons.shield_outlined,
-                    ),
-                    label: Text(
-                      _hasPin ? 'Unlock Vault' : 'Create PIN & Continue',
-                    ),
-                  ),
                   if (_hasPin) ...[
                     const SizedBox(height: 8),
                     TextButton.icon(
@@ -1172,7 +1277,7 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
 class _PasswordPinResetDialog extends StatefulWidget {
   const _PasswordPinResetDialog({required this.pinService});
 
-  final VaultPinService pinService;
+  final VaultPinServiceContract pinService;
 
   @override
   State<_PasswordPinResetDialog> createState() =>
@@ -1187,6 +1292,7 @@ class _PasswordPinResetDialogState extends State<_PasswordPinResetDialog> {
   bool _saving = false;
   bool _hidePassword = true;
   bool _hidePin = true;
+  int? _selectedPinLength;
   String? _error;
 
   Future<void> _verifyPassword() async {
@@ -1225,8 +1331,13 @@ class _PasswordPinResetDialogState extends State<_PasswordPinResetDialog> {
 
   Future<void> _saveNewPin() async {
     final pin = _pinController.text;
-    if (!RegExp(r'^\d{4,6}$').hasMatch(pin)) {
-      setState(() => _error = 'Enter a PIN containing 4 to 6 digits.');
+    final pinLength = _selectedPinLength;
+    if (pinLength == null) {
+      setState(() => _error = 'Choose a 4 or 6 digit PIN length.');
+      return;
+    }
+    if (!RegExp('^\\d{$pinLength}\$').hasMatch(pin)) {
+      setState(() => _error = 'Enter a $pinLength-digit PIN.');
       return;
     }
     if (pin != _confirmController.text) {
@@ -1285,49 +1396,65 @@ class _PasswordPinResetDialogState extends State<_PasswordPinResetDialog> {
         ),
         const SizedBox(height: 22),
         const Text(
-          'Enter and confirm a new 4 to 6 digit PIN for your Document Vault.',
+          'Choose either a 4-digit or 6-digit PIN for your Document Vault.',
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 26),
-        _PinCodeField(
-          controller: _pinController,
-          label: 'New PIN',
-          autofocus: true,
-          obscureText: _hidePin,
-          errorText: _error,
+        const SizedBox(height: 20),
+        _PinLengthSelector(
+          selectedLength: _selectedPinLength,
+          onSelected: (length) {
+            setState(() {
+              _selectedPinLength = length;
+              _error = null;
+              _pinController.clear();
+              _confirmController.clear();
+            });
+          },
         ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: () => setState(() => _hidePin = !_hidePin),
-            icon: Icon(
-              _hidePin
-                  ? Icons.visibility_outlined
-                  : Icons.visibility_off_outlined,
-              size: 18,
-            ),
-            label: Text(_hidePin ? 'Show PIN' : 'Hide PIN'),
+        if (_selectedPinLength != null) ...[
+          const SizedBox(height: 24),
+          _PinCodeField(
+            controller: _pinController,
+            label: 'New PIN',
+            pinLength: _selectedPinLength!,
+            autofocus: true,
+            obscureText: _hidePin,
+            errorText: _error,
           ),
-        ),
-        const SizedBox(height: 6),
-        _PinCodeField(
-          controller: _confirmController,
-          label: 'Confirm new PIN',
-          obscureText: _hidePin,
-          onSubmitted: _saving ? null : _saveNewPin,
-        ),
-        const SizedBox(height: 22),
-        ElevatedButton.icon(
-          onPressed: _saving ? null : _saveNewPin,
-          icon: _saving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.lock_reset),
-          label: const Text('Reset PIN'),
-        ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => setState(() => _hidePin = !_hidePin),
+              icon: Icon(
+                _hidePin
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+                size: 18,
+              ),
+              label: Text(_hidePin ? 'Show PIN' : 'Hide PIN'),
+            ),
+          ),
+          const SizedBox(height: 6),
+          _PinCodeField(
+            controller: _confirmController,
+            label: 'Confirm new PIN',
+            pinLength: _selectedPinLength!,
+            obscureText: _hidePin,
+            onSubmitted: _saving ? null : _saveNewPin,
+          ),
+          const SizedBox(height: 22),
+          ElevatedButton.icon(
+            onPressed: _saving ? null : _saveNewPin,
+            icon: _saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.lock_reset),
+            label: const Text('Reset PIN'),
+          ),
+        ],
         const SizedBox(height: 8),
         TextButton(
           onPressed: _saving ? null : () => Navigator.pop(context, false),
@@ -2185,10 +2312,54 @@ class _VaultActionBar extends StatelessWidget {
   }
 }
 
+class _PinLengthSelector extends StatelessWidget {
+  const _PinLengthSelector({
+    required this.selectedLength,
+    required this.onSelected,
+  });
+
+  final int? selectedLength;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const Text(
+        'Choose PIN length',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontWeight: FontWeight.w700),
+      ),
+      const SizedBox(height: 10),
+      SegmentedButton<int>(
+        segments: const [
+          ButtonSegment<int>(
+            value: 4,
+            icon: Icon(Icons.pin_outlined),
+            label: Text('4 digits'),
+          ),
+          ButtonSegment<int>(
+            value: 6,
+            icon: Icon(Icons.password_outlined),
+            label: Text('6 digits'),
+          ),
+        ],
+        selected: selectedLength == null ? const {} : {selectedLength!},
+        emptySelectionAllowed: true,
+        showSelectedIcon: true,
+        onSelectionChanged: (selection) {
+          if (selection.isNotEmpty) onSelected(selection.first);
+        },
+      ),
+    ],
+  );
+}
+
 class _PinCodeField extends StatefulWidget {
   const _PinCodeField({
     required this.controller,
     required this.label,
+    required this.pinLength,
     this.autofocus = false,
     this.obscureText = true,
     this.errorText,
@@ -2197,6 +2368,7 @@ class _PinCodeField extends StatefulWidget {
 
   final TextEditingController controller;
   final String label;
+  final int pinLength;
   final bool autofocus;
   final bool obscureText;
   final String? errorText;
@@ -2253,15 +2425,19 @@ class _PinCodeFieldState extends State<_PinCodeField> {
             children: [
               ExcludeSemantics(
                 child: Row(
-                  children: List.generate(6, (index) {
+                  children: List.generate(widget.pinLength, (index) {
                     final hasValue = index < value.length;
                     final active =
                         _focusNode.hasFocus &&
                         (index == value.length ||
-                            (value.length == 6 && index == 5));
+                            (value.length == widget.pinLength &&
+                                index == widget.pinLength - 1));
                     return Expanded(
                       child: Container(
-                        margin: EdgeInsets.only(right: index == 5 ? 0 : 7),
+                        key: ValueKey('${widget.label}-pin-box-$index'),
+                        margin: EdgeInsets.only(
+                          right: index == widget.pinLength - 1 ? 0 : 7,
+                        ),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: colorScheme.surface,
@@ -2293,15 +2469,16 @@ class _PinCodeFieldState extends State<_PinCodeField> {
                 child: Opacity(
                   opacity: 0,
                   child: TextField(
+                    key: ValueKey('${widget.label}-pin-input'),
                     controller: widget.controller,
                     focusNode: _focusNode,
                     autofocus: widget.autofocus,
                     keyboardType: TextInputType.number,
                     textInputAction: TextInputAction.done,
-                    maxLength: 6,
+                    maxLength: widget.pinLength,
                     inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(6),
+                      LengthLimitingTextInputFormatter(widget.pinLength),
                     ],
                     enableSuggestions: false,
                     autocorrect: false,

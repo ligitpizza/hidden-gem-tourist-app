@@ -54,4 +54,64 @@ void main() {
       isNotNull,
     );
   });
+
+  testWidgets('distance is hidden without a user-location reference', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EcoPartnerDetailScreen(
+          partner: _detailPartner,
+          destinationLabel: 'Malaysia',
+        ),
+      ),
+    );
+
+    expect(find.textContaining('0.0 km away'), findsNothing);
+  });
+
+  testWidgets('distance is shown for current-location results', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EcoPartnerDetailScreen(
+          partner: _detailPartner.withDistance(6.4),
+          destinationLabel: 'Current location',
+          showDistance: true,
+        ),
+      ),
+    );
+
+    expect(find.text('6.4 km away'), findsOneWidget);
+  });
+
+  testWidgets('far search result shows its nearby-area status', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EcoPartnerDetailScreen(
+          partner: _detailPartner.withDistance(243.7),
+          destinationLabel: 'Eco Partner name search',
+          showDistance: true,
+          outsideRadiusKm: 50,
+        ),
+      ),
+    );
+
+    expect(find.text('243.7 km away'), findsOneWidget);
+    expect(find.text('Outside your 50 km area'), findsOneWidget);
+  });
 }
+
+final _detailPartner = EcoPartner(
+  id: 'hotel:detail',
+  name: 'Detail Eco Hotel',
+  category: EcoPartnerCategory.stay,
+  subtype: 'Hotel',
+  latitude: 3.14,
+  longitude: 101.69,
+  address: 'Kuala Lumpur',
+  sustainabilityLabel: 'GSTC verified',
+  evidence: 'Verified evidence',
+  sourceName: 'Test source',
+  sourceUrl: 'https://example.com',
+  lastUpdated: DateTime(2026),
+);
