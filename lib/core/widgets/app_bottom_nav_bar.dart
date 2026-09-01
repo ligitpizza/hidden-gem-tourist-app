@@ -22,7 +22,7 @@ class _NavDestination {
 const _destinations = [
   _NavDestination(icon: Icons.map_outlined, selectedIcon: Icons.map, label: 'Map'), // 0
   _NavDestination(icon: Icons.explore_outlined, selectedIcon: Icons.explore, label: 'Explore'), // 1
-  _NavDestination(icon: Icons.smart_toy_outlined, selectedIcon: Icons.smart_toy, label: 'Assistant'), // 2
+  _NavDestination(icon: Icons.home_outlined, selectedIcon: Icons.home, label: 'Home'), // 2
   _NavDestination(icon: Icons.bookmark_outline, selectedIcon: Icons.bookmark, label: 'Saved'), // 3
   _NavDestination(icon: Icons.luggage_outlined, selectedIcon: Icons.luggage, label: 'Travel Prep'), // 4
   _NavDestination(icon: Icons.auto_stories_outlined, selectedIcon: Icons.auto_stories, label: 'Journal'), // 5
@@ -30,7 +30,7 @@ const _destinations = [
 ];
 
 /// Always-visible tabs, either side of the center "More" button.
-const _primaryLeft = [0, 2]; // Map, Assistant
+const _primaryLeft = [0, 2]; // Map, Home
 const _primaryRight = [5, 6]; // Journal, Profile
 
 /// Tucked behind "More" — real shell branches selected the same way as the
@@ -63,7 +63,7 @@ int _pendingQuizCount(BuildContext context) {
   return quizController.pendingQuizCount(checkedInIds);
 }
 
-/// Bottom nav: a primary row (Map, Assistant, More, Journal, Profile)
+/// Bottom nav: a primary row (Map, Home, More, Journal, Profile)
 /// always visible, plus a "More" button that opens a dark overlay — sized
 /// to stop just above the nav bar itself (rather than the whole screen)
 /// so the bar stays visible, undimmed, and tappable — with the remaining

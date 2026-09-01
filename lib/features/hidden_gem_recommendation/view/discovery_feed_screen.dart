@@ -139,7 +139,10 @@ class _SearchBar extends StatelessWidget {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.tune),
+            // Icons.tune reads as a generic "search filters" control, which
+            // this isn't — it's a shortcut to the preference profile
+            // itself. Icons.interests names the actual concept.
+            icon: const Icon(Icons.interests_outlined),
             tooltip: 'Refresh your interests',
             color: colorScheme.onSurfaceVariant,
             onPressed: onTunePressed,
