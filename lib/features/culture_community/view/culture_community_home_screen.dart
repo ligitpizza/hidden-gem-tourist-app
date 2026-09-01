@@ -18,14 +18,17 @@ class CultureCommunityHomeScreen
   });
 
   @override
-  ConsumerState<CultureCommunityHomeScreen>
+  ConsumerState<
+      CultureCommunityHomeScreen>
   createState() =>
       _CultureCommunityHomeScreenState();
 }
 
 class _CultureCommunityHomeScreenState
-    extends ConsumerState<CultureCommunityHomeScreen> {
-  final TextEditingController _searchController =
+    extends ConsumerState<
+        CultureCommunityHomeScreen> {
+  final TextEditingController
+  _searchController =
   TextEditingController();
 
   String _searchQuery = '';
@@ -33,11 +36,34 @@ class _CultureCommunityHomeScreenState
   @override
   void dispose() {
     _searchController.dispose();
+
     super.dispose();
   }
 
   // =========================================================
-  // EVENT SEARCH
+  // REFRESH BOTH EVENT + FOOD
+  // =========================================================
+
+  Future<void> _refresh() async {
+    await Future.wait(
+      [
+        ref
+            .read(
+          culturalEventsControllerProvider,
+        )
+            .refresh(),
+
+        ref
+            .read(
+          traditionalFoodControllerProvider,
+        )
+            .refresh(),
+      ],
+    );
+  }
+
+  // =========================================================
+  // FILTER EVENTS
   // =========================================================
 
   List<CulturalEvent> _filterEvents(
@@ -46,37 +72,30 @@ class _CultureCommunityHomeScreenState
     final query =
     _searchQuery.trim().toLowerCase();
 
-    final filtered = events.where((event) {
-      if (query.isEmpty) {
-        return true;
-      }
+    if (query.isEmpty) {
+      return events;
+    }
 
-      final searchableText = [
-        event.name,
-        event.description,
-        event.category.label,
-        event.venueName,
-        event.address ?? '',
-        event.city ?? '',
-        event.state,
-        ...event.travelStyles,
-      ].join(' ').toLowerCase();
+    return events.where(
+          (event) {
+        final searchable = [
+          event.name,
+          event.description,
+          event.category.label,
+          event.venueName,
+          event.city ?? '',
+          event.state,
+          event.address ?? '',
+          ...event.travelStyles,
+        ].join(' ').toLowerCase();
 
-      return searchableText.contains(query);
-    }).toList();
-
-    // Show earlier events first.
-    filtered.sort(
-          (a, b) => a.startAt.compareTo(
-        b.startAt,
-      ),
-    );
-
-    return filtered;
+        return searchable.contains(query);
+      },
+    ).toList();
   }
 
   // =========================================================
-  // FOOD SEARCH
+  // FILTER FOODS
   // =========================================================
 
   List<TraditionalFood> _filterFoods(
@@ -89,41 +108,23 @@ class _CultureCommunityHomeScreenState
       return foods;
     }
 
-    return foods.where((food) {
-      final searchableText = [
-        food.name,
-        food.description,
-        food.culturalCategory,
-        food.state,
-        food.region ?? '',
-        ...food.dietaryTags,
-        ...food.ingredients,
-      ].join(' ').toLowerCase();
+    return foods.where(
+          (food) {
+        final searchable = [
+          food.name,
+          food.description,
+          food.culturalHistory,
+          food.state,
+          food.region ?? '',
+          food.culturalCategory,
+          ...food.ingredients,
+          ...food.dietaryTags,
+          ...food.travelStyles,
+        ].join(' ').toLowerCase();
 
-      return searchableText.contains(query);
-    }).toList();
-  }
-
-  // =========================================================
-  // QUICK SEARCH
-  // =========================================================
-
-  void _applyQuickSearch(
-      String value,
-      ) {
-    _searchController.text = value;
-
-    setState(() {
-      _searchQuery = value;
-    });
-  }
-
-  void _clearSearch() {
-    _searchController.clear();
-
-    setState(() {
-      _searchQuery = '';
-    });
+        return searchable.contains(query);
+      },
+    ).toList();
   }
 
   // =========================================================
@@ -131,12 +132,16 @@ class _CultureCommunityHomeScreenState
   // =========================================================
 
   @override
-  Widget build(BuildContext context) {
-    final eventController = ref.watch(
+  Widget build(
+      BuildContext context,
+      ) {
+    final eventController =
+    ref.watch(
       culturalEventsControllerProvider,
     );
 
-    final foodController = ref.watch(
+    final foodController =
+    ref.watch(
       traditionalFoodControllerProvider,
     );
 
@@ -150,35 +155,50 @@ class _CultureCommunityHomeScreenState
 
     return Scaffold(
       // =======================================================
-      // IMPORTANT:
-      //
-      // Culture is now a StatefulShellRoute branch.
-      // We do not want a back button on the Culture Home page.
-      //
-      // The team's _MainShell will display the bottom nav.
+      // APP BAR
       // =======================================================
 
       appBar: AppBar(
         automaticallyImplyLeading: false,
+
         title: Text(
           'Culture & Community',
-          style: GoogleFonts.montserrat(
+          style:
+          GoogleFonts.montserrat(
             fontWeight: FontWeight.w700,
           ),
         ),
+
+        actions: [
+          // ===================================================
+          // SAVED CULTURE BUTTON
+          // ===================================================
+
+          IconButton(
+            tooltip: 'Saved Culture',
+            onPressed: () {
+              context.push(
+                CultureCommunityRoutes.saved,
+              );
+            },
+            icon: const Icon(
+              Icons.bookmark_outline_rounded,
+            ),
+          ),
+        ],
       ),
 
+      // =======================================================
+      // BODY
+      // =======================================================
+
       body: RefreshIndicator(
-        onRefresh: () async {
-          await Future.wait([
-            eventController.refresh(),
-            foodController.refresh(),
-          ]);
-        },
+        onRefresh: _refresh,
         child: ListView(
           physics:
           const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(
+          padding:
+          const EdgeInsets.fromLTRB(
             16,
             16,
             16,
@@ -186,28 +206,28 @@ class _CultureCommunityHomeScreenState
           ),
           children: [
             // =================================================
-            // INTRODUCTION
+            // INTRO
             // =================================================
 
             Text(
-              'Experience Local Malaysia',
-              style: GoogleFonts.montserrat(
-                fontSize: 26,
-                fontWeight: FontWeight.w700,
-                color: Theme.of(context)
-                    .colorScheme
-                    .primary,
+              'Discover Malaysia',
+              style:
+              GoogleFonts.montserrat(
+                fontSize: 27,
+                fontWeight:
+                FontWeight.w700,
               ),
             ),
 
             const SizedBox(height: 6),
 
             Text(
-              'Discover cultural events, local communities and traditional Malaysian food.',
+              'Explore cultural events, local communities and traditional Malaysian food.',
               style: GoogleFonts.inter(
-                fontSize: 14,
-                height: 1.5,
-                color: Theme.of(context)
+                fontSize: 13,
+                height: 1.45,
+                color:
+                Theme.of(context)
                     .colorScheme
                     .onSurfaceVariant,
               ),
@@ -220,244 +240,142 @@ class _CultureCommunityHomeScreenState
             // =================================================
 
             TextField(
-              controller: _searchController,
-              textInputAction:
-              TextInputAction.search,
-              onChanged: (value) {
+              controller:
+              _searchController,
+
+              onChanged: (
+                  value,
+                  ) {
                 setState(() {
                   _searchQuery = value;
                 });
               },
+
               decoration: InputDecoration(
                 hintText:
-                'Search festivals, culture or food...',
-                prefixIcon: const Icon(
+                'Search events or food...',
+
+                prefixIcon:
+                const Icon(
                   Icons.search_rounded,
                 ),
+
                 suffixIcon:
-                _searchQuery.trim().isEmpty
+                _searchQuery.isEmpty
                     ? null
                     : IconButton(
                   tooltip:
-                  'Clear search',
+                  'Clear Search',
                   onPressed:
-                  _clearSearch,
+                      () {
+                    _searchController
+                        .clear();
+
+                    setState(() {
+                      _searchQuery =
+                      '';
+                    });
+                  },
                   icon:
                   const Icon(
                     Icons
                         .close_rounded,
                   ),
                 ),
-                border: OutlineInputBorder(
+
+                filled: true,
+
+                border:
+                OutlineInputBorder(
                   borderRadius:
                   BorderRadius.circular(
                     16,
                   ),
+                  borderSide:
+                  BorderSide.none,
                 ),
               ),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 26),
 
             // =================================================
-            // QUICK SEARCH CHIPS
-            // =================================================
-
-            SingleChildScrollView(
-              scrollDirection:
-              Axis.horizontal,
-              child: Row(
-                children: [
-                  ActionChip(
-                    avatar: const Icon(
-                      Icons
-                          .festival_outlined,
-                      size: 17,
-                    ),
-                    label: const Text(
-                      '#Festival',
-                    ),
-                    onPressed: () {
-                      _applyQuickSearch(
-                        'festival',
-                      );
-                    },
-                  ),
-
-                  const SizedBox(width: 8),
-
-                  ActionChip(
-                    avatar: const Icon(
-                      Icons.place_outlined,
-                      size: 17,
-                    ),
-                    label: const Text(
-                      '#Sarawak',
-                    ),
-                    onPressed: () {
-                      _applyQuickSearch(
-                        'sarawak',
-                      );
-                    },
-                  ),
-
-                  const SizedBox(width: 8),
-
-                  ActionChip(
-                    avatar: const Icon(
-                      Icons
-                          .restaurant_outlined,
-                      size: 17,
-                    ),
-                    label: const Text(
-                      '#LocalFood',
-                    ),
-                    onPressed: () {
-                      _applyQuickSearch(
-                        'food',
-                      );
-                    },
-                  ),
-
-                  const SizedBox(width: 8),
-
-                  ActionChip(
-                    avatar: const Icon(
-                      Icons
-                          .account_balance_outlined,
-                      size: 17,
-                    ),
-                    label: const Text(
-                      '#Culture',
-                    ),
-                    onPressed: () {
-                      _applyQuickSearch(
-                        'culture',
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 34),
-
-            // =================================================
-            // CULTURAL EVENTS HEADER
-            // =================================================
-
-            Row(
-              crossAxisAlignment:
-              CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
-                    children: [
-                      Text(
-                        'Cultural Events',
-                        style: GoogleFonts
-                            .montserrat(
-                          fontSize: 22,
-                          fontWeight:
-                          FontWeight
-                              .w700,
-                          color:
-                          Theme.of(
-                            context,
-                          )
-                              .colorScheme
-                              .primary,
-                        ),
-                      ),
-
-                      const SizedBox(
-                        height: 4,
-                      ),
-
-                      Text(
-                        'Discover cultural experiences across Malaysia',
-                        style:
-                        GoogleFonts.inter(
-                          fontSize: 12,
-                          color:
-                          Theme.of(
-                            context,
-                          )
-                              .colorScheme
-                              .onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 14),
-
-            // =================================================
-            // VIEW ALL EVENTS + VIEW MAP
+            // QUICK ACCESS
             // =================================================
 
             Row(
               children: [
                 Expanded(
-                  child:
-                  OutlinedButton.icon(
-                    onPressed: () {
+                  child: _QuickAccessCard(
+                    icon: Icons
+                        .celebration_rounded,
+                    title:
+                    'Cultural Events',
+                    subtitle:
+                    'Festivals & activities',
+                    onTap: () {
                       context.push(
                         CultureCommunityRoutes
                             .events,
                       );
                     },
-                    icon: const Icon(
-                      Icons
-                          .format_list_bulleted_rounded,
-                    ),
-                    label: const Text(
-                      'View All Events',
-                    ),
                   ),
                 ),
 
                 const SizedBox(width: 10),
 
                 Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () {
+                  child: _QuickAccessCard(
+                    icon: Icons
+                        .restaurant_menu_rounded,
+                    title:
+                    'Traditional Food',
+                    subtitle:
+                    'Local flavours',
+                    onTap: () {
                       context.push(
                         CultureCommunityRoutes
-                            .eventMap,
+                            .food,
                       );
                     },
-                    icon: const Icon(
-                      Icons.map_outlined,
-                    ),
-                    label: const Text(
-                      'View Map',
-                    ),
                   ),
                 ),
               ],
             ),
 
-            const SizedBox(height: 18),
+            const SizedBox(height: 32),
+
+            // =================================================
+            // EVENT SECTION HEADER
+            // =================================================
+
+            _SectionHeader(
+              title:
+              'Cultural Events Near Me',
+              subtitle:
+              'Explore upcoming Malaysian cultural events',
+              actionLabel:
+              'View Map',
+              onAction: () {
+                context.push(
+                  CultureCommunityRoutes
+                      .eventMap,
+                );
+              },
+            ),
+
+            const SizedBox(height: 14),
 
             // =================================================
             // EVENT LOADING
             // =================================================
 
             if (eventController.isLoading &&
-                eventController.events.isEmpty)
-              const SizedBox(
-                height: 220,
-                child: Center(
-                  child:
-                  CircularProgressIndicator(),
-                ),
+                eventController
+                    .events.isEmpty)
+              const Center(
+                child:
+                CircularProgressIndicator(),
               )
 
             // =================================================
@@ -467,238 +385,96 @@ class _CultureCommunityHomeScreenState
             else if (eventController
                 .errorMessage !=
                 null &&
-                eventController.events.isEmpty)
-              _HomeErrorState(
-                message: eventController
+                eventController
+                    .events.isEmpty)
+              _ErrorCard(
+                message:
+                eventController
                     .errorMessage!,
                 onRetry:
                 eventController.refresh,
               )
 
             // =================================================
-            // NO EVENT
+            // EVENT EMPTY
             // =================================================
 
             else if (events.isEmpty)
-                _NoEventState(
-                  searching:
-                  _searchQuery
-                      .trim()
-                      .isNotEmpty,
+                const _EmptyCard(
+                  icon:
+                  Icons.event_busy_outlined,
+                  message:
+                  'No cultural events found.',
                 )
 
               // =================================================
-              // EVENTS EXIST
+              // EVENT CONTENT
               // =================================================
 
               else ...[
-                  // ===============================================
-                  // MINI MAP
-                  // ===============================================
-
-                  _HomeMiniMap(
+                  _MiniEventMap(
                     events:
                     events.take(6).toList(),
-                    onMarkerTap: (event) {
-                      context.push(
-                        CultureCommunityRoutes
-                            .eventDetail,
-                        extra: event,
-                      );
-                    },
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
-                  // ===============================================
-                  // LEGEND
-                  // ===============================================
-
-                  const _EventLegend(),
-
-                  const SizedBox(height: 22),
-
-                  // ===============================================
-                  // EVENT PREVIEW TITLE
-                  // ===============================================
-
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _searchQuery
-                              .trim()
-                              .isEmpty
-                              ? 'Upcoming Events'
-                              : 'Event Results',
-                          style: GoogleFonts
-                              .montserrat(
-                            fontSize: 18,
-                            fontWeight:
-                            FontWeight
-                                .w700,
-                          ),
-                        ),
-                      ),
-
-                      Text(
-                        '${events.length} found',
-                        style:
-                        GoogleFonts.inter(
-                          fontSize: 12,
-                          color:
-                          Theme.of(context)
-                              .colorScheme
-                              .onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // ===============================================
-                  // HORIZONTAL EVENT CARDS
-                  // ===============================================
-
-                  SizedBox(
-                    height: 305,
-                    child:
-                    ListView.separated(
-                      scrollDirection:
-                      Axis.horizontal,
-
-                      itemCount:
-                      events.length > 5
-                          ? 5
-                          : events.length,
-
-                      separatorBuilder:
-                          (_, __) =>
-                      const SizedBox(
-                        width: 14,
-                      ),
-
-                      itemBuilder:
-                          (context, index) {
-                        final event =
-                        events[index];
-
-                        return SizedBox(
-                          width: 270,
-                          child:
-                          _HomeEventCard(
-                            event: event,
-
-                            // =====================================
-                            // CLICK ANYWHERE ON EVENT CARD
-                            // → EVENT DETAILS PAGE
-                            // =====================================
-
-                            onTap: () {
-                              context.push(
-                                CultureCommunityRoutes
-                                    .eventDetail,
-                                extra: event,
-                              );
-                            },
-                          ),
+                  for (final event
+                  in events.take(3)) ...[
+                    _EventPreviewCard(
+                      event: event,
+                      onTap: () {
+                        context.push(
+                          CultureCommunityRoutes
+                              .eventDetail,
+                          extra: event,
                         );
                       },
                     ),
-                  ),
 
-                  // Show another View All link after cards.
-                  if (events.length > 1) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
+                  ],
 
-                    Align(
-                      alignment:
-                      Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: () {
-                          context.push(
-                            CultureCommunityRoutes
-                                .events,
-                          );
-                        },
-                        label: const Text(
-                          'View All Events',
-                        ),
-                        icon: const Icon(
-                          Icons
-                              .arrow_forward_rounded,
-                          size: 18,
-                        ),
+                  SizedBox(
+                    width: double.infinity,
+                    child:
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        context.push(
+                          CultureCommunityRoutes
+                              .events,
+                        );
+                      },
+                      icon: const Icon(
+                        Icons
+                            .calendar_month_outlined,
+                      ),
+                      label: const Text(
+                        'View All Events',
                       ),
                     ),
-                  ],
+                  ),
                 ],
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 34),
 
             // =================================================
-            // TRADITIONAL FOOD HEADER
+            // FOOD HEADER
             // =================================================
 
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
-                    children: [
-                      Text(
-                        'Traditional Food Guide',
-                        style: GoogleFonts
-                            .montserrat(
-                          fontSize: 22,
-                          fontWeight:
-                          FontWeight
-                              .w700,
-                          color:
-                          Theme.of(
-                            context,
-                          )
-                              .colorScheme
-                              .primary,
-                        ),
-                      ),
-
-                      const SizedBox(
-                        height: 4,
-                      ),
-
-                      Text(
-                        'Discover Malaysia through its traditional flavours',
-                        style:
-                        GoogleFonts.inter(
-                          fontSize: 12,
-                          color:
-                          Theme.of(
-                            context,
-                          )
-                              .colorScheme
-                              .onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                TextButton(
-                  onPressed: () {
-                    context.push(
-                      CultureCommunityRoutes
-                          .food,
-                    );
-                  },
-                  child: const Text(
-                    'See All',
-                  ),
-                ),
-              ],
+            _SectionHeader(
+              title:
+              'Traditional Food Guide',
+              subtitle:
+              'Discover Malaysian dishes and their cultural stories',
+              actionLabel:
+              'See All',
+              onAction: () {
+                context.push(
+                  CultureCommunityRoutes
+                      .food,
+                );
+              },
             ),
 
             const SizedBox(height: 14),
@@ -708,14 +484,11 @@ class _CultureCommunityHomeScreenState
             // =================================================
 
             if (foodController.isLoading &&
-                foodController.foods.isEmpty)
-              const Padding(
-                padding:
-                EdgeInsets.all(30),
-                child: Center(
-                  child:
-                  CircularProgressIndicator(),
-                ),
+                foodController
+                    .foods.isEmpty)
+              const Center(
+                child:
+                CircularProgressIndicator(),
               )
 
             // =================================================
@@ -725,55 +498,68 @@ class _CultureCommunityHomeScreenState
             else if (foodController
                 .errorMessage !=
                 null &&
-                foodController.foods.isEmpty)
-              _HomeErrorState(
-                message: foodController
+                foodController
+                    .foods.isEmpty)
+              _ErrorCard(
+                message:
+                foodController
                     .errorMessage!,
                 onRetry:
                 foodController.refresh,
               )
 
             // =================================================
-            // NO FOOD
+            // FOOD EMPTY
             // =================================================
 
             else if (foods.isEmpty)
-                Padding(
-                  padding:
-                  const EdgeInsets.all(
-                    24,
-                  ),
-                  child: Center(
-                    child: Text(
-                      _searchQuery
-                          .trim()
-                          .isEmpty
-                          ? 'No traditional food available.'
-                          : 'No traditional food matches your search.',
-                      textAlign:
-                      TextAlign.center,
-                    ),
-                  ),
+                const _EmptyCard(
+                  icon:
+                  Icons.no_food_outlined,
+                  message:
+                  'No traditional foods found.',
                 )
 
               // =================================================
-              // FOOD PREVIEW
+              // FOOD CONTENT
               // =================================================
 
-              else
-                for (final food
-                in foods.take(3)) ...[
-                  _FoodPreviewCard(
-                    food: food,
-                    onTap: () {
-                      context.push(
-                        CultureCommunityRoutes
-                            .food,
-                      );
-                    },
-                  ),
+              else ...[
+                  for (final food
+                  in foods.take(4)) ...[
+                    _FoodPreviewCard(
+                      food: food,
+                      onTap: () {
+                        context.push(
+                          CultureCommunityRoutes
+                              .foodDetail,
+                          extra: food,
+                        );
+                      },
+                    ),
 
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 10),
+                  ],
+
+                  SizedBox(
+                    width: double.infinity,
+                    child:
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        context.push(
+                          CultureCommunityRoutes
+                              .food,
+                        );
+                      },
+                      icon: const Icon(
+                        Icons
+                            .restaurant_menu_rounded,
+                      ),
+                      label: const Text(
+                        'Explore Traditional Food',
+                      ),
+                    ),
+                  ),
                 ],
           ],
         ),
@@ -783,65 +569,194 @@ class _CultureCommunityHomeScreenState
 }
 
 // ===========================================================
-// HOME MINI MAP
+// QUICK ACCESS
 // ===========================================================
 
-class _HomeMiniMap extends StatelessWidget {
-  const _HomeMiniMap({
+class _QuickAccessCard
+    extends StatelessWidget {
+  const _QuickAccessCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).colorScheme;
+
+    return Material(
+      color:
+      colors.surfaceContainerLow,
+      borderRadius:
+      BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius:
+        BorderRadius.circular(18),
+        child: Padding(
+          padding:
+          const EdgeInsets.all(15),
+          child: Column(
+            crossAxisAlignment:
+            CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding:
+                const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color:
+                  colors.primaryContainer,
+                  borderRadius:
+                  BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  color: colors
+                      .onPrimaryContainer,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              Text(
+                title,
+                style:
+                GoogleFonts.montserrat(
+                  fontSize: 14,
+                  fontWeight:
+                  FontWeight.w700,
+                ),
+              ),
+
+              const SizedBox(height: 4),
+
+              Text(
+                subtitle,
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  color: colors
+                      .onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ===========================================================
+// SECTION HEADER
+// ===========================================================
+
+class _SectionHeader
+    extends StatelessWidget {
+  const _SectionHeader({
+    required this.title,
+    required this.subtitle,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final String title;
+  final String subtitle;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment:
+      CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment:
+            CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style:
+                GoogleFonts.montserrat(
+                  fontSize: 18,
+                  fontWeight:
+                  FontWeight.w700,
+                ),
+              ),
+
+              const SizedBox(height: 3),
+
+              Text(
+                subtitle,
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  color:
+                  Theme.of(context)
+                      .colorScheme
+                      .onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        TextButton(
+          onPressed: onAction,
+          child: Text(
+            actionLabel,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ===========================================================
+// MINI EVENT MAP
+// ===========================================================
+
+class _MiniEventMap
+    extends StatelessWidget {
+  const _MiniEventMap({
     required this.events,
-    required this.onMarkerTap,
   });
 
   final List<CulturalEvent> events;
 
-  final ValueChanged<CulturalEvent>
-  onMarkerTap;
-
-  LatLng get _mapCenter {
-    if (events.isEmpty) {
-      return const LatLng(
-        4.2105,
-        101.9758,
-      );
-    }
-
-    double totalLatitude = 0;
-    double totalLongitude = 0;
-
-    for (final event in events) {
-      totalLatitude +=
-          event.latitude;
-
-      totalLongitude +=
-          event.longitude;
-    }
-
-    return LatLng(
-      totalLatitude / events.length,
-      totalLongitude / events.length,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    final center =
+    _averageCenter(events);
+
     return Container(
-      height: 270,
+      height: 220,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         borderRadius:
-        BorderRadius.circular(22),
+        BorderRadius.circular(20),
         border: Border.all(
           color: Theme.of(context)
               .colorScheme
               .outlineVariant,
         ),
       ),
-      clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
           FlutterMap(
             options: MapOptions(
-              initialCenter: _mapCenter,
-              initialZoom: 5.4,
+              initialCenter: center,
+              initialZoom:
+              events.length == 1
+                  ? 12
+                  : 5.5,
             ),
             children: [
               TileLayer(
@@ -860,18 +775,29 @@ class _HomeMiniMap extends StatelessWidget {
                         event.latitude,
                         event.longitude,
                       ),
-                      width: 46,
-                      height: 46,
-                      child:
-                      GestureDetector(
-                        onTap: () {
-                          onMarkerTap(
-                            event,
-                          );
-                        },
-                        child:
-                        _MiniEventMarker(
-                          event: event,
+                      width: 40,
+                      height: 40,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color:
+                          _categoryColor(
+                            event.category,
+                          ),
+                          shape:
+                          BoxShape.circle,
+                          border: Border.all(
+                            color:
+                            Colors.white,
+                            width: 2.5,
+                          ),
+                        ),
+                        child: Icon(
+                          _categoryIcon(
+                            event.category,
+                          ),
+                          size: 18,
+                          color:
+                          Colors.white,
                         ),
                       ),
                     ),
@@ -880,29 +806,25 @@ class _HomeMiniMap extends StatelessWidget {
             ],
           ),
 
-          // OSM attribution
           Positioned(
             left: 5,
             bottom: 4,
-            child: IgnorePointer(
-              child: Container(
-                padding:
-                const EdgeInsets
-                    .symmetric(
-                  horizontal: 5,
-                  vertical: 2,
-                ),
-                color: Theme.of(context)
-                    .colorScheme
-                    .surface
-                    .withValues(
-                  alpha: 0.85,
-                ),
-                child: const Text(
-                  '© OpenStreetMap contributors',
-                  style: TextStyle(
-                    fontSize: 8,
-                  ),
+            child: Container(
+              padding:
+              const EdgeInsets.symmetric(
+                horizontal: 5,
+                vertical: 2,
+              ),
+              color: Theme.of(context)
+                  .colorScheme
+                  .surface
+                  .withValues(
+                alpha: 0.85,
+              ),
+              child: const Text(
+                '© OpenStreetMap contributors',
+                style: TextStyle(
+                  fontSize: 8,
                 ),
               ),
             ),
@@ -911,128 +833,32 @@ class _HomeMiniMap extends StatelessWidget {
       ),
     );
   }
-}
 
-// ===========================================================
-// MINI EVENT MARKER
-// ===========================================================
+  LatLng _averageCenter(
+      List<CulturalEvent> events,
+      ) {
+    var latitude = 0.0;
+    var longitude = 0.0;
 
-class _MiniEventMarker extends StatelessWidget {
-  const _MiniEventMarker({
-    required this.event,
-  });
+    for (final event in events) {
+      latitude += event.latitude;
+      longitude += event.longitude;
+    }
 
-  final CulturalEvent event;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color:
-        _categoryColor(
-          event.category,
-        ),
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: Colors.white,
-          width: 3,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Icon(
-        _categoryIcon(
-          event.category,
-        ),
-        color: Colors.white,
-        size: 20,
-      ),
+    return LatLng(
+      latitude / events.length,
+      longitude / events.length,
     );
   }
 }
 
 // ===========================================================
-// EVENT LEGEND
+// EVENT PREVIEW
 // ===========================================================
 
-class _EventLegend extends StatelessWidget {
-  const _EventLegend();
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 14,
-      runSpacing: 8,
-      children: const [
-        _LegendItem(
-          color: Color(0xFF1B4332),
-          label: 'Festival',
-        ),
-        _LegendItem(
-          color: Color(0xFFD1A51E),
-          label: 'Cultural Show',
-        ),
-        _LegendItem(
-          color: Color(0xFF6B5435),
-          label: 'Community Activity',
-        ),
-      ],
-    );
-  }
-}
-
-class _LegendItem extends StatelessWidget {
-  const _LegendItem({
-    required this.color,
-    required this.label,
-  });
-
-  final Color color;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize:
-      MainAxisSize.min,
-      children: [
-        Container(
-          width: 9,
-          height: 9,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
-        ),
-
-        const SizedBox(width: 5),
-
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 11,
-            color:
-            Theme.of(context)
-                .colorScheme
-                .onSurfaceVariant,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ===========================================================
-// HOME EVENT CARD
-// ===========================================================
-
-class _HomeEventCard extends StatelessWidget {
-  const _HomeEventCard({
+class _EventPreviewCard
+    extends StatelessWidget {
+  const _EventPreviewCard({
     required this.event,
     required this.onTap,
   });
@@ -1045,208 +871,93 @@ class _HomeEventCard extends StatelessWidget {
     final colors =
         Theme.of(context).colorScheme;
 
-    return Material(
-      color: colors.surface,
-      borderRadius:
-      BorderRadius.circular(18),
+    return Card(
+      clipBehavior:
+      Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius:
-        BorderRadius.circular(18),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius:
-            BorderRadius.circular(
-              18,
-            ),
-            border: Border.all(
-              color:
-              colors.outlineVariant,
-            ),
-          ),
-          clipBehavior:
-          Clip.antiAlias,
-          child: Column(
+        child: Padding(
+          padding:
+          const EdgeInsets.all(13),
+          child: Row(
             crossAxisAlignment:
             CrossAxisAlignment.start,
             children: [
-              // ===============================================
-              // EVENT IMAGE
-              // ===============================================
+              CircleAvatar(
+                radius: 24,
+                backgroundColor:
+                _categoryColor(
+                  event.category,
+                ),
+                child: Icon(
+                  _categoryIcon(
+                    event.category,
+                  ),
+                  color:
+                  Colors.white,
+                ),
+              ),
 
-              SizedBox(
-                height: 160,
-                width: double.infinity,
-                child: Stack(
-                  fit: StackFit.expand,
+              const SizedBox(width: 11),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                  CrossAxisAlignment.start,
                   children: [
-                    _EventPreviewImage(
-                      event: event,
+                    Text(
+                      event.name,
+                      maxLines: 2,
+                      overflow:
+                      TextOverflow
+                          .ellipsis,
+                      style:
+                      GoogleFonts.inter(
+                        fontWeight:
+                        FontWeight.w700,
+                      ),
                     ),
 
-                    Positioned(
-                      left: 10,
-                      bottom: 10,
-                      child: Container(
-                        padding:
-                        const EdgeInsets
-                            .symmetric(
-                          horizontal: 9,
-                          vertical: 5,
-                        ),
-                        decoration:
-                        BoxDecoration(
-                          color:
-                          _categoryColor(
-                            event.category,
-                          ),
-                          borderRadius:
-                          BorderRadius
-                              .circular(
-                            999,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize:
-                          MainAxisSize
-                              .min,
-                          children: [
-                            Icon(
-                              _categoryIcon(
-                                event
-                                    .category,
-                              ),
-                              size: 13,
-                              color:
-                              Colors.white,
-                            ),
-                            const SizedBox(
-                              width: 4,
-                            ),
-                            Text(
-                              event.category
-                                  .label,
-                              style:
-                              GoogleFonts
-                                  .inter(
-                                color:
-                                Colors.white,
-                                fontSize:
-                                10,
-                                fontWeight:
-                                FontWeight
-                                    .w700,
-                              ),
-                            ),
-                          ],
-                        ),
+                    const SizedBox(height: 5),
+
+                    Text(
+                      _formatEventDateRange(
+                        event,
+                      ),
+                      style:
+                      GoogleFonts.inter(
+                        fontSize: 10,
+                        color: colors
+                            .onSurfaceVariant,
+                      ),
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Text(
+                      [
+                        if (event.city !=
+                            null &&
+                            event.city!
+                                .trim()
+                                .isNotEmpty)
+                          event.city!,
+                        event.state,
+                      ].join(', '),
+                      style:
+                      GoogleFonts.inter(
+                        fontSize: 10,
+                        color: colors
+                            .onSurfaceVariant,
                       ),
                     ),
                   ],
                 ),
               ),
 
-              // ===============================================
-              // EVENT INFORMATION
-              // ===============================================
-
-              Expanded(
-                child: Padding(
-                  padding:
-                  const EdgeInsets.all(
-                    14,
-                  ),
-                  child: Column(
-                    crossAxisAlignment:
-                    CrossAxisAlignment
-                        .start,
-                    children: [
-                      Text(
-                        event.name,
-                        maxLines: 2,
-                        overflow:
-                        TextOverflow
-                            .ellipsis,
-                        style: GoogleFonts
-                            .montserrat(
-                          fontSize: 16,
-                          fontWeight:
-                          FontWeight
-                              .w700,
-                          color:
-                          colors.primary,
-                          height: 1.2,
-                        ),
-                      ),
-
-                      const SizedBox(
-                        height: 8,
-                      ),
-
-                      _SmallInfoRow(
-                        icon: Icons
-                            .calendar_today_outlined,
-                        text:
-                        _formatEventDateRange(
-                          event.startAt,
-                          event.endAt,
-                        ),
-                      ),
-
-                      const SizedBox(
-                        height: 6,
-                      ),
-
-                      _SmallInfoRow(
-                        icon: Icons
-                            .location_on_outlined,
-                        text:
-                        event.city !=
-                            null &&
-                            event.city!
-                                .trim()
-                                .isNotEmpty
-                            ? '${event.city}, ${event.state}'
-                            : event.state,
-                      ),
-
-                      const Spacer(),
-
-                      Row(
-                        mainAxisAlignment:
-                        MainAxisAlignment
-                            .end,
-                        children: [
-                          Text(
-                            'View Details',
-                            style:
-                            GoogleFonts
-                                .inter(
-                              fontSize: 12,
-                              fontWeight:
-                              FontWeight
-                                  .w700,
-                              color: colors
-                                  .primary,
-                            ),
-                          ),
-
-                          const SizedBox(
-                            width: 3,
-                          ),
-
-                          Icon(
-                            Icons
-                                .arrow_forward_rounded,
-                            size: 16,
-                            color:
-                            colors.primary,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+              const Icon(
+                Icons
+                    .chevron_right_rounded,
               ),
             ],
           ),
@@ -1257,128 +968,11 @@ class _HomeEventCard extends StatelessWidget {
 }
 
 // ===========================================================
-// EVENT PREVIEW IMAGE
+// FOOD PREVIEW
 // ===========================================================
 
-class _EventPreviewImage extends StatelessWidget {
-  const _EventPreviewImage({
-    required this.event,
-  });
-
-  final CulturalEvent event;
-
-  @override
-  Widget build(BuildContext context) {
-    final url =
-    event.imageUrl?.trim();
-
-    if (url != null &&
-        url.isNotEmpty) {
-      return Image.network(
-        url,
-        fit: BoxFit.cover,
-        errorBuilder:
-            (_, __, ___) {
-          return _fallback(
-            context,
-          );
-        },
-      );
-    }
-
-    return _fallback(context);
-  }
-
-  Widget _fallback(
-      BuildContext context,
-      ) {
-    return Container(
-      decoration:
-      BoxDecoration(
-        gradient: LinearGradient(
-          begin:
-          Alignment.topLeft,
-          end:
-          Alignment.bottomRight,
-          colors: [
-            _categoryColor(
-              event.category,
-            ).withValues(
-              alpha: 0.85,
-            ),
-            Theme.of(context)
-                .colorScheme
-                .surfaceContainerHighest,
-          ],
-        ),
-      ),
-      alignment: Alignment.center,
-      child: Icon(
-        _categoryIcon(
-          event.category,
-        ),
-        size: 50,
-        color: Colors.white,
-      ),
-    );
-  }
-}
-
-// ===========================================================
-// SMALL INFORMATION ROW
-// ===========================================================
-
-class _SmallInfoRow extends StatelessWidget {
-  const _SmallInfoRow({
-    required this.icon,
-    required this.text,
-  });
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment:
-      CrossAxisAlignment.start,
-      children: [
-        Icon(
-          icon,
-          size: 15,
-          color:
-          Theme.of(context)
-              .colorScheme
-              .onSurfaceVariant,
-        ),
-
-        const SizedBox(width: 5),
-
-        Expanded(
-          child: Text(
-            text,
-            maxLines: 1,
-            overflow:
-            TextOverflow.ellipsis,
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              color:
-              Theme.of(context)
-                  .colorScheme
-                  .onSurfaceVariant,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ===========================================================
-// FOOD PREVIEW CARD
-// ===========================================================
-
-class _FoodPreviewCard extends StatelessWidget {
+class _FoodPreviewCard
+    extends StatelessWidget {
   const _FoodPreviewCard({
     required this.food,
     required this.onTap,
@@ -1392,37 +986,20 @@ class _FoodPreviewCard extends StatelessWidget {
     final colors =
         Theme.of(context).colorScheme;
 
-    return Material(
-      color:
-      colors.surfaceContainerLow,
-      borderRadius:
-      BorderRadius.circular(16),
+    return Card(
+      clipBehavior:
+      Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius:
-        BorderRadius.circular(16),
-        child: Container(
-          height: 135,
-          decoration:
-          BoxDecoration(
-            border: Border.all(
-              color:
-              colors.outlineVariant,
-            ),
-            borderRadius:
-            BorderRadius.circular(
-              16,
-            ),
-          ),
-          clipBehavior:
-          Clip.antiAlias,
+        child: SizedBox(
+          height: 115,
           child: Row(
             children: [
               SizedBox(
                 width: 115,
-                height:
-                double.infinity,
-                child: _FoodImage(
+                height: 115,
+                child:
+                _FoodThumbnail(
                   food: food,
                 ),
               ),
@@ -1431,12 +1008,15 @@ class _FoodPreviewCard extends StatelessWidget {
                 child: Padding(
                   padding:
                   const EdgeInsets.all(
-                    14,
+                    12,
                   ),
                   child: Column(
                     crossAxisAlignment:
                     CrossAxisAlignment
                         .start,
+                    mainAxisAlignment:
+                    MainAxisAlignment
+                        .center,
                     children: [
                       Text(
                         food.name,
@@ -1444,86 +1024,84 @@ class _FoodPreviewCard extends StatelessWidget {
                         overflow:
                         TextOverflow
                             .ellipsis,
-                        style: GoogleFonts
-                            .montserrat(
-                          fontSize: 16,
+                        style:
+                        GoogleFonts.inter(
+                          fontSize: 14,
                           fontWeight:
-                          FontWeight
-                              .w700,
-                          color:
-                          colors.primary,
+                          FontWeight.w700,
                         ),
                       ),
 
                       const SizedBox(
-                        height: 5,
+                        height: 4,
                       ),
 
-                      Expanded(
-                        child: Text(
-                          food.description,
-                          maxLines: 3,
-                          overflow:
-                          TextOverflow
-                              .ellipsis,
-                          style:
-                          GoogleFonts
-                              .inter(
-                            fontSize: 12,
-                            height: 1.35,
-                            color: colors
-                                .onSurfaceVariant,
-                          ),
+                      Text(
+                        food.description,
+                        maxLines: 2,
+                        overflow:
+                        TextOverflow
+                            .ellipsis,
+                        style:
+                        GoogleFonts.inter(
+                          fontSize: 10,
+                          height: 1.35,
+                          color: colors
+                              .onSurfaceVariant,
                         ),
+                      ),
+
+                      const SizedBox(
+                        height: 7,
                       ),
 
                       Row(
                         children: [
-                          Text(
-                            food.state,
-                            style:
-                            GoogleFonts
-                                .inter(
-                              fontSize: 11,
-                              fontWeight:
-                              FontWeight
-                                  .w600,
-                              color: colors
-                                  .onSurfaceVariant,
-                            ),
-                          ),
-
-                          const Spacer(),
-
-                          Text(
-                            'Learn More',
-                            style:
-                            GoogleFonts
-                                .inter(
-                              fontSize: 11,
-                              fontWeight:
-                              FontWeight
-                                  .w700,
-                              color: colors
-                                  .primary,
-                            ),
+                          Icon(
+                            Icons
+                                .location_on_outlined,
+                            size: 14,
+                            color:
+                            colors.primary,
                           ),
 
                           const SizedBox(
                             width: 3,
                           ),
 
-                          Icon(
-                            Icons
-                                .arrow_forward_rounded,
-                            size: 15,
-                            color:
-                            colors.primary,
+                          Expanded(
+                            child: Text(
+                              food.state,
+                              maxLines: 1,
+                              overflow:
+                              TextOverflow
+                                  .ellipsis,
+                              style:
+                              GoogleFonts
+                                  .inter(
+                                fontSize:
+                                10,
+                                fontWeight:
+                                FontWeight
+                                    .w600,
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ],
                   ),
+                ),
+              ),
+
+              const Padding(
+                padding:
+                EdgeInsets.only(
+                  right: 8,
+                ),
+                child: Icon(
+                  Icons
+                      .chevron_right_rounded,
                 ),
               ),
             ],
@@ -1534,12 +1112,9 @@ class _FoodPreviewCard extends StatelessWidget {
   }
 }
 
-// ===========================================================
-// FOOD IMAGE
-// ===========================================================
-
-class _FoodImage extends StatelessWidget {
-  const _FoodImage({
+class _FoodThumbnail
+    extends StatelessWidget {
+  const _FoodThumbnail({
     required this.food,
   });
 
@@ -1547,61 +1122,109 @@ class _FoodImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url =
+    final imageUrl =
     food.imageUrl?.trim();
 
-    if (url != null &&
-        url.isNotEmpty) {
-      return Image.network(
-        url,
-        width: double.infinity,
-        height: double.infinity,
-        fit: BoxFit.cover,
-        errorBuilder:
-            (_, __, ___) {
-          return _fallback(
-            context,
-          );
-        },
+    if (imageUrl == null ||
+        imageUrl.isEmpty) {
+      return Container(
+        color: Theme.of(context)
+            .colorScheme
+            .secondaryContainer,
+        child: Icon(
+          Icons.restaurant_rounded,
+          size: 40,
+          color: Theme.of(context)
+              .colorScheme
+              .onSecondaryContainer,
+        ),
       );
     }
 
-    return _fallback(context);
+    return Image.network(
+      imageUrl,
+      fit: BoxFit.cover,
+      errorBuilder: (
+          context,
+          error,
+          stackTrace,
+          ) {
+        return Container(
+          color: Theme.of(context)
+              .colorScheme
+              .secondaryContainer,
+          child: Icon(
+            Icons.restaurant_rounded,
+            color: Theme.of(context)
+                .colorScheme
+                .onSecondaryContainer,
+          ),
+        );
+      },
+    );
   }
+}
 
-  Widget _fallback(
-      BuildContext context,
-      ) {
-    final colors =
-        Theme.of(context).colorScheme;
+// ===========================================================
+// EMPTY
+// ===========================================================
 
+class _EmptyCard extends StatelessWidget {
+  const _EmptyCard({
+    required this.icon,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      color:
-      colors.secondaryContainer,
-      alignment:
-      Alignment.center,
-      child: Icon(
-        Icons.restaurant_rounded,
-        size: 38,
-        color: colors
-            .onSecondaryContainer,
+      width: double.infinity,
+      padding:
+      const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerLow,
+        borderRadius:
+        BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            icon,
+            size: 40,
+            color:
+            Theme.of(context)
+                .colorScheme
+                .outline,
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            message,
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
 }
 
 // ===========================================================
-// ERROR STATE
+// ERROR
 // ===========================================================
 
-class _HomeErrorState extends StatelessWidget {
-  const _HomeErrorState({
+class _ErrorCard extends StatelessWidget {
+  const _ErrorCard({
     required this.message,
     required this.onRetry,
   });
 
   final String message;
-
   final Future<void> Function()
   onRetry;
 
@@ -1610,91 +1233,36 @@ class _HomeErrorState extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding:
-      const EdgeInsets.all(
-        24,
-      ),
+      const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color:
-        Theme.of(context)
+        color: Theme.of(context)
             .colorScheme
-            .surfaceContainerLow,
+            .errorContainer,
         borderRadius:
-        BorderRadius.circular(
-          16,
-        ),
+        BorderRadius.circular(16),
       ),
       child: Column(
         children: [
           const Icon(
             Icons.cloud_off_outlined,
-            size: 42,
+            size: 40,
           ),
 
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
 
           Text(
             message,
-            textAlign:
-            TextAlign.center,
-          ),
-
-          const SizedBox(height: 12),
-
-          FilledButton.icon(
-            onPressed: () {
-              onRetry();
-            },
-            icon: const Icon(
-              Icons.refresh_rounded,
-            ),
-            label: const Text(
-              'Try Again',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ===========================================================
-// NO EVENT STATE
-// ===========================================================
-
-class _NoEventState extends StatelessWidget {
-  const _NoEventState({
-    required this.searching,
-  });
-
-  final bool searching;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding:
-      const EdgeInsets.all(
-        28,
-      ),
-      child: Column(
-        children: [
-          Icon(
-            Icons.event_busy_outlined,
-            size: 44,
-            color:
-            Theme.of(context)
-                .colorScheme
-                .outline,
+            textAlign: TextAlign.center,
           ),
 
           const SizedBox(height: 10),
 
-          Text(
-            searching
-                ? 'No cultural events match your search.'
-                : 'No cultural events are available.',
-            textAlign:
-            TextAlign.center,
+          OutlinedButton(
+            onPressed: () {
+              onRetry();
+            },
+            child:
+            const Text('Retry'),
           ),
         ],
       ),
@@ -1703,7 +1271,7 @@ class _NoEventState extends StatelessWidget {
 }
 
 // ===========================================================
-// EVENT CATEGORY COLOR
+// EVENT HELPERS
 // ===========================================================
 
 Color _categoryColor(
@@ -1727,10 +1295,6 @@ Color _categoryColor(
   }
 }
 
-// ===========================================================
-// EVENT CATEGORY ICON
-// ===========================================================
-
 IconData _categoryIcon(
     CulturalEventCategory category,
     ) {
@@ -1739,22 +1303,19 @@ IconData _categoryIcon(
       return Icons.festival_rounded;
 
     case CulturalEventCategory.culturalShow:
-      return Icons
-          .theater_comedy_rounded;
+      return Icons.theater_comedy_rounded;
 
     case CulturalEventCategory.communityActivity:
       return Icons.groups_rounded;
   }
 }
 
-// ===========================================================
-// EVENT DATE FORMAT
-// ===========================================================
-
-String _formatEventDateRange(
-    DateTime start,
-    DateTime? end,
+String _formatDate(
+    DateTime date,
     ) {
+  final local =
+  date.toLocal();
+
   const months = [
     'Jan',
     'Feb',
@@ -1770,55 +1331,33 @@ String _formatEventDateRange(
     'Dec',
   ];
 
-  final startDate =
-  start.toLocal();
+  return '${local.day} '
+      '${months[local.month - 1]} '
+      '${local.year}';
+}
+
+String _formatEventDateRange(
+    CulturalEvent event,
+    ) {
+  final start =
+  event.startAt.toLocal();
+
+  final end =
+  event.endAt?.toLocal();
 
   if (end == null) {
-    return '${startDate.day} '
-        '${months[startDate.month - 1]} '
-        '${startDate.year}';
+    return _formatDate(start);
   }
 
-  final endDate =
-  end.toLocal();
+  final sameDay =
+      start.year == end.year &&
+          start.month == end.month &&
+          start.day == end.day;
 
-  // Same day
-  if (startDate.year ==
-      endDate.year &&
-      startDate.month ==
-          endDate.month &&
-      startDate.day ==
-          endDate.day) {
-    return '${startDate.day} '
-        '${months[startDate.month - 1]} '
-        '${startDate.year}';
+  if (sameDay) {
+    return _formatDate(start);
   }
 
-  // Same month
-  if (startDate.year ==
-      endDate.year &&
-      startDate.month ==
-          endDate.month) {
-    return '${startDate.day}–${endDate.day} '
-        '${months[startDate.month - 1]} '
-        '${startDate.year}';
-  }
-
-  // Same year
-  if (startDate.year ==
-      endDate.year) {
-    return '${startDate.day} '
-        '${months[startDate.month - 1]} – '
-        '${endDate.day} '
-        '${months[endDate.month - 1]} '
-        '${startDate.year}';
-  }
-
-  // Different years
-  return '${startDate.day} '
-      '${months[startDate.month - 1]} '
-      '${startDate.year} – '
-      '${endDate.day} '
-      '${months[endDate.month - 1]} '
-      '${endDate.year}';
+  return '${_formatDate(start)} - '
+      '${_formatDate(end)}';
 }

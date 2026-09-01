@@ -17,7 +17,8 @@ class TraditionalFoodDetailController
 
   final String foodId;
 
-  final CultureCommunityRepository _repository;
+  final CultureCommunityRepository
+  _repository;
 
   bool isLoading = false;
 
@@ -25,10 +26,36 @@ class TraditionalFoodDetailController
 
   bool isSavingFavourite = false;
 
-  List<TraditionalFoodPlace> places =
-  const [];
+  List<TraditionalFoodPlace> places = [];
+
+  Set<String> favouritePlaceIds = {};
+
+  Set<String> savingPlaceIds = {};
 
   String? errorMessage;
+
+  bool get isSignedIn =>
+      _repository.isSignedIn;
+
+  // =========================================================
+  // PLACE SAVED STATUS
+  // =========================================================
+
+  bool isPlaceFavourite(
+      String placeId,
+      ) {
+    return favouritePlaceIds.contains(
+      placeId,
+    );
+  }
+
+  bool isSavingPlace(
+      String placeId,
+      ) {
+    return savingPlaceIds.contains(
+      placeId,
+    );
+  }
 
   // =========================================================
   // LOAD
@@ -40,9 +67,9 @@ class TraditionalFoodDetailController
 
     notifyListeners();
 
-    // ---------------------------------------------------------
+    // =======================================================
     // FOOD LOCATIONS
-    // ---------------------------------------------------------
+    // =======================================================
 
     try {
       places =
@@ -50,24 +77,20 @@ class TraditionalFoodDetailController
           .fetchTraditionalFoodPlaces(
         foodId,
       );
-    } catch (error, stackTrace) {
+    } catch (error) {
       debugPrint(
-        'Food location loading error: $error',
+        'Load food locations error: $error',
       );
 
-      debugPrintStack(
-        stackTrace: stackTrace,
-      );
-
-      places = const [];
+      places = [];
 
       errorMessage =
       'Could not load food locations.';
     }
 
-    // ---------------------------------------------------------
-    // FAVOURITE
-    // ---------------------------------------------------------
+    // =======================================================
+    // FOOD SAVED STATUS
+    // =======================================================
 
     if (_repository.isSignedIn) {
       try {
@@ -76,19 +99,33 @@ class TraditionalFoodDetailController
             .isTraditionalFoodFavourite(
           foodId,
         );
-      } catch (error, stackTrace) {
+      } catch (error) {
         debugPrint(
-          'Traditional food favourite loading error: $error',
-        );
-
-        debugPrintStack(
-          stackTrace: stackTrace,
+          'Load saved food error: $error',
         );
 
         isFavourite = false;
       }
+
+      // =====================================================
+      // SAVED RESTAURANTS
+      // =====================================================
+
+      try {
+        favouritePlaceIds =
+        await _repository
+            .fetchFavouriteFoodLocationIds();
+      } catch (error) {
+        debugPrint(
+          'Load saved restaurants error: $error',
+        );
+
+        favouritePlaceIds = {};
+      }
     } else {
       isFavourite = false;
+
+      favouritePlaceIds = {};
     }
 
     isLoading = false;
@@ -97,10 +134,11 @@ class TraditionalFoodDetailController
   }
 
   // =========================================================
-  // TOGGLE FAVOURITE
+  // SAVE FOOD
   // =========================================================
 
-  Future<bool> toggleFavourite() async {
+  Future<bool>
+  toggleFavourite() async {
     if (isSavingFavourite) {
       return false;
     }
@@ -137,17 +175,13 @@ class TraditionalFoodDetailController
       }
 
       return true;
-    } catch (error, stackTrace) {
+    } catch (error) {
       debugPrint(
-        'Traditional food favourite update error: $error',
-      );
-
-      debugPrintStack(
-        stackTrace: stackTrace,
+        'Save food error: $error',
       );
 
       errorMessage =
-      'Could not update Favorite.';
+      'Could not update saved food.';
 
       return false;
     } finally {
@@ -156,6 +190,83 @@ class TraditionalFoodDetailController
       notifyListeners();
     }
   }
+
+  // =========================================================
+  // SAVE RESTAURANT
+  // =========================================================
+
+  Future<bool>
+  togglePlaceFavourite(
+      String placeId,
+      ) async {
+    if (savingPlaceIds.contains(
+      placeId,
+    )) {
+      return false;
+    }
+
+    if (!_repository.isSignedIn) {
+      errorMessage =
+      'Please sign in to save this place.';
+
+      notifyListeners();
+
+      return false;
+    }
+
+    savingPlaceIds.add(
+      placeId,
+    );
+
+    errorMessage = null;
+
+    notifyListeners();
+
+    try {
+      if (favouritePlaceIds.contains(
+        placeId,
+      )) {
+        await _repository
+            .removeFoodLocationFavourite(
+          placeId,
+        );
+
+        favouritePlaceIds.remove(
+          placeId,
+        );
+      } else {
+        await _repository
+            .addFoodLocationFavourite(
+          placeId,
+        );
+
+        favouritePlaceIds.add(
+          placeId,
+        );
+      }
+
+      return true;
+    } catch (error) {
+      debugPrint(
+        'Save restaurant error: $error',
+      );
+
+      errorMessage =
+      'Could not update saved place.';
+
+      return false;
+    } finally {
+      savingPlaceIds.remove(
+        placeId,
+      );
+
+      notifyListeners();
+    }
+  }
+
+  // =========================================================
+  // REFRESH
+  // =========================================================
 
   Future<void> refresh() {
     return load();

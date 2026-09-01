@@ -4,11 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../controller/traditional_food_detail_controller.dart';
 import '../model/traditional_food.dart';
 import '../model/traditional_food_place.dart';
+import 'google_maps_navigation.dart';
 
 enum _HalalFilter {
   all,
@@ -18,7 +18,8 @@ enum _HalalFilter {
   unknown,
 }
 
-extension _HalalFilterX on _HalalFilter {
+extension _HalalFilterExtension
+on _HalalFilter {
   String get label {
     switch (this) {
       case _HalalFilter.all:
@@ -49,7 +50,8 @@ class TraditionalFoodNearbyScreen
   final TraditionalFood food;
 
   @override
-  ConsumerState<TraditionalFoodNearbyScreen>
+  ConsumerState<
+      TraditionalFoodNearbyScreen>
   createState() =>
       _TraditionalFoodNearbyScreenState();
 }
@@ -60,7 +62,8 @@ class _TraditionalFoodNearbyScreenState
   final MapController _mapController =
   MapController();
 
-  final TextEditingController _searchController =
+  final TextEditingController
+  _searchController =
   TextEditingController();
 
   LatLng? _userLocation;
@@ -74,20 +77,18 @@ class _TraditionalFoodNearbyScreenState
   _HalalFilter _halalFilter =
       _HalalFilter.all;
 
-  TraditionalFoodPlace? _selectedPlace;
+  TraditionalFoodPlace?
+  _selectedPlace;
 
   TraditionalFood get food =>
       widget.food;
-
-  // =========================================================
-  // INIT
-  // =========================================================
 
   @override
   void initState() {
     super.initState();
 
-    WidgetsBinding.instance.addPostFrameCallback(
+    WidgetsBinding.instance
+        .addPostFrameCallback(
           (_) {
         _locateUser(
           moveMap: false,
@@ -119,10 +120,11 @@ class _TraditionalFoodNearbyScreenState
     });
 
     try {
-      final enabled =
-      await Geolocator.isLocationServiceEnabled();
+      final serviceEnabled =
+      await Geolocator
+          .isLocationServiceEnabled();
 
-      if (!enabled) {
+      if (!serviceEnabled) {
         if (mounted) {
           ScaffoldMessenger.of(context)
               .showSnackBar(
@@ -138,12 +140,14 @@ class _TraditionalFoodNearbyScreenState
       }
 
       var permission =
-      await Geolocator.checkPermission();
+      await Geolocator
+          .checkPermission();
 
       if (permission ==
           LocationPermission.denied) {
         permission =
-        await Geolocator.requestPermission();
+        await Geolocator
+            .requestPermission();
       }
 
       if (permission ==
@@ -153,7 +157,7 @@ class _TraditionalFoodNearbyScreenState
               .showSnackBar(
             const SnackBar(
               content: Text(
-                'Location permission is required to calculate nearby food locations.',
+                'Location permission is required.',
               ),
             ),
           );
@@ -163,7 +167,8 @@ class _TraditionalFoodNearbyScreenState
       }
 
       if (permission ==
-          LocationPermission.deniedForever) {
+          LocationPermission
+              .deniedForever) {
         if (mounted) {
           ScaffoldMessenger.of(context)
               .showSnackBar(
@@ -171,10 +176,12 @@ class _TraditionalFoodNearbyScreenState
               content: const Text(
                 'Location permission is permanently denied.',
               ),
-              action: SnackBarAction(
+              action:
+              SnackBarAction(
                 label: 'Settings',
                 onPressed: () {
-                  Geolocator.openAppSettings();
+                  Geolocator
+                      .openAppSettings();
                 },
               ),
             ),
@@ -185,7 +192,8 @@ class _TraditionalFoodNearbyScreenState
       }
 
       final position =
-      await Geolocator.getCurrentPosition();
+      await Geolocator
+          .getCurrentPosition();
 
       if (!mounted) {
         return false;
@@ -197,7 +205,8 @@ class _TraditionalFoodNearbyScreenState
       );
 
       setState(() {
-        _userLocation = location;
+        _userLocation =
+            location;
       });
 
       if (moveMap) {
@@ -230,14 +239,17 @@ class _TraditionalFoodNearbyScreenState
   double? _distanceToPlace(
       TraditionalFoodPlace place,
       ) {
-    if (_userLocation == null) {
+    final userLocation =
+        _userLocation;
+
+    if (userLocation == null) {
       return null;
     }
 
     final metres =
     Geolocator.distanceBetween(
-      _userLocation!.latitude,
-      _userLocation!.longitude,
+      userLocation.latitude,
+      userLocation.longitude,
       place.latitude,
       place.longitude,
     );
@@ -246,19 +258,22 @@ class _TraditionalFoodNearbyScreenState
   }
 
   // =========================================================
-  // FILTER LOCATIONS
+  // FILTER
   // =========================================================
 
   List<TraditionalFoodPlace>
   _filteredPlaces(
-      List<TraditionalFoodPlace> places,
+      List<TraditionalFoodPlace>
+      places,
       ) {
     final query =
-    _searchQuery.trim().toLowerCase();
+    _searchQuery
+        .trim()
+        .toLowerCase();
 
-    final result = places.where(
+    final result =
+    places.where(
           (place) {
-        // Search.
         if (query.isNotEmpty) {
           final searchable = [
             place.name,
@@ -266,15 +281,15 @@ class _TraditionalFoodNearbyScreenState
             place.state,
             place.city ?? '',
             place.address ?? '',
-            place.description ?? '',
           ].join(' ').toLowerCase();
 
-          if (!searchable.contains(query)) {
+          if (!searchable.contains(
+            query,
+          )) {
             return false;
           }
         }
 
-        // Halal filter.
         switch (_halalFilter) {
           case _HalalFilter.all:
             break;
@@ -286,7 +301,8 @@ class _TraditionalFoodNearbyScreenState
             }
             break;
 
-          case _HalalFilter.muslimFriendly:
+          case _HalalFilter
+              .muslimFriendly:
             if (place.halalStatus !=
                 'muslim_friendly') {
               return false;
@@ -308,10 +324,11 @@ class _TraditionalFoodNearbyScreenState
             break;
         }
 
-        // Distance filter.
         if (_maxDistanceKm != null) {
           final distance =
-          _distanceToPlace(place);
+          _distanceToPlace(
+            place,
+          );
 
           if (distance == null ||
               distance >
@@ -324,31 +341,25 @@ class _TraditionalFoodNearbyScreenState
       },
     ).toList();
 
-    // Nearest first.
     result.sort(
           (a, b) {
-        final distanceA =
+        final aDistance =
         _distanceToPlace(a);
 
-        final distanceB =
+        final bDistance =
         _distanceToPlace(b);
 
-        if (distanceA != null &&
-            distanceB != null) {
-          final comparison =
-          distanceA.compareTo(
-            distanceB,
+        if (aDistance != null &&
+            bDistance != null) {
+          return aDistance
+              .compareTo(
+            bDistance,
           );
-
-          if (comparison != 0) {
-            return comparison;
-          }
         }
 
         return a.name
-            .toLowerCase()
             .compareTo(
-          b.name.toLowerCase(),
+          b.name,
         );
       },
     );
@@ -357,7 +368,7 @@ class _TraditionalFoodNearbyScreenState
   }
 
   // =========================================================
-  // SELECT LOCATION
+  // SELECT
   // =========================================================
 
   void _selectPlace(
@@ -377,35 +388,19 @@ class _TraditionalFoodNearbyScreenState
   }
 
   // =========================================================
-  // OPEN EXTERNAL OSM
+  // NAVIGATE
   // =========================================================
 
-  Future<void> _openLocation(
+  Future<void> _navigate(
       TraditionalFoodPlace place,
       ) async {
-    final uri = Uri.parse(
-      'https://www.openstreetmap.org/'
-          '?mlat=${place.latitude}'
-          '&mlon=${place.longitude}'
-          '#map=17/${place.latitude}/${place.longitude}',
+    await openGoogleMapsNavigation(
+      context: context,
+      latitude:
+      place.latitude,
+      longitude:
+      place.longitude,
     );
-
-    final opened = await launchUrl(
-      uri,
-      mode:
-      LaunchMode.externalApplication,
-    );
-
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Could not open this location.',
-          ),
-        ),
-      );
-    }
   }
 
   // =========================================================
@@ -422,7 +417,6 @@ class _TraditionalFoodNearbyScreenState
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      isScrollControlled: true,
       builder: (
           bottomSheetContext,
           ) {
@@ -432,9 +426,11 @@ class _TraditionalFoodNearbyScreenState
               setSheetState,
               ) {
             return SafeArea(
-              child: SingleChildScrollView(
+              child:
+              SingleChildScrollView(
                 padding:
-                const EdgeInsets.fromLTRB(
+                const EdgeInsets
+                    .fromLTRB(
                   20,
                   0,
                   20,
@@ -442,61 +438,43 @@ class _TraditionalFoodNearbyScreenState
                 ),
                 child: Column(
                   crossAxisAlignment:
-                  CrossAxisAlignment.start,
+                  CrossAxisAlignment
+                      .start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Location Filters',
-                            style:
-                            GoogleFonts.montserrat(
-                              fontSize: 21,
-                              fontWeight:
-                              FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            setSheetState(
-                                  () {
-                                temporaryHalal =
-                                    _HalalFilter.all;
-
-                                temporaryDistance =
-                                null;
-                              },
-                            );
-                          },
-                          child:
-                          const Text(
-                            'Reset',
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 24),
-
                     Text(
-                      'Halal Status',
-                      style:
-                      GoogleFonts.montserrat(
-                        fontSize: 16,
+                      'Restaurant Filters',
+                      style: GoogleFonts
+                          .montserrat(
+                        fontSize: 20,
                         fontWeight:
                         FontWeight.w700,
                       ),
                     ),
 
-                    const SizedBox(height: 10),
+                    const SizedBox(
+                      height: 20,
+                    ),
+
+                    Text(
+                      'Halal Status',
+                      style: GoogleFonts
+                          .montserrat(
+                        fontWeight:
+                        FontWeight.w700,
+                      ),
+                    ),
+
+                    const SizedBox(
+                      height: 10,
+                    ),
 
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: [
                         for (final filter
-                        in _HalalFilter.values)
+                        in _HalalFilter
+                            .values)
                           ChoiceChip(
                             label: Text(
                               filter.label,
@@ -516,19 +494,22 @@ class _TraditionalFoodNearbyScreenState
                       ],
                     ),
 
-                    const SizedBox(height: 26),
+                    const SizedBox(
+                      height: 24,
+                    ),
 
                     Text(
-                      'Distance From Me',
-                      style:
-                      GoogleFonts.montserrat(
-                        fontSize: 16,
+                      'Distance',
+                      style: GoogleFonts
+                          .montserrat(
                         fontWeight:
                         FontWeight.w700,
                       ),
                     ),
 
-                    const SizedBox(height: 10),
+                    const SizedBox(
+                      height: 10,
+                    ),
 
                     Wrap(
                       spacing: 8,
@@ -553,7 +534,8 @@ class _TraditionalFoodNearbyScreenState
                         ),
 
                         for (final distance
-                        in const <double>[
+                        in const <
+                            double>[
                           5,
                           10,
                           25,
@@ -562,7 +544,7 @@ class _TraditionalFoodNearbyScreenState
                         ])
                           ChoiceChip(
                             label: Text(
-                              'Within ${distance.toInt()} km',
+                              '${distance.toInt()} km',
                             ),
                             selected:
                             temporaryDistance ==
@@ -579,43 +561,35 @@ class _TraditionalFoodNearbyScreenState
                       ],
                     ),
 
-                    const SizedBox(height: 28),
+                    const SizedBox(
+                      height: 24,
+                    ),
 
                     SizedBox(
-                      width: double.infinity,
-                      height: 50,
+                      width:
+                      double.infinity,
                       child:
-                      FilledButton.icon(
-                        onPressed: () async {
-                          // Distance needs GPS.
+                      FilledButton(
+                        onPressed:
+                            () async {
+                          Navigator.pop(
+                            bottomSheetContext,
+                          );
+
                           if (temporaryDistance !=
                               null &&
                               _userLocation ==
                                   null) {
-                            Navigator.pop(
-                              bottomSheetContext,
+                            final success =
+                            await _locateUser(
+                              moveMap:
+                              false,
                             );
 
-                            final found =
-                            await _locateUser();
-
-                            if (!found ||
+                            if (!success ||
                                 !mounted) {
                               return;
                             }
-
-                            setState(() {
-                              _halalFilter =
-                                  temporaryHalal;
-
-                              _maxDistanceKm =
-                                  temporaryDistance;
-
-                              _selectedPlace =
-                              null;
-                            });
-
-                            return;
                           }
 
                           setState(() {
@@ -628,17 +602,8 @@ class _TraditionalFoodNearbyScreenState
                             _selectedPlace =
                             null;
                           });
-
-                          Navigator.pop(
-                            bottomSheetContext,
-                          );
                         },
-                        icon:
-                        const Icon(
-                          Icons
-                              .filter_alt_rounded,
-                        ),
-                        label:
+                        child:
                         const Text(
                           'Apply Filters',
                         ),
@@ -655,46 +620,26 @@ class _TraditionalFoodNearbyScreenState
   }
 
   // =========================================================
-  // FILTER COUNT
-  // =========================================================
-
-  int get _filterCount {
-    var count = 0;
-
-    if (_halalFilter !=
-        _HalalFilter.all) {
-      count++;
-    }
-
-    if (_maxDistanceKm != null) {
-      count++;
-    }
-
-    return count;
-  }
-
-  // =========================================================
   // BUILD
   // =========================================================
 
   @override
-  Widget build(BuildContext context) {
-    final controller = ref.watch(
+  Widget build(
+      BuildContext context,
+      ) {
+    final controller =
+    ref.watch(
       traditionalFoodDetailControllerProvider(
         food.id,
       ),
-    );
-
-    final places = _filteredPlaces(
-      controller.places,
     );
 
     if (controller.isLoading &&
         controller.places.isEmpty) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text(
-            'Find Nearby',
+          title: Text(
+            '${food.name} Nearby',
           ),
         ),
         body: const Center(
@@ -704,6 +649,11 @@ class _TraditionalFoodNearbyScreenState
       );
     }
 
+    final places =
+    _filteredPlaces(
+      controller.places,
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -711,256 +661,60 @@ class _TraditionalFoodNearbyScreenState
           maxLines: 1,
           overflow:
           TextOverflow.ellipsis,
-          style:
-          GoogleFonts.montserrat(
-            fontWeight:
-            FontWeight.w700,
-          ),
         ),
       ),
-      body: controller.places.isEmpty
-          ? _NoLocations(
-        foodName:
-        food.name,
-      )
-          : _buildMap(
-        controller.places,
-        places,
-      ),
-    );
-  }
-
-  // =========================================================
-  // MAP
-  // =========================================================
-
-  Widget _buildMap(
-      List<TraditionalFoodPlace> allPlaces,
-      List<TraditionalFoodPlace> places,
-      ) {
-    final center =
-    _averageCenter(
-      allPlaces,
-    );
-
-    return Stack(
-      children: [
-        FlutterMap(
-          mapController:
-          _mapController,
-          options:
-          MapOptions(
-            initialCenter:
-            center,
-            initialZoom:
-            11,
-          ),
-          children: [
-            TileLayer(
-              urlTemplate:
-              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName:
-              'com.collab.app',
+      body: Stack(
+        children: [
+          FlutterMap(
+            mapController:
+            _mapController,
+            options: MapOptions(
+              initialCenter:
+              controller
+                  .places
+                  .isEmpty
+                  ? const LatLng(
+                4.2105,
+                101.9758,
+              )
+                  : _averageCenter(
+                controller
+                    .places,
+              ),
+              initialZoom:
+              controller
+                  .places
+                  .isEmpty
+                  ? 6
+                  : 10,
             ),
-
-            MarkerLayer(
-              markers: [
-                for (final place
-                in places)
-                  Marker(
-                    point:
-                    LatLng(
-                      place.latitude,
-                      place.longitude,
-                    ),
-                    width:
-                    _selectedPlace?.id ==
-                        place.id
-                        ? 54
-                        : 46,
-                    height:
-                    _selectedPlace?.id ==
-                        place.id
-                        ? 54
-                        : 46,
-                    child:
-                    GestureDetector(
-                      onTap: () {
-                        _selectPlace(
-                          place,
-                        );
-                      },
-                      child:
-                      _LocationMarker(
-                        selected:
-                        _selectedPlace?.id ==
-                            place.id,
-                        halalStatus:
-                        place.halalStatus,
-                      ),
-                    ),
-                  ),
-
-                if (_userLocation !=
-                    null)
-                  Marker(
-                    point:
-                    _userLocation!,
-                    width: 36,
-                    height: 36,
-                    child:
-                    Container(
-                      decoration:
-                      BoxDecoration(
-                        color:
-                        Colors.blue,
-                        shape:
-                        BoxShape.circle,
-                        border:
-                        Border.all(
-                          color:
-                          Colors.white,
-                          width:
-                          3,
-                        ),
-                      ),
-                      child:
-                      const Icon(
-                        Icons
-                            .person_pin_circle_rounded,
-                        color:
-                        Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-
-        // =====================================================
-        // SEARCH + FILTER
-        // =====================================================
-
-        Positioned(
-          top: 12,
-          left: 12,
-          right: 12,
-          child: Row(
             children: [
-              Expanded(
-                child:
-                Material(
-                  elevation: 4,
-                  borderRadius:
-                  BorderRadius.circular(
-                    16,
-                  ),
-                  child:
-                  TextField(
-                    controller:
-                    _searchController,
-                    onChanged:
-                        (value) {
-                      setState(() {
-                        _searchQuery =
-                            value;
-
-                        _selectedPlace =
-                        null;
-                      });
-                    },
-                    decoration:
-                    InputDecoration(
-                      hintText:
-                      'Search location...',
-                      prefixIcon:
-                      const Icon(
-                        Icons
-                            .search_rounded,
-                      ),
-                      suffixIcon:
-                      _searchQuery
-                          .trim()
-                          .isEmpty
-                          ? null
-                          : IconButton(
-                        onPressed:
-                            () {
-                          _searchController
-                              .clear();
-
-                          setState(
-                                () {
-                              _searchQuery =
-                              '';
-
-                              _selectedPlace =
-                              null;
-                            },
-                          );
-                        },
-                        icon:
-                        const Icon(
-                          Icons
-                              .close_rounded,
-                        ),
-                      ),
-                      filled: true,
-                      border:
-                      OutlineInputBorder(
-                        borderRadius:
-                        BorderRadius.circular(
-                          16,
-                        ),
-                        borderSide:
-                        BorderSide.none,
-                      ),
-                    ),
-                  ),
-                ),
+              TileLayer(
+                urlTemplate:
+                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName:
+                'com.collab.app',
               ),
 
-              const SizedBox(width: 8),
-
-              SizedBox(
-                width: 52,
-                height: 52,
-                child:
-                Stack(
-                  clipBehavior:
-                  Clip.none,
-                  children: [
-                    Positioned.fill(
-                      child:
-                      FloatingActionButton
-                          .small(
-                        heroTag:
-                        'food-filter',
-                        onPressed:
-                        _showFilters,
-                        child:
-                        const Icon(
-                          Icons
-                              .tune_rounded,
-                        ),
+              MarkerLayer(
+                markers: [
+                  for (final place
+                  in places)
+                    Marker(
+                      point: LatLng(
+                        place.latitude,
+                        place.longitude,
                       ),
-                    ),
-
-                    if (_filterCount >
-                        0)
-                      Positioned(
-                        right: -3,
-                        top: -4,
-                        child:
-                        Container(
-                          width:
-                          21,
-                          height:
-                          21,
-                          alignment:
-                          Alignment.center,
+                      width: 48,
+                      height: 48,
+                      child:
+                      GestureDetector(
+                        onTap: () {
+                          _selectPlace(
+                            place,
+                          );
+                        },
+                        child: Container(
                           decoration:
                           BoxDecoration(
                             color:
@@ -968,211 +722,554 @@ class _TraditionalFoodNearbyScreenState
                               context,
                             )
                                 .colorScheme
-                                .error,
+                                .primary,
                             shape:
-                            BoxShape.circle,
+                            BoxShape
+                                .circle,
+                            border:
+                            Border.all(
+                              color:
+                              Colors
+                                  .white,
+                              width: 3,
+                            ),
                           ),
                           child:
-                          Text(
-                            '$_filterCount',
-                            style:
-                            const TextStyle(
-                              color:
-                              Colors.white,
-                              fontSize:
-                              10,
-                              fontWeight:
-                              FontWeight.bold,
-                            ),
+                          const Icon(
+                            Icons
+                                .restaurant_rounded,
+                            color:
+                            Colors.white,
                           ),
                         ),
                       ),
-                  ],
-                ),
+                    ),
+
+                  if (_userLocation !=
+                      null)
+                    Marker(
+                      point:
+                      _userLocation!,
+                      width: 38,
+                      height: 38,
+                      child: Container(
+                        decoration:
+                        BoxDecoration(
+                          color:
+                          Colors.blue,
+                          shape:
+                          BoxShape
+                              .circle,
+                          border:
+                          Border.all(
+                            color:
+                            Colors.white,
+                            width: 3,
+                          ),
+                        ),
+                        child:
+                        const Icon(
+                          Icons.person,
+                          color:
+                          Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ],
           ),
-        ),
 
-        // =====================================================
-        // GPS BUTTON
-        // =====================================================
+          // =================================================
+          // SEARCH
+          // =================================================
 
-        Positioned(
-          right: 15,
-          bottom:
-          _selectedPlace ==
-              null
-              ? 200
-              : 275,
-          child:
-          FloatingActionButton
-              .small(
-            heroTag:
-            'food-location',
-            onPressed:
-            _locatingUser
-                ? null
-                : () {
-              _locateUser();
-            },
-            child:
-            _locatingUser
-                ? const Padding(
-              padding:
-              EdgeInsets.all(
-                10,
-              ),
-              child:
-              CircularProgressIndicator(
-                strokeWidth:
-                2,
-              ),
-            )
-                : const Icon(
-              Icons
-                  .my_location_rounded,
+          Positioned(
+            top: 12,
+            left: 12,
+            right: 12,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Material(
+                    elevation: 4,
+                    borderRadius:
+                    BorderRadius
+                        .circular(
+                      16,
+                    ),
+                    child: TextField(
+                      controller:
+                      _searchController,
+                      onChanged:
+                          (value) {
+                        setState(() {
+                          _searchQuery =
+                              value;
+                        });
+                      },
+                      decoration:
+                      InputDecoration(
+                        hintText:
+                        'Search restaurant...',
+                        prefixIcon:
+                        const Icon(
+                          Icons.search,
+                        ),
+                        border:
+                        OutlineInputBorder(
+                          borderRadius:
+                          BorderRadius
+                              .circular(
+                            16,
+                          ),
+                          borderSide:
+                          BorderSide
+                              .none,
+                        ),
+                        filled: true,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(
+                  width: 8,
+                ),
+
+                FloatingActionButton
+                    .small(
+                  heroTag:
+                  'foodFilter',
+                  onPressed:
+                  _showFilters,
+                  child: const Icon(
+                    Icons.tune,
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
 
-        // =====================================================
-        // LIST
-        // =====================================================
+          // =================================================
+          // GPS
+          // =================================================
 
-        if (_selectedPlace == null)
-          DraggableScrollableSheet(
-            initialChildSize:
-            0.30,
-            minChildSize:
-            0.18,
-            maxChildSize:
-            0.65,
-            builder: (
-                context,
-                scrollController,
-                ) {
-              return _LocationsSheet(
-                foodName:
-                food.name,
-                places:
-                places,
-                scrollController:
-                scrollController,
-                distanceBuilder:
-                _distanceToPlace,
-                onSelected:
-                _selectPlace,
-              );
-            },
-          ),
-
-        // =====================================================
-        // SELECTED LOCATION
-        // =====================================================
-
-        if (_selectedPlace != null)
-          DraggableScrollableSheet(
-            initialChildSize:
-            0.36,
-            minChildSize:
-            0.24,
-            maxChildSize:
-            0.55,
-            builder: (
-                context,
-                scrollController,
-                ) {
-              return _SelectedLocationSheet(
-                place:
-                _selectedPlace!,
-                distanceKm:
-                _distanceToPlace(
-                  _selectedPlace!,
-                ),
-                scrollController:
-                scrollController,
-                onClose: () {
-                  setState(() {
-                    _selectedPlace =
-                    null;
-                  });
-                },
-                onOpen: () {
-                  _openLocation(
-                    _selectedPlace!,
-                  );
-                },
-              );
-            },
-          ),
-
-        // =====================================================
-        // NO FILTER RESULTS
-        // =====================================================
-
-        if (places.isEmpty &&
-            allPlaces.isNotEmpty)
           Positioned(
-            top: 90,
-            left: 25,
-            right: 25,
+            right: 15,
+            bottom:
+            _selectedPlace ==
+                null
+                ? 210
+                : 330,
             child:
-            Card(
+            FloatingActionButton
+                .small(
+              heroTag:
+              'foodLocation',
+              onPressed:
+              _locatingUser
+                  ? null
+                  : () {
+                _locateUser();
+              },
               child:
-              Padding(
+              _locatingUser
+                  ? const Padding(
                 padding:
-                const EdgeInsets.all(
-                  20,
+                EdgeInsets
+                    .all(
+                  10,
                 ),
                 child:
-                Column(
-                  mainAxisSize:
-                  MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons
-                          .search_off_rounded,
-                      size: 38,
-                    ),
-                    const SizedBox(
-                      height: 8,
-                    ),
-                    const Text(
-                      'No locations match your filters.',
-                      textAlign:
-                      TextAlign.center,
-                    ),
-                  ],
+                CircularProgressIndicator(
+                  strokeWidth:
+                  2,
                 ),
+              )
+                  : const Icon(
+                Icons
+                    .my_location,
               ),
             ),
           ),
 
-        Positioned(
-          left: 5,
-          bottom: 4,
-          child:
-          IgnorePointer(
-            child:
-            Container(
+          // =================================================
+          // LIST
+          // =================================================
+
+          if (_selectedPlace ==
+              null)
+            DraggableScrollableSheet(
+              initialChildSize:
+              0.30,
+              minChildSize:
+              0.18,
+              maxChildSize:
+              0.65,
+              builder: (
+                  context,
+                  scrollController,
+                  ) {
+                return Material(
+                  elevation: 16,
+                  borderRadius:
+                  const BorderRadius
+                      .vertical(
+                    top:
+                    Radius.circular(
+                      24,
+                    ),
+                  ),
+                  child: ListView(
+                    controller:
+                    scrollController,
+                    padding:
+                    const EdgeInsets
+                        .all(
+                      12,
+                    ),
+                    children: [
+                      Text(
+                        'Places Serving ${food.name}',
+                        style: GoogleFonts
+                            .montserrat(
+                          fontSize: 17,
+                          fontWeight:
+                          FontWeight
+                              .w700,
+                        ),
+                      ),
+
+                      const SizedBox(
+                        height: 10,
+                      ),
+
+                      if (places
+                          .isEmpty)
+                        const Padding(
+                          padding:
+                          EdgeInsets
+                              .all(
+                            20,
+                          ),
+                          child: Text(
+                            'No restaurants match your filters.',
+                            textAlign:
+                            TextAlign
+                                .center,
+                          ),
+                        ),
+
+                      for (final place
+                      in places)
+                        Card(
+                          child:
+                          ListTile(
+                            onTap: () {
+                              _selectPlace(
+                                place,
+                              );
+                            },
+                            leading:
+                            const CircleAvatar(
+                              child:
+                              Icon(
+                                Icons
+                                    .restaurant,
+                              ),
+                            ),
+                            title: Text(
+                              place.name,
+                            ),
+                            subtitle:
+                            Text(
+                              [
+                                if (place.city !=
+                                    null)
+                                  place.city!,
+                                place.state,
+                                if (_distanceToPlace(
+                                  place,
+                                ) !=
+                                    null)
+                                  '${_distanceToPlace(place)!.toStringAsFixed(1)} km',
+                              ].join(
+                                ' • ',
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+
+          // =================================================
+          // SELECTED RESTAURANT
+          // =================================================
+
+          if (_selectedPlace !=
+              null)
+            DraggableScrollableSheet(
+              initialChildSize:
+              0.44,
+              minChildSize:
+              0.31,
+              maxChildSize:
+              0.65,
+              builder: (
+                  context,
+                  scrollController,
+                  ) {
+                final place =
+                _selectedPlace!;
+
+                final isSaved =
+                controller
+                    .isPlaceFavourite(
+                  place.id,
+                );
+
+                final isSaving =
+                controller
+                    .isSavingPlace(
+                  place.id,
+                );
+
+                return Material(
+                  elevation: 16,
+                  borderRadius:
+                  const BorderRadius
+                      .vertical(
+                    top:
+                    Radius.circular(
+                      24,
+                    ),
+                  ),
+                  child: ListView(
+                    controller:
+                    scrollController,
+                    padding:
+                    const EdgeInsets
+                        .fromLTRB(
+                      18,
+                      12,
+                      18,
+                      24,
+                    ),
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              place.name,
+                              style:
+                              GoogleFonts
+                                  .montserrat(
+                                fontSize:
+                                18,
+                                fontWeight:
+                                FontWeight
+                                    .w700,
+                              ),
+                            ),
+                          ),
+
+                          IconButton(
+                            onPressed:
+                                () {
+                              setState(
+                                    () {
+                                  _selectedPlace =
+                                  null;
+                                },
+                              );
+                            },
+                            icon:
+                            const Icon(
+                              Icons.close,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      Text(
+                        [
+                          if (place.city !=
+                              null &&
+                              place.city!
+                                  .isNotEmpty)
+                            place.city!,
+                          place.state,
+                        ].join(', '),
+                      ),
+
+                      if (place.address !=
+                          null &&
+                          place.address!
+                              .isNotEmpty) ...[
+                        const SizedBox(
+                          height: 10,
+                        ),
+
+                        Text(
+                          place.address!,
+                        ),
+                      ],
+
+                      const SizedBox(
+                        height: 12,
+                      ),
+
+                      Wrap(
+                        spacing: 7,
+                        runSpacing: 7,
+                        children: [
+                          _Tag(
+                            text:
+                            _halalLabel(
+                              place
+                                  .halalStatus,
+                            ),
+                          ),
+
+                          if (_distanceToPlace(
+                            place,
+                          ) !=
+                              null)
+                            _Tag(
+                              text:
+                              '${_distanceToPlace(place)!.toStringAsFixed(1)} km away',
+                            ),
+                        ],
+                      ),
+
+                      const SizedBox(
+                        height: 20,
+                      ),
+
+                      FilledButton.icon(
+                        onPressed: () {
+                          _navigate(
+                            place,
+                          );
+                        },
+                        icon:
+                        const Icon(
+                          Icons
+                              .navigation_rounded,
+                        ),
+                        label:
+                        const Text(
+                          'Navigate with Google Maps',
+                        ),
+                      ),
+
+                      const SizedBox(
+                        height: 8,
+                      ),
+
+                      OutlinedButton.icon(
+                        onPressed:
+                        isSaving
+                            ? null
+                            : () async {
+                          final success =
+                          await controller
+                              .togglePlaceFavourite(
+                            place.id,
+                          );
+
+                          if (!context
+                              .mounted) {
+                            return;
+                          }
+
+                          if (!success) {
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(
+                              SnackBar(
+                                content:
+                                Text(
+                                  controller.errorMessage ??
+                                      'Could not update saved restaurant.',
+                                ),
+                              ),
+                            );
+
+                            return;
+                          }
+
+                          final nowSaved =
+                          controller
+                              .isPlaceFavourite(
+                            place.id,
+                          );
+
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(
+                            SnackBar(
+                              content:
+                              Text(
+                                nowSaved
+                                    ? '${place.name} saved.'
+                                    : '${place.name} removed from saved.',
+                              ),
+                            ),
+                          );
+                        },
+                        icon:
+                        isSaving
+                            ? const SizedBox(
+                          width:
+                          18,
+                          height:
+                          18,
+                          child:
+                          CircularProgressIndicator(
+                            strokeWidth:
+                            2,
+                          ),
+                        )
+                            : Icon(
+                          isSaved
+                              ? Icons.bookmark_rounded
+                              : Icons.bookmark_border_rounded,
+                        ),
+                        label: Text(
+                          isSaved
+                              ? 'Saved Place'
+                              : 'Save Place',
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+
+          Positioned(
+            left: 5,
+            bottom: 4,
+            child: Container(
               padding:
-              const EdgeInsets.symmetric(
+              const EdgeInsets
+                  .symmetric(
                 horizontal: 5,
                 vertical: 2,
               ),
-              color:
-              Theme.of(
-                context,
-              )
+              color: Theme.of(context)
                   .colorScheme
                   .surface
                   .withValues(
-                alpha:
-                0.85,
+                alpha: 0.85,
               ),
-              child:
-              const Text(
+              child: const Text(
                 '© OpenStreetMap contributors',
                 style:
                 TextStyle(
@@ -1181,13 +1278,14 @@ class _TraditionalFoodNearbyScreenState
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   LatLng _averageCenter(
-      List<TraditionalFoodPlace> places,
+      List<TraditionalFoodPlace>
+      places,
       ) {
     var latitude = 0.0;
     var longitude = 0.0;
@@ -1201,721 +1299,8 @@ class _TraditionalFoodNearbyScreenState
     }
 
     return LatLng(
-      latitude /
-          places.length,
-      longitude /
-          places.length,
-    );
-  }
-}
-
-// ===========================================================
-// LOCATION MARKER
-// ===========================================================
-
-class _LocationMarker
-    extends StatelessWidget {
-  const _LocationMarker({
-    required this.selected,
-    required this.halalStatus,
-  });
-
-  final bool selected;
-  final String halalStatus;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedScale(
-      duration:
-      const Duration(
-        milliseconds: 160,
-      ),
-      scale:
-      selected ? 1.18 : 1,
-      child:
-      Container(
-        decoration:
-        BoxDecoration(
-          color:
-          _halalColor(
-            halalStatus,
-          ),
-          shape:
-          BoxShape.circle,
-          border:
-          Border.all(
-            color:
-            Colors.white,
-            width:
-            selected
-                ? 4
-                : 3,
-          ),
-          boxShadow:
-          const [
-            BoxShadow(
-              color:
-              Colors.black26,
-              blurRadius:
-              7,
-            ),
-          ],
-        ),
-        child:
-        const Icon(
-          Icons
-              .restaurant_rounded,
-          color:
-          Colors.white,
-          size: 20,
-        ),
-      ),
-    );
-  }
-}
-
-// ===========================================================
-// LOCATION LIST
-// ===========================================================
-
-class _LocationsSheet
-    extends StatelessWidget {
-  const _LocationsSheet({
-    required this.foodName,
-    required this.places,
-    required this.scrollController,
-    required this.distanceBuilder,
-    required this.onSelected,
-  });
-
-  final String foodName;
-
-  final List<TraditionalFoodPlace> places;
-
-  final ScrollController scrollController;
-
-  final double? Function(
-      TraditionalFoodPlace place,
-      ) distanceBuilder;
-
-  final ValueChanged<
-      TraditionalFoodPlace> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context)
-            .colorScheme;
-
-    return Material(
-      elevation: 16,
-      color:
-      colors.surface,
-      borderRadius:
-      const BorderRadius.vertical(
-        top:
-        Radius.circular(
-          24,
-        ),
-      ),
-      child:
-      Column(
-        children: [
-          const SizedBox(
-            height: 9,
-          ),
-
-          Container(
-            width: 38,
-            height: 4,
-            decoration:
-            BoxDecoration(
-              color:
-              colors.outlineVariant,
-              borderRadius:
-              BorderRadius.circular(
-                999,
-              ),
-            ),
-          ),
-
-          Padding(
-            padding:
-            const EdgeInsets.fromLTRB(
-              16,
-              12,
-              16,
-              8,
-            ),
-            child:
-            Row(
-              children: [
-                Expanded(
-                  child:
-                  Text(
-                    'Places Serving $foodName',
-                    maxLines:
-                    1,
-                    overflow:
-                    TextOverflow.ellipsis,
-                    style:
-                    GoogleFonts.montserrat(
-                      fontSize:
-                      17,
-                      fontWeight:
-                      FontWeight.w700,
-                    ),
-                  ),
-                ),
-
-                Text(
-                  '${places.length}',
-                ),
-              ],
-            ),
-          ),
-
-          const Divider(
-            height: 1,
-          ),
-
-          Expanded(
-            child:
-            ListView.separated(
-              controller:
-              scrollController,
-              padding:
-              const EdgeInsets.all(
-                10,
-              ),
-              itemCount:
-              places.length,
-              separatorBuilder:
-                  (_, _) =>
-              const SizedBox(
-                height: 8,
-              ),
-              itemBuilder:
-                  (
-                  context,
-                  index,
-                  ) {
-                final place =
-                places[index];
-
-                return _LocationTile(
-                  place:
-                  place,
-                  distanceKm:
-                  distanceBuilder(
-                    place,
-                  ),
-                  onTap:
-                      () {
-                    onSelected(
-                      place,
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ===========================================================
-// LOCATION TILE
-// ===========================================================
-
-class _LocationTile
-    extends StatelessWidget {
-  const _LocationTile({
-    required this.place,
-    required this.distanceKm,
-    required this.onTap,
-  });
-
-  final TraditionalFoodPlace place;
-
-  final double? distanceKm;
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context)
-            .colorScheme;
-
-    return Material(
-      color:
-      colors.surfaceContainerLow,
-      borderRadius:
-      BorderRadius.circular(
-        14,
-      ),
-      child:
-      InkWell(
-        onTap:
-        onTap,
-        borderRadius:
-        BorderRadius.circular(
-          14,
-        ),
-        child:
-        Padding(
-          padding:
-          const EdgeInsets.all(
-            12,
-          ),
-          child:
-          Row(
-            children: [
-              CircleAvatar(
-                backgroundColor:
-                _halalColor(
-                  place
-                      .halalStatus,
-                ),
-                child:
-                const Icon(
-                  Icons
-                      .restaurant_rounded,
-                  color:
-                  Colors.white,
-                ),
-              ),
-
-              const SizedBox(
-                width: 11,
-              ),
-
-              Expanded(
-                child:
-                Column(
-                  crossAxisAlignment:
-                  CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      place
-                          .name,
-                      maxLines:
-                      1,
-                      overflow:
-                      TextOverflow.ellipsis,
-                      style:
-                      GoogleFonts.inter(
-                        fontWeight:
-                        FontWeight.w700,
-                      ),
-                    ),
-
-                    const SizedBox(
-                      height: 3,
-                    ),
-
-                    Text(
-                      [
-                        if (place.city !=
-                            null &&
-                            place.city!
-                                .trim()
-                                .isNotEmpty)
-                          place
-                              .city!,
-                        place
-                            .state,
-                      ].join(
-                        ', ',
-                      ),
-                      style:
-                      GoogleFonts.inter(
-                        fontSize:
-                        10,
-                        color:
-                        colors.onSurfaceVariant,
-                      ),
-                    ),
-
-                    const SizedBox(
-                      height: 5,
-                    ),
-
-                    Wrap(
-                      spacing:
-                      6,
-                      runSpacing:
-                      5,
-                      children: [
-                        _Tag(
-                          text:
-                          _halalLabel(
-                            place
-                                .halalStatus,
-                          ),
-                        ),
-
-                        if (distanceKm !=
-                            null)
-                          _Tag(
-                            text:
-                            '${distanceKm!.toStringAsFixed(1)} km away',
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const Icon(
-                Icons
-                    .chevron_right_rounded,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ===========================================================
-// SELECTED LOCATION
-// ===========================================================
-
-class _SelectedLocationSheet
-    extends StatelessWidget {
-  const _SelectedLocationSheet({
-    required this.place,
-    required this.distanceKm,
-    required this.scrollController,
-    required this.onClose,
-    required this.onOpen,
-  });
-
-  final TraditionalFoodPlace place;
-
-  final double? distanceKm;
-
-  final ScrollController scrollController;
-
-  final VoidCallback onClose;
-  final VoidCallback onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context)
-            .colorScheme;
-
-    return Material(
-      elevation: 16,
-      color:
-      colors.surface,
-      borderRadius:
-      const BorderRadius.vertical(
-        top:
-        Radius.circular(
-          24,
-        ),
-      ),
-      child:
-      ListView(
-        controller:
-        scrollController,
-        padding:
-        const EdgeInsets.fromLTRB(
-          18,
-          10,
-          18,
-          24,
-        ),
-        children: [
-          Center(
-            child:
-            Container(
-              width: 38,
-              height: 4,
-              decoration:
-              BoxDecoration(
-                color:
-                colors.outlineVariant,
-                borderRadius:
-                BorderRadius.circular(
-                  999,
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(
-            height: 12,
-          ),
-
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 26,
-                backgroundColor:
-                _halalColor(
-                  place
-                      .halalStatus,
-                ),
-                child:
-                const Icon(
-                  Icons
-                      .restaurant_rounded,
-                  color:
-                  Colors.white,
-                ),
-              ),
-
-              const SizedBox(
-                width: 12,
-              ),
-
-              Expanded(
-                child:
-                Column(
-                  crossAxisAlignment:
-                  CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      place
-                          .name,
-                      style:
-                      GoogleFonts.montserrat(
-                        fontSize:
-                        18,
-                        fontWeight:
-                        FontWeight.w700,
-                      ),
-                    ),
-
-                    const SizedBox(
-                      height: 3,
-                    ),
-
-                    Text(
-                      [
-                        if (place.city !=
-                            null &&
-                            place.city!
-                                .trim()
-                                .isNotEmpty)
-                          place
-                              .city!,
-                        place
-                            .state,
-                      ].join(
-                        ', ',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              IconButton(
-                onPressed:
-                onClose,
-                icon:
-                const Icon(
-                  Icons
-                      .close_rounded,
-                ),
-              ),
-            ],
-          ),
-
-          if (place.address != null &&
-              place.address!
-                  .trim()
-                  .isNotEmpty) ...[
-            const SizedBox(
-              height: 14,
-            ),
-
-            Row(
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
-              children: [
-                const Icon(
-                  Icons
-                      .location_on_outlined,
-                  size:
-                  18,
-                ),
-                const SizedBox(
-                  width: 6,
-                ),
-                Expanded(
-                  child:
-                  Text(
-                    place.address!,
-                  ),
-                ),
-              ],
-            ),
-          ],
-
-          if (place.description !=
-              null &&
-              place.description!
-                  .trim()
-                  .isNotEmpty) ...[
-            const SizedBox(
-              height: 14,
-            ),
-
-            Text(
-              place.description!,
-              style:
-              GoogleFonts.inter(
-                fontSize: 12,
-                height:
-                1.45,
-              ),
-            ),
-          ],
-
-          const SizedBox(
-            height: 14,
-          ),
-
-          Wrap(
-            spacing: 7,
-            runSpacing:
-            7,
-            children: [
-              _Tag(
-                text:
-                _halalLabel(
-                  place
-                      .halalStatus,
-                ),
-              ),
-
-              _Tag(
-                text:
-                _displayValue(
-                  place
-                      .category,
-                ),
-              ),
-
-              if (distanceKm !=
-                  null)
-                _Tag(
-                  text:
-                  '${distanceKm!.toStringAsFixed(1)} km away',
-                ),
-            ],
-          ),
-
-          if (place.verificationSource !=
-              null &&
-              place.verificationSource!
-                  .trim()
-                  .isNotEmpty) ...[
-            const SizedBox(
-              height: 14,
-            ),
-
-            Text(
-              'Verified source: ${place.verificationSource}',
-              style:
-              GoogleFonts.inter(
-                fontSize: 10,
-                color:
-                colors.onSurfaceVariant,
-              ),
-            ),
-          ],
-
-          const SizedBox(
-            height: 20,
-          ),
-
-          FilledButton.icon(
-            onPressed:
-            onOpen,
-            icon:
-            const Icon(
-              Icons
-                  .map_outlined,
-            ),
-            label:
-            const Text(
-              'Open Location',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ===========================================================
-// NO LOCATIONS
-// ===========================================================
-
-class _NoLocations
-    extends StatelessWidget {
-  const _NoLocations({
-    required this.foodName,
-  });
-
-  final String foodName;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child:
-      Padding(
-        padding:
-        const EdgeInsets.all(
-          32,
-        ),
-        child:
-        Column(
-          mainAxisSize:
-          MainAxisSize.min,
-          children: [
-            Icon(
-              Icons
-                  .location_off_outlined,
-              size:
-              55,
-              color:
-              Theme.of(
-                context,
-              )
-                  .colorScheme
-                  .outline,
-            ),
-
-            const SizedBox(
-              height: 14,
-            ),
-
-            Text(
-              'No verified locations for $foodName have been added yet.',
-              textAlign:
-              TextAlign.center,
-              style:
-              GoogleFonts.montserrat(
-                fontSize:
-                17,
-                fontWeight:
-                FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
+      latitude / places.length,
+      longitude / places.length,
     );
   }
 }
@@ -1924,8 +1309,7 @@ class _NoLocations
 // TAG
 // ===========================================================
 
-class _Tag
-    extends StatelessWidget {
+class _Tag extends StatelessWidget {
   const _Tag({
     required this.text,
   });
@@ -1936,18 +1320,14 @@ class _Tag
   Widget build(BuildContext context) {
     return Container(
       padding:
-      const EdgeInsets.symmetric(
-        horizontal:
-        8,
-        vertical:
-        4,
+      const EdgeInsets
+          .symmetric(
+        horizontal: 8,
+        vertical: 4,
       ),
       decoration:
       BoxDecoration(
-        color:
-        Theme.of(
-          context,
-        )
+        color: Theme.of(context)
             .colorScheme
             .surfaceContainerHighest,
         borderRadius:
@@ -1955,24 +1335,16 @@ class _Tag
           999,
         ),
       ),
-      child:
-      Text(
+      child: Text(
         text,
         style:
-        GoogleFonts.inter(
-          fontSize:
-          9,
-          fontWeight:
-          FontWeight.w600,
+        const TextStyle(
+          fontSize: 10,
         ),
       ),
     );
   }
 }
-
-// ===========================================================
-// HELPERS
-// ===========================================================
 
 String _halalLabel(
     String value,
@@ -1990,54 +1362,4 @@ String _halalLabel(
     default:
       return 'Status Unknown';
   }
-}
-
-Color _halalColor(
-    String value,
-    ) {
-  switch (value) {
-    case 'certified':
-      return const Color(
-        0xFF1B4332,
-      );
-
-    case 'muslim_friendly':
-      return const Color(
-        0xFF3F6653,
-      );
-
-    case 'non_halal':
-      return const Color(
-        0xFF8A3A32,
-      );
-
-    default:
-      return const Color(
-        0xFF6B7280,
-      );
-  }
-}
-
-String _displayValue(
-    String value,
-    ) {
-  final normalized = value
-      .replaceAll(
-    '_',
-    ' ',
-  )
-      .trim();
-
-  return normalized
-      .split(' ')
-      .where(
-        (word) =>
-    word.isNotEmpty,
-  )
-      .map(
-        (word) =>
-    word[0].toUpperCase() +
-        word.substring(1),
-  )
-      .join(' ');
 }

@@ -21,12 +21,14 @@ class CulturalEventDetailController
   bool isLoading = false;
 
   bool isFavourite = false;
-  bool isInItinerary = false;
 
   bool isSavingFavourite = false;
-  bool isSavingItinerary = false;
 
   String? errorMessage;
+
+  // =========================================================
+  // LOAD SAVED STATUS
+  // =========================================================
 
   Future<void> load() async {
     isLoading = true;
@@ -34,29 +36,49 @@ class CulturalEventDetailController
 
     notifyListeners();
 
-    try {
-      final results = await Future.wait<bool>([
-        _repository.isCulturalEventFavourite(
-          eventId,
-        ),
-        _repository.isCulturalEventInItinerary(
-          eventId,
-        ),
-      ]);
-
-      isFavourite = results[0];
-      isInItinerary = results[1];
-    } catch (_) {
-      errorMessage =
-      'Could not load your saved event status.';
-    } finally {
+    if (!_repository.isSignedIn) {
+      isFavourite = false;
       isLoading = false;
+
       notifyListeners();
+
+      return;
     }
+
+    try {
+      isFavourite =
+      await _repository
+          .isCulturalEventFavourite(
+        eventId,
+      );
+    } catch (error) {
+      debugPrint(
+        'Load event favourite error: $error',
+      );
+
+      isFavourite = false;
+    }
+
+    isLoading = false;
+
+    notifyListeners();
   }
+
+  // =========================================================
+  // SAVE / UNSAVE
+  // =========================================================
 
   Future<bool> toggleFavourite() async {
     if (isSavingFavourite) {
+      return false;
+    }
+
+    if (!_repository.isSignedIn) {
+      errorMessage =
+      'Please sign in to save this event.';
+
+      notifyListeners();
+
       return false;
     }
 
@@ -83,57 +105,24 @@ class CulturalEventDetailController
       }
 
       return true;
-    } catch (_) {
+    } catch (error) {
+      debugPrint(
+        'Update event favourite error: $error',
+      );
+
       errorMessage =
-      'Could not update your favourite.';
+      'Could not update saved event.';
 
       return false;
     } finally {
       isSavingFavourite = false;
+
       notifyListeners();
     }
   }
 
-  Future<bool> toggleItinerary(
-      DateTime eventStart,
-      ) async {
-    if (isSavingItinerary) {
-      return false;
-    }
-
-    isSavingItinerary = true;
-    errorMessage = null;
-
-    notifyListeners();
-
-    try {
-      if (isInItinerary) {
-        await _repository
-            .removeCulturalEventFromItinerary(
-          eventId,
-        );
-
-        isInItinerary = false;
-      } else {
-        await _repository
-            .addCulturalEventToItinerary(
-          eventId: eventId,
-          plannedAt: eventStart,
-        );
-
-        isInItinerary = true;
-      }
-
-      return true;
-    } catch (_) {
-      errorMessage =
-      'Could not update your itinerary.';
-
-      return false;
-    } finally {
-      isSavingItinerary = false;
-      notifyListeners();
-    }
+  Future<void> refresh() {
+    return load();
   }
 }
 
