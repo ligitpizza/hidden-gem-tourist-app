@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../config/theme.dart';
+import '../../../../shared/models/destination.dart' as shared;
 import '../../../../shared/widgets/app_header.dart';
 import '../../../../shared/widgets/check_in_button.dart';
+import '../../../destination_exploration/model/favourite_destinations_store.dart';
 import '../../../destination_exploration/view/widgets/ratings_section.dart';
+import '../../../itinerary_planning/controller/itinerary_planner_controller.dart';
 import '../../controller/badge_controller.dart';
 import '../../controller/checkin_controller.dart';
 import '../../controller/journal_controller.dart';
@@ -28,6 +33,24 @@ import '../../services/mock/mock_checkin_service.dart';
 /// unlockable forever.
 bool _isCheckInCurrent(CheckInModel checkIn) =>
     DateTime.now().difference(checkIn.timestamp) < MockCheckInService.cooldownWindow;
+
+/// Best-effort mapping from this module's plain-string category label back
+/// to [shared.DestinationCategory] for the "Add to Itinerary Route" button —
+/// lossy (this module's 5 labels don't line up 1:1 with the itinerary
+/// module's 15 categories), defaults to [shared.DestinationCategory.attraction]
+/// like every other unrecognised-category fallback in this codebase.
+shared.DestinationCategory _itineraryCategoryFor(String label) {
+  switch (label) {
+    case 'Food':
+      return shared.DestinationCategory.restaurant;
+    case 'Culture':
+      return shared.DestinationCategory.heritageSite;
+    case 'Nature':
+      return shared.DestinationCategory.park;
+    default:
+      return shared.DestinationCategory.attraction;
+  }
+}
 
 /// When no badge was newly unlocked, nudge the traveler toward whichever
 /// locked badge is actually relevant to what they just did — the
@@ -475,6 +498,10 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
               errorMessage: _checkInErrorMessage,
               onPressed: _handleCheckIn,
             ),
+            const SizedBox(height: 10),
+            _SaveToFavouritesButton(destination: destination),
+            const SizedBox(height: 10),
+            _AddToItineraryRouteButton(destination: destination),
             const Divider(height: 40),
             RatingsSection(
               destinationId: destination.id,
@@ -1201,6 +1228,77 @@ class _LocationRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SaveToFavouritesButton extends StatelessWidget {
+  const _SaveToFavouritesButton({required this.destination});
+
+  final DestinationModel destination;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: FavouriteDestinationsStore.instance,
+      builder: (context, _) {
+        final isSaved = FavouriteDestinationsStore.instance.contains(destination.id);
+        return SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: isSaved
+                ? null
+                : () async {
+                    await FavouriteDestinationsStore.instance.addById(destination.id);
+                    if (!context.mounted) return;
+                    final error = FavouriteDestinationsStore.instance.error;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(error ?? '${destination.name} saved to favourites')),
+                    );
+                  },
+            icon: Icon(isSaved ? Icons.favorite : Icons.favorite_border),
+            label: Text(isSaved ? 'Saved to Favourites' : 'Save to Favourites'),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AddToItineraryRouteButton extends StatelessWidget {
+  const _AddToItineraryRouteButton({required this.destination});
+
+  final DestinationModel destination;
+
+  @override
+  Widget build(BuildContext context) {
+    return riverpod.Consumer(
+      builder: (context, ref, _) {
+        final itineraryController = ref.watch(itineraryPlannerControllerProvider);
+        final alreadyAdded =
+            itineraryController.selectedDestinations.any((d) => d.id == destination.id);
+        return SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: alreadyAdded
+                ? null
+                : () {
+                    itineraryController.addDestination(shared.Destination(
+                      id: destination.id,
+                      name: destination.name,
+                      city: destination.state,
+                      category: _itineraryCategoryFor(destination.category),
+                      location: LatLng(destination.latitude, destination.longitude),
+                    ));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('${destination.name} added to your itinerary route')),
+                    );
+                  },
+            icon: Icon(alreadyAdded ? Icons.check_circle : Icons.card_travel),
+            label: Text(alreadyAdded ? 'Added to Itinerary Route' : 'Add to Itinerary Route'),
+          ),
+        );
+      },
     );
   }
 }

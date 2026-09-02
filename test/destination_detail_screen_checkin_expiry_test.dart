@@ -1,7 +1,9 @@
 // test/destination_detail_screen_checkin_expiry_test.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' hide ChangeNotifierProvider;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:collab/features/gamification_journal/controller/badge_controller.dart';
 import 'package:collab/features/gamification_journal/controller/checkin_controller.dart';
 import 'package:collab/features/gamification_journal/controller/journal_controller.dart';
@@ -23,18 +25,24 @@ final _destination = DestinationModel(
 );
 
 Widget _wrap(CheckInController checkInController) {
-  return MultiProvider(
-    providers: [
-      ChangeNotifierProvider<CheckInController>.value(value: checkInController),
-      ChangeNotifierProvider<QuizController>(create: (_) => QuizController(userId: 'u1')),
-      ChangeNotifierProvider<BadgeController>(create: (_) => BadgeController(userId: 'u1')),
-      ChangeNotifierProvider<JournalController>(create: (_) => JournalController(userId: 'u1')),
-    ],
-    child: MaterialApp(home: DestinationDetailScreen(destination: _destination)),
+  return ProviderScope(
+    child: MultiProvider(
+      providers: [
+        ChangeNotifierProvider<CheckInController>.value(value: checkInController),
+        ChangeNotifierProvider<QuizController>(create: (_) => QuizController(userId: 'u1')),
+        ChangeNotifierProvider<BadgeController>(create: (_) => BadgeController(userId: 'u1')),
+        ChangeNotifierProvider<JournalController>(create: (_) => JournalController(userId: 'u1')),
+      ],
+      child: MaterialApp(home: DestinationDetailScreen(destination: _destination)),
+    ),
   );
 }
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   testWidgets('Write a Review is locked once the check-in is older than the cooldown window', (tester) async {
     final checkInController = CheckInController(userId: 'u1')
       ..setHistoryForTesting([
