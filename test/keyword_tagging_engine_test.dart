@@ -62,6 +62,19 @@ void main() {
       expect(tags, ['wheelchair-friendly', 'wheelchair-unfriendly']);
     });
 
+    test('a negation cue that follows the keyword still negates it', () {
+      // The negation ("not good") describes wheelchair accessibility but
+      // comes *after* "wheelchair" in the sentence, not before it — the
+      // word-window check must look both directions, not just backward.
+      final tags = KeywordTaggingEngine.tagsFor(
+        "here got a lot of chair to seat, but it's not friendly for stroller. "
+        'the wheelchair accessibility is not good too',
+      );
+      expect(tags, contains('wheelchair-unfriendly'));
+      expect(tags, isNot(contains('wheelchair-friendly')));
+      expect(tags, contains('stroller-unfriendly'));
+    });
+
     test('a negation cue far outside the word window does not suppress the tag', () {
       // "Not" here modifies "crowded", not "wheelchair" — 7 words separate
       // them, past the 4-word negation window, so wheelchair still tags

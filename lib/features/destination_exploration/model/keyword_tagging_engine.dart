@@ -3,11 +3,13 @@
 /// classification style of OverpassEcoSource.classifyDiet
 /// (lib/features/travel_prep/model/eco_partner_repository.dart).
 ///
-/// A keyword preceded by a negation cue within a few words ("unable to use
-/// wheelchair", "no parking") is not tagged with its positive meaning — a
-/// small, deterministic word-window check, not real negation scope parsing.
-/// It won't catch every phrasing (e.g. a negation more than
-/// [_negationWindowWords] words earlier). For keywords whose [_KeywordRule]
+/// A keyword preceded *or followed* by a negation cue within a few words
+/// ("unable to use wheelchair", "no parking", "wheelchair accessibility is
+/// not good") is not tagged with its positive meaning — a small,
+/// deterministic word-window check in both directions, not real negation
+/// scope parsing. It won't catch every phrasing (e.g. a negation more than
+/// [_negationWindowWords] words away in either direction). For keywords
+/// whose [_KeywordRule]
 /// defines a [_KeywordRule.negatedTag] (currently wheelchair/stroller), a
 /// negated mention tags that explicit opposite instead of just being
 /// dropped — e.g. "unable to use wheelchair" tags "wheelchair-unfriendly".
@@ -90,21 +92,37 @@ class KeywordTaggingEngine {
     while (true) {
       final index = lower.indexOf(keyword, searchStart);
       if (index == -1) return false;
-      if (_isNegated(lower, index) == negated) return true;
+      if (_isNegated(lower, index, keyword.length) == negated) return true;
       searchStart = index + keyword.length;
     }
   }
 
-  static bool _isNegated(String lower, int keywordIndex) {
+  /// Checks both directions: a negation cue shortly *before* the keyword
+  /// ("unable to use wheelchair") and shortly *after* it ("wheelchair
+  /// accessibility is not good") both count — the cue can modify the
+  /// keyword from either side depending on phrasing.
+  static bool _isNegated(String lower, int keywordIndex, int keywordLength) {
+    return _hasNegationCueBefore(lower, keywordIndex) ||
+        _hasNegationCueAfter(lower, keywordIndex + keywordLength);
+  }
+
+  static bool _hasNegationCueBefore(String lower, int keywordIndex) {
     final before = lower.substring(0, keywordIndex).trim();
     if (before.isEmpty) return false;
 
     final words = before.split(RegExp(r'\s+'));
     final window =
         words.length <= _negationWindowWords ? words : words.sublist(words.length - _negationWindowWords);
-    final windowText = window.join(' ');
+    return _negationCues.any(window.join(' ').contains);
+  }
 
-    return _negationCues.any(windowText.contains);
+  static bool _hasNegationCueAfter(String lower, int afterKeywordIndex) {
+    final after = lower.substring(afterKeywordIndex).trim();
+    if (after.isEmpty) return false;
+
+    final words = after.split(RegExp(r'\s+'));
+    final window = words.length <= _negationWindowWords ? words : words.sublist(0, _negationWindowWords);
+    return _negationCues.any(window.join(' ').contains);
   }
 }
 
