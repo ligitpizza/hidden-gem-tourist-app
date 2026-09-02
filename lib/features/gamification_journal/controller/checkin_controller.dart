@@ -80,4 +80,10 @@ class CheckInController extends ChangeNotifier {
     await _service.setHidden(checkInId: checkInId, isHidden: isHidden);
     await loadHistory();
   }
+
+  @visibleForTesting
+  void setHistoryForTesting(List<CheckInModel> history) {
+    _history = history;
+    notifyListeners();
+  }
 }

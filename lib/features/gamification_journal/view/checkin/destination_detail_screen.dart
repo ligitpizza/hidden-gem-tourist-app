@@ -12,11 +12,22 @@ import '../../controller/checkin_controller.dart';
 import '../../controller/journal_controller.dart';
 import '../../controller/quiz_controller.dart';
 import '../../model/badge_model.dart';
+import '../../model/check_in_model.dart';
 import '../../model/cultural_fact_model.dart';
 import '../../model/destination_model.dart';
 import '../../model/quiz_attempt_model.dart';
 import '../../model/quiz_question_model.dart';
 import '../../model/user_badge_model.dart';
+import '../../services/mock/mock_checkin_service.dart';
+
+/// A check-in only counts toward unlocking this destination's review/quiz
+/// while it's still within the same 24-hour cooldown window the check-in
+/// system itself uses (see [MockCheckInService.cooldownWindow]) — matches
+/// the "resets every 24 hours" copy already shown on this screen. Without
+/// this, a single check-in from days ago would leave reviews/the quiz
+/// unlockable forever.
+bool _isCheckInCurrent(CheckInModel checkIn) =>
+    DateTime.now().difference(checkIn.timestamp) < MockCheckInService.cooldownWindow;
 
 /// When no badge was newly unlocked, nudge the traveler toward whichever
 /// locked badge is actually relevant to what they just did — the
@@ -120,7 +131,7 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
   bool get _isCheckedIn => context
       .read<CheckInController>()
       .history
-      .any((c) => c.destinationId == widget.destination.id);
+      .any((c) => c.destinationId == widget.destination.id && _isCheckInCurrent(c));
 
   Future<void> _initQuizIfNeeded() async {
     if (!mounted) return;
@@ -378,7 +389,7 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
     final checkInController = context.watch<CheckInController>();
     final quizController = context.watch<QuizController>();
     final isCheckedIn = checkInController.history.any(
-      (c) => c.destinationId == destination.id,
+      (c) => c.destinationId == destination.id && _isCheckInCurrent(c),
     );
 
     return Scaffold(
