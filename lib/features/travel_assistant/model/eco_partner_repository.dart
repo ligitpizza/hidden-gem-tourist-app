@@ -724,7 +724,7 @@ class SupabaseGtfsSource implements EcoTransitSource {
         subtype: mode,
         latitude: _number(row['latitude']),
         longitude: _number(row['longitude']),
-        address: '${row['address'] ?? ''}',
+        address: _gtfsStopAddress(row),
         sustainabilityLabel: '$mode public transport',
         evidence: routeInfo.isEmpty
             ? 'Official GTFS stop'
@@ -1119,6 +1119,13 @@ double? _nullableNumber(dynamic value) =>
 String? _text(dynamic value) {
   final text = '${value ?? ''}'.trim();
   return text.isEmpty ? null : text;
+}
+
+String _gtfsStopAddress(Map<String, dynamic> row) {
+  final address = _text(row['address']);
+  if (address != null) return address;
+  final name = _text(row['name']);
+  return name == null ? 'Malaysia' : '$name, Malaysia';
 }
 
 bool _isWebUrl(String value) {

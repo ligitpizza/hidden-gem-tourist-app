@@ -70,6 +70,43 @@ void main() {
     expect(find.textContaining('0.0 km away'), findsNothing);
   });
 
+  testWidgets('transport details use the station name when address is absent', (
+    tester,
+  ) async {
+    final station = EcoPartner(
+      id: 'stop:blank-address',
+      name: 'Bukit Bintang MRT',
+      category: EcoPartnerCategory.transport,
+      subtype: 'MRT',
+      latitude: 3.146,
+      longitude: 101.711,
+      address: '',
+      sustainabilityLabel: 'MRT public transport',
+      evidence: 'Official GTFS stop',
+      sourceName: 'Official Malaysia GTFS',
+      sourceUrl: 'https://developer.data.gov.my/',
+      lastUpdated: DateTime(2026),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EcoPartnerDetailScreen(
+          partner: station,
+          destinationLabel: 'Malaysia',
+        ),
+      ),
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('Bukit Bintang MRT, Malaysia'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(find.text('Bukit Bintang MRT, Malaysia'), findsOneWidget);
+    expect(find.text('Location available on the map'), findsNothing);
+  });
+
   testWidgets('distance is shown for current-location results', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

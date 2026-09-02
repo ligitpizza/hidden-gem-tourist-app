@@ -113,10 +113,9 @@ class EcoPartnerDetailScreen extends StatelessWidget {
             children: [
               Text(
                 partner.address.isEmpty
-                    ? 'Location available on the map'
+                    ? _locationFallback(partner)
                     : partner.address,
               ),
-              const SizedBox(height: 12),
               const SizedBox(height: 12),
               _EcoPartnerRouteGuide(partner: partner),
             ],
@@ -283,13 +282,16 @@ class _SaveEcoPartnerButtonState extends State<_SaveEcoPartnerButton> {
       final store = SavedEcoPartnersStore.instance;
       final saved = store.isSaved(widget.partner.id);
       final busy = store.isBusy(widget.partner.id);
+      final supportsPacking = _supportsPackingChecklist(widget.partner);
       return SizedBox(
         width: double.infinity,
         child: saved
             ? OutlinedButton.icon(
                 onPressed: busy ? null : _toggle,
                 icon: const Icon(Icons.bookmark),
-                label: const Text('Saved for packing'),
+                label: Text(
+                  supportsPacking ? 'Saved for packing' : 'Saved to profile',
+                ),
               )
             : FilledButton.tonalIcon(
                 onPressed: busy ? null : _toggle,
@@ -304,18 +306,30 @@ class _SaveEcoPartnerButtonState extends State<_SaveEcoPartnerButton> {
     final saved = await SavedEcoPartnersStore.instance.toggle(widget.partner);
     if (!mounted) return;
     final error = SavedEcoPartnersStore.instance.error;
+    final supportsPacking = _supportsPackingChecklist(widget.partner);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           error ??
               (saved
-                  ? 'Saved for your profile and packing checklist.'
+                  ? supportsPacking
+                        ? 'Saved for your profile and packing checklist.'
+                        : 'Saved to your profile.'
                   : 'Removed from saved Eco Partners.'),
         ),
       ),
     );
   }
 }
+
+bool _supportsPackingChecklist(EcoPartner partner) =>
+    partner.category == EcoPartnerCategory.stay ||
+    partner.category == EcoPartnerCategory.dining;
+
+String _locationFallback(EcoPartner partner) =>
+    partner.category == EcoPartnerCategory.transport
+    ? '${partner.name}, Malaysia'
+    : 'Location available on the map';
 
 enum _RouteMode { walking, publicTransit, evCar }
 

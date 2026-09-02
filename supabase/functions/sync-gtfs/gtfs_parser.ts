@@ -19,7 +19,7 @@ export function transportMode(route: Record<string, string>): string {
 export function parseGtfs(zip: Uint8Array, feedId: string, sourceUrl: string) {
   const files = unzipSync(zip);
   const agencies = rows(files, "agency.txt").map((a: Record<string, string>) => ({ id: `${feedId}:${a.agency_id || "default"}`, feed_id: feedId, agency_id: a.agency_id || "default", name: a.agency_name, url: a.agency_url || null, timezone: a.agency_timezone || null }));
-  const stops = rows(files, "stops.txt").filter((s: Record<string, string>) => s.stop_lat && s.stop_lon).map((s: Record<string, string>) => ({ id: `${feedId}:${s.stop_id}`, feed_id: feedId, stop_id: s.stop_id, name: s.stop_name, address: s.stop_desc || "", latitude: Number(s.stop_lat), longitude: Number(s.stop_lon), source_name: "Official Malaysia GTFS", source_url: sourceUrl }));
+  const stops = rows(files, "stops.txt").filter((s: Record<string, string>) => s.stop_lat && s.stop_lon).map((s: Record<string, string>) => ({ id: `${feedId}:${s.stop_id}`, feed_id: feedId, stop_id: s.stop_id, name: s.stop_name, address: s.stop_desc?.trim() || `${s.stop_name}, Malaysia`, latitude: Number(s.stop_lat), longitude: Number(s.stop_lon), source_name: "Official Malaysia GTFS", source_url: sourceUrl }));
   const routesRaw = rows(files, "routes.txt") as Record<string, string>[];
   const routes = routesRaw.map(r => ({ id: `${feedId}:${r.route_id}`, feed_id: feedId, route_id: r.route_id, agency_id: r.agency_id || null, short_name: r.route_short_name || null, long_name: r.route_long_name || null, route_type: Number(r.route_type), mode: transportMode(r) }));
   const tripRoutes = new Map((rows(files, "trips.txt") as Record<string, string>[]).map(t => [t.trip_id, t.route_id]));

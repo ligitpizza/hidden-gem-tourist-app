@@ -1204,7 +1204,7 @@ String _homeSectionTitle(EcoPartnerHomeSection section) => switch (section) {
   EcoPartnerHomeSection.recommended => 'Recommended for You',
   EcoPartnerHomeSection.hotel => 'Hotels',
   EcoPartnerHomeSection.dining => 'Dining',
-  EcoPartnerHomeSection.transport => 'Transport',
+  EcoPartnerHomeSection.transport => 'Transport (MRT, LRT, etc.)',
   EcoPartnerHomeSection.ev => 'EV Charging',
 };
 
@@ -1218,7 +1218,10 @@ IconData _homeSectionIcon(EcoPartnerHomeSection section) => switch (section) {
 
 String _partnerAddress(EcoPartner partner) {
   final address = partner.address.trim();
-  return address.isEmpty ? 'Address unavailable' : address;
+  if (address.isNotEmpty) return address;
+  return partner.category == EcoPartnerCategory.transport
+      ? '${partner.name}, Malaysia'
+      : 'Address unavailable';
 }
 
 String _partnerLocationText(EcoPartner partner, {required bool showDistance}) =>

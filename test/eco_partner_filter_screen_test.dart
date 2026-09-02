@@ -25,7 +25,7 @@ void main() {
     expect(find.text('Recommended for You'), findsOneWidget);
     expect(find.text('Hotels'), findsOneWidget);
     expect(find.text('Dining'), findsOneWidget);
-    expect(find.text('Transport'), findsOneWidget);
+    expect(find.text('Transport (MRT, LRT, etc.)'), findsOneWidget);
     expect(find.text('EV Charging'), findsOneWidget);
     expect(find.byTooltip('Change results layout'), findsNothing);
   });
@@ -150,6 +150,39 @@ void main() {
 
     expect(find.textContaining('Kota Kinabalu, Sabah'), findsOneWidget);
     expect(find.textContaining('0.0 km'), findsNothing);
+  });
+
+  testWidgets('transport results use the station name when address is absent', (
+    tester,
+  ) async {
+    final station = EcoPartner(
+      id: 'stop:1',
+      name: 'Bukit Bintang MRT',
+      category: EcoPartnerCategory.transport,
+      subtype: 'MRT',
+      latitude: 3.146,
+      longitude: 101.711,
+      address: '',
+      sustainabilityLabel: 'MRT public transport',
+      evidence: 'Official GTFS stop',
+      sourceName: 'Official Malaysia GTFS',
+      sourceUrl: 'https://developer.data.gov.my/',
+      lastUpdated: DateTime(2026),
+    );
+    final controller = _FilterTestController(_FilterRepository())
+      ..filter = 'Public Transport'
+      ..result = EcoPartnerSearchResult(
+        destination: const EcoDestination('Malaysia', 4.21, 101.97),
+        partners: [station],
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(home: EcoPartnersScreen(controller: controller)),
+    );
+    await tester.pump();
+
+    expect(find.textContaining('Bukit Bintang MRT, Malaysia'), findsOneWidget);
+    expect(find.text('Address unavailable'), findsNothing);
   });
 
   testWidgets('current-location results show calculated distance', (
