@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../features/itinerary_planning/view/itinerary_routes.dart';
 import '../../../shared/models/destination.dart';
 import '../controller/recommendation_controller.dart';
 import '../model/hidden_gem_feed_item.dart';
@@ -9,10 +10,22 @@ import '../model/interaction_repository.dart';
 import 'hidden_gem_recommendation_routes.dart';
 import 'widgets/hidden_gem_list_tile.dart';
 
-/// The Assistant tab's landing feed — personalized hidden-gem matches and
+/// The Home tab's landing feed — personalized hidden-gem matches and
 /// trending places (Module 1's "View Recommended Destinations" /
 /// "View Trending Destination" use cases), with the itinerary planner
 /// (Module 3) reachable via the "Plan a Trip" action from here.
+///
+/// Owns its own "Plan a Trip" FAB (moved here from the shared shell
+/// scaffold in app_router.dart) rather than the outer shell deciding
+/// whether to show it based on `navigationShell.currentIndex` — that
+/// tracking didn't reliably hide the FAB when navigating to a More-menu
+/// entry nested under a different branch (found during pre-demo testing:
+/// it kept floating over Journal's Badges/Quizzes/etc). A FAB on this
+/// screen's own Scaffold has no such ambiguity: Flutter's IndexedStack
+/// physically doesn't paint a non-selected branch at all, so this FAB is
+/// guaranteed gone the instant Home isn't the visible tab, and covered
+/// like normal whenever something is pushed on top of it within this
+/// branch (Score Detail, Search, etc.) — the same as any other FAB.
 class DiscoveryFeedScreen extends ConsumerWidget {
   const DiscoveryFeedScreen({super.key});
 
@@ -22,6 +35,11 @@ class DiscoveryFeedScreen extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push(ItineraryRoutes.planRoute),
+        icon: const Icon(Icons.add_location_alt_outlined),
+        label: const Text('Plan a Trip'),
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: controller.load,
