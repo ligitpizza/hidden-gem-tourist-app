@@ -39,31 +39,37 @@ class CategoryFilterBar extends ConsumerWidget {
         builder: (context, _) => SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Filter by Category', style: Theme.of(context).textTheme.titleMedium),
-                    if (controller.selectedCategories.isNotEmpty)
-                      TextButton(
-                        onPressed: controller.clearFilters,
-                        child: const Text('Clear all'),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                for (final category in HiddenGemCategory.values)
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    secondary: Icon(categoryIcon(category), color: categoryColor(category)),
-                    title: Text(category.label),
-                    value: controller.selectedCategories.contains(category),
-                    onChanged: (_) => controller.toggleCategory(category),
+            // Scrollable so a short viewport (small screens, or more
+            // categories added later) clips gracefully instead of
+            // overflowing — the list still lays out at its natural height
+            // and doesn't scroll at all when everything already fits.
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Filter by Category', style: Theme.of(context).textTheme.titleMedium),
+                      if (controller.selectedCategories.isNotEmpty)
+                        TextButton(
+                          onPressed: controller.clearFilters,
+                          child: const Text('Clear all'),
+                        ),
+                    ],
                   ),
-              ],
+                  const SizedBox(height: 4),
+                  for (final category in HiddenGemCategory.values)
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      secondary: Icon(categoryIcon(category), color: categoryColor(category)),
+                      title: Text(category.label),
+                      value: controller.selectedCategories.contains(category),
+                      onChanged: (_) => controller.toggleCategory(category),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
