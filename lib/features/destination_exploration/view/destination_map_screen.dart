@@ -416,11 +416,9 @@ class _MapBodyState extends State<_MapBody> {
             onZoomIn: _zoomIn,
             onZoomOut: _zoomOut,
             onLocateMe: _locateMe,
-            onSearch: controller.mode == MapViewMode.comparison
-                ? () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const DestinationSearchScreen()),
-                    )
-                : null,
+            onSearch: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const DestinationSearchScreen()),
+            ),
           ),
         ),
       ],
@@ -428,9 +426,11 @@ class _MapBodyState extends State<_MapBody> {
   }
 }
 
-/// Right-side zoom/locate controls, visible in both map modes. Search sits
-/// below locate-me and only appears in Comparison mode — it's an alternate
-/// way to pick destinations for comparison, not a general map action.
+/// Right-side zoom/locate/search controls, visible in both map modes —
+/// search used to be Comparison-only (an alternate way to pick destinations
+/// for comparison instead of tapping markers directly), but it's just as
+/// useful for finding a destination while browsing in Map View, so it's
+/// shown in the same spot regardless of mode.
 class _MapZoomControls extends StatelessWidget {
   const _MapZoomControls({
     required this.onZoomIn,
@@ -442,7 +442,7 @@ class _MapZoomControls extends StatelessWidget {
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
   final VoidCallback onLocateMe;
-  final VoidCallback? onSearch;
+  final VoidCallback onSearch;
 
   @override
   Widget build(BuildContext context) {
@@ -454,14 +454,8 @@ class _MapZoomControls extends StatelessWidget {
         _MapControlButton(icon: Icons.remove, tooltip: 'Zoom out', onPressed: onZoomOut),
         const SizedBox(height: 16),
         _MapControlButton(icon: Icons.my_location, tooltip: 'My location', onPressed: onLocateMe),
-        if (onSearch != null) ...[
-          const SizedBox(height: 16),
-          _MapControlButton(
-            icon: Icons.search,
-            tooltip: 'Search destinations to compare',
-            onPressed: onSearch!,
-          ),
-        ],
+        const SizedBox(height: 16),
+        _MapControlButton(icon: Icons.search, tooltip: 'Search destinations', onPressed: onSearch),
       ],
     );
   }
