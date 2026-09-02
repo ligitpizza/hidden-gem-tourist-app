@@ -58,13 +58,12 @@ import '../../features/travel_prep/view/travel_prep_screens.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 import 'shell_routes.dart';
 
-/// The bottom-nav branches, in on-screen order: Map | Explore | Assistant |
-/// Saved | Travel Prep | Journal | Profile. The Journal tab shows the
-/// entries timeline directly; its satellite screens (badges, quizzes,
-/// check-in history) are pushed routes reached via the More menu instead
-/// of living on the tab itself.
-const _assistantTabIndex = 2;
-
+/// The bottom-nav branches, in on-screen order: Map | Explore | Home |
+/// Saved | Travel Prep | Journal | Profile | Culture. The Journal tab
+/// shows the entries timeline directly; its satellite screens (badges,
+/// quizzes, check-in history) are pushed routes reached via the More menu
+/// instead of living on the tab itself.
+///
 /// One Navigator key per shell branch, in the same order as the branches
 /// list below — lets _MainShell reach directly into a branch's own
 /// Navigator and pop it back to root when its tab is re-tapped, instead of
@@ -417,14 +416,9 @@ class _MainShellState extends State<_MainShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // No FAB here — "Plan a Trip" lives on DiscoveryFeedScreen's own
+      // Scaffold now (see its doc comment for why).
       body: widget.navigationShell,
-      floatingActionButton: widget.navigationShell.currentIndex == _assistantTabIndex
-          ? FloatingActionButton.extended(
-              onPressed: () => context.push(ItineraryRoutes.planRoute),
-              icon: const Icon(Icons.add_location_alt_outlined),
-              label: const Text('Plan a Trip'),
-            )
-          : null,
       bottomNavigationBar: AppBottomNavBar(
         currentIndex: widget.navigationShell.currentIndex,
         onTabSelected: (index) {
