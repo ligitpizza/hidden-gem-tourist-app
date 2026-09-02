@@ -2,9 +2,19 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:collab/features/destination_exploration/model/comparison_destination.dart';
+import 'package:collab/features/destination_exploration/model/destination_exploration_repository.dart';
 import 'package:collab/features/destination_exploration/model/favourite_destination_repository.dart';
 import 'package:collab/features/destination_exploration/model/favourite_destinations_store.dart';
 import 'package:collab/shared/models/hidden_gem.dart';
+
+class _FakeDestinationExplorationRepository extends DestinationExplorationRepository {
+  _FakeDestinationExplorationRepository(this.result);
+  final List<ComparisonDestination> result;
+
+  @override
+  Future<List<ComparisonDestination>> fetchForComparison(List<String> ids) async =>
+      result.where((d) => ids.contains(d.id)).toList();
+}
 
 class _FakeFavouriteRepository extends FavouriteDestinationRepository {
   _FakeFavouriteRepository({this.fetchResult = const [], this.shouldThrowOnAdd = false, this.shouldThrowOnRemove = false});
@@ -129,5 +139,48 @@ void main() {
     expect(store.contains('d1'), isFalse);
     await store.add(_destination);
     expect(store.contains('d1'), isTrue);
+  });
+
+  test('addById resolves the real destination via the repository and adds it', () async {
+    final favouriteRepo = _FakeFavouriteRepository();
+    final destinationRepo = _FakeDestinationExplorationRepository([_destination]);
+    final store = FavouriteDestinationsStore(
+      repository: favouriteRepo,
+      destinationRepository: destinationRepo,
+    );
+
+    await store.addById('d1');
+
+    expect(store.favourites, [_destination]);
+    expect(favouriteRepo.addedIds, ['d1']);
+  });
+
+  test('addById does nothing if the destination cannot be resolved', () async {
+    final favouriteRepo = _FakeFavouriteRepository();
+    final destinationRepo = _FakeDestinationExplorationRepository(const []);
+    final store = FavouriteDestinationsStore(
+      repository: favouriteRepo,
+      destinationRepository: destinationRepo,
+    );
+
+    await store.addById('missing');
+
+    expect(store.favourites, isEmpty);
+    expect(favouriteRepo.addedIds, isEmpty);
+  });
+
+  test('toggleById removes when already favourited, adds when not', () async {
+    final favouriteRepo = _FakeFavouriteRepository();
+    final destinationRepo = _FakeDestinationExplorationRepository([_destination]);
+    final store = FavouriteDestinationsStore(
+      repository: favouriteRepo,
+      destinationRepository: destinationRepo,
+    );
+
+    await store.toggleById('d1');
+    expect(store.contains('d1'), isTrue);
+
+    await store.toggleById('d1');
+    expect(store.contains('d1'), isFalse);
   });
 }

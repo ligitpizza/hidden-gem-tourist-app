@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'comparison_destination.dart';
+import 'destination_exploration_repository.dart';
 import 'favourite_destination_repository.dart';
 
 /// Live view over the traveller's favourited destinations, backed by
@@ -11,8 +12,11 @@ import 'favourite_destination_repository.dart';
 /// SavedItinerariesStore's shape (lib/features/itinerary_planning/model/
 /// saved_itineraries_store.dart).
 class FavouriteDestinationsStore extends ChangeNotifier {
-  FavouriteDestinationsStore({FavouriteDestinationRepository? repository})
-      : _repository = repository ?? FavouriteDestinationRepository();
+  FavouriteDestinationsStore({
+    FavouriteDestinationRepository? repository,
+    DestinationExplorationRepository? destinationRepository,
+  })  : _repository = repository ?? FavouriteDestinationRepository(),
+        _destinationRepository = destinationRepository ?? DestinationExplorationRepository();
 
   // Mutable (not `final`) so tests can swap in a fake-repository-backed
   // instance instead of hitting real Supabase through the default —
@@ -21,6 +25,7 @@ class FavouriteDestinationsStore extends ChangeNotifier {
   static FavouriteDestinationsStore instance = FavouriteDestinationsStore();
 
   final FavouriteDestinationRepository _repository;
+  final DestinationExplorationRepository _destinationRepository;
 
   List<ComparisonDestination> _favourites = [];
   bool isLoading = false;
@@ -76,6 +81,29 @@ class FavouriteDestinationsStore extends ChangeNotifier {
       _favourites = previous; // rollback — the delete didn't actually go through
       error = 'Could not remove this favourite. Check your connection and try again.';
       notifyListeners();
+    }
+  }
+
+  /// Resolves [id] to a real [ComparisonDestination] (rating, images, etc.
+  /// all pulled from the actual `destinations` table via
+  /// [DestinationExplorationRepository.fetchForComparison]) and favourites
+  /// it — used by callers (e.g. the Destination Detail screen) that only
+  /// have a bare id/lean model, not the full comparison data [add] expects.
+  /// A no-op if the id can't be resolved.
+  Future<void> addById(String id) async {
+    if (contains(id)) return;
+    final resolved = await _destinationRepository.fetchForComparison([id]);
+    if (resolved.isEmpty) return;
+    await add(resolved.first);
+  }
+
+  /// Removes [id] if already favourited, otherwise favourites it via
+  /// [addById] — the single call a toggle-style favourite button needs.
+  Future<void> toggleById(String id) async {
+    if (contains(id)) {
+      await remove(id);
+    } else {
+      await addById(id);
     }
   }
 
