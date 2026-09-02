@@ -32,7 +32,7 @@ and `DestinationMapScreen` all exist as that plan built them.
   distinguished from a real route (dashed stroke + a fixed disclaimer string), never implying
   real navigation (NFR4, FR2.4).
 - `Geolocator` is called directly (no shared location service exists in this codebase — same
-  direct-call convention as `lib/features/travel_prep/view/eco_partner_screen.dart`), but
+  direct-call convention as `lib/features/travel_assistant/view/eco_partner_screen.dart`), but
   wrapped behind an injectable seam on the controller so it's unit-testable without a real GPS
   fix.
 

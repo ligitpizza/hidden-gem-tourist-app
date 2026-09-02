@@ -1,5 +1,7 @@
-import 'package:collab/features/travel_prep/model/packing_location_source.dart';
-import 'package:collab/features/travel_prep/model/travel_prep_cover_image.dart';
+import 'dart:convert';
+
+import 'package:collab/features/travel_assistant/model/packing_location_source.dart';
+import 'package:collab/features/travel_assistant/model/travel_assistant_cover_image.dart';
 import 'package:collab/shared/models/destination.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,7 +12,7 @@ void main() {
   test('curated cover takes priority over cache and Wikimedia', () async {
     final cache = _MemoryCoverCache()..image = _cachedCover;
     final wikimedia = _FakeWikimediaSource(_wikiCover);
-    final resolver = TravelPrepCoverImageResolver(
+    final resolver = TravelAssistantCoverImageResolver(
       curated: const _FakeCuratedSource(_curatedCover),
       wikimedia: wikimedia,
       cache: cache,
@@ -24,7 +26,7 @@ void main() {
   test('cached Wikimedia cover avoids another network lookup', () async {
     final cache = _MemoryCoverCache()..image = _cachedCover;
     final wikimedia = _FakeWikimediaSource(_wikiCover);
-    final resolver = TravelPrepCoverImageResolver(
+    final resolver = TravelAssistantCoverImageResolver(
       curated: const _FakeCuratedSource(null),
       wikimedia: wikimedia,
       cache: cache,
@@ -36,7 +38,7 @@ void main() {
 
   test('Wikimedia fallback is cached after a successful lookup', () async {
     final cache = _MemoryCoverCache();
-    final resolver = TravelPrepCoverImageResolver(
+    final resolver = TravelAssistantCoverImageResolver(
       curated: const _FakeCuratedSource(null),
       wikimedia: _FakeWikimediaSource(_wikiCover),
       cache: cache,
@@ -48,7 +50,7 @@ void main() {
   });
 
   test('Mapillary street imagery is rejected as a trusted cover', () async {
-    final source = SupabaseTravelPrepCuratedCoverSource(
+    final source = SupabaseTravelAssistantCuratedCoverSource(
       client: SupabaseClient('https://example.supabase.co', 'test-key'),
     );
     const mapillaryLocation = PackingLocationOption(
@@ -67,7 +69,7 @@ void main() {
   });
 
   test('non-Mapillary saved partner image remains eligible', () async {
-    final source = SupabaseTravelPrepCuratedCoverSource(
+    final source = SupabaseTravelAssistantCuratedCoverSource(
       client: SupabaseClient('https://example.supabase.co', 'test-key'),
     );
     const partnerLocation = PackingLocationOption(
@@ -84,7 +86,7 @@ void main() {
 
     final result = await source.resolve(partnerLocation);
     expect(result?.imageUrl, 'https://hotel.example.com/cover.jpg');
-    expect(result?.source, TravelPrepCoverSource.curated);
+    expect(result?.source, TravelAssistantCoverSource.curated);
   });
 
   test('Wikimedia exact page image includes author and licence', () async {
@@ -148,7 +150,7 @@ void main() {
         },
       ),
     );
-    final source = WikimediaTravelPrepCoverSource(dio: dio);
+    final source = WikimediaTravelAssistantCoverSource(dio: dio);
 
     final result = await source.resolve(_location);
 
@@ -187,17 +189,43 @@ void main() {
     );
 
     expect(
-      await WikimediaTravelPrepCoverSource(dio: dio).resolve(_location),
+      await WikimediaTravelAssistantCoverSource(dio: dio).resolve(_location),
       isNull,
     );
   });
 
   test('shared preferences cache expires stale cover metadata', () async {
     SharedPreferences.setMockInitialValues({});
-    final cache = SharedPreferencesTravelPrepCoverCache(ttl: Duration.zero);
+    final cache = SharedPreferencesTravelAssistantCoverCache(
+      ttl: Duration.zero,
+    );
     await cache.write(_location.id, _wikiCover);
 
     expect(await cache.read(_location.id), isNull);
+  });
+
+  test('legacy cover cache keys migrate to Travel Assistant', () async {
+    for (final legacyKey in [
+      'travel_prep_cover_v1_${_location.id}',
+      'smart_assistant_cover_v1_${_location.id}',
+    ]) {
+      SharedPreferences.setMockInitialValues({
+        legacyKey: jsonEncode({
+          'savedAt': DateTime.now().toUtc().toIso8601String(),
+          'image': _wikiCover.toJson(),
+        }),
+      });
+      final cache = SharedPreferencesTravelAssistantCoverCache();
+
+      expect(await cache.read(_location.id), isNotNull);
+
+      final preferences = await SharedPreferences.getInstance();
+      expect(preferences.getString(legacyKey), isNull);
+      expect(
+        preferences.getString('travel_assistant_cover_v1_${_location.id}'),
+        isNotNull,
+      );
+    }
   });
 }
 
@@ -211,61 +239,65 @@ const _location = PackingLocationOption(
   lookupName: 'Kota Kinabalu',
 );
 
-const _curatedCover = TravelPrepCoverImage(
+const _curatedCover = TravelAssistantCoverImage(
   imageUrl: 'https://example.com/curated.jpg',
   attribution: 'Destination photo',
-  source: TravelPrepCoverSource.curated,
+  source: TravelAssistantCoverSource.curated,
 );
 
-const _cachedCover = TravelPrepCoverImage(
+const _cachedCover = TravelAssistantCoverImage(
   imageUrl: 'https://example.com/cached.jpg',
   attribution: 'Photo: Cached · CC BY 4.0',
-  source: TravelPrepCoverSource.wikipedia,
+  source: TravelAssistantCoverSource.wikipedia,
 );
 
-const _wikiCover = TravelPrepCoverImage(
+const _wikiCover = TravelAssistantCoverImage(
   imageUrl: 'https://example.com/wiki.jpg',
   attribution: 'Photo: Example · CC BY-SA 4.0',
   attributionUrl: 'https://commons.wikimedia.org/example',
-  source: TravelPrepCoverSource.wikipedia,
+  source: TravelAssistantCoverSource.wikipedia,
 );
 
-class _FakeCuratedSource implements TravelPrepCuratedCoverSourceContract {
+class _FakeCuratedSource implements TravelAssistantCuratedCoverSourceContract {
   const _FakeCuratedSource(this.image);
 
-  final TravelPrepCoverImage? image;
+  final TravelAssistantCoverImage? image;
 
   @override
-  Future<TravelPrepCoverImage?> resolve(PackingLocationOption location) async =>
-      image;
+  Future<TravelAssistantCoverImage?> resolve(
+    PackingLocationOption location,
+  ) async => image;
 }
 
-class _FakeWikimediaSource implements TravelPrepWikimediaCoverSourceContract {
+class _FakeWikimediaSource
+    implements TravelAssistantWikimediaCoverSourceContract {
   _FakeWikimediaSource(this.image);
 
-  final TravelPrepCoverImage? image;
+  final TravelAssistantCoverImage? image;
   int calls = 0;
 
   @override
-  Future<TravelPrepCoverImage?> resolve(PackingLocationOption location) async {
+  Future<TravelAssistantCoverImage?> resolve(
+    PackingLocationOption location,
+  ) async {
     calls++;
     return image;
   }
 }
 
-class _MemoryCoverCache implements TravelPrepCoverCacheContract {
-  TravelPrepCoverImage? image;
+class _MemoryCoverCache implements TravelAssistantCoverCacheContract {
+  TravelAssistantCoverImage? image;
   int reads = 0;
   int writes = 0;
 
   @override
-  Future<TravelPrepCoverImage?> read(String locationId) async {
+  Future<TravelAssistantCoverImage?> read(String locationId) async {
     reads++;
     return image;
   }
 
   @override
-  Future<void> write(String locationId, TravelPrepCoverImage image) async {
+  Future<void> write(String locationId, TravelAssistantCoverImage image) async {
     writes++;
     this.image = image;
   }

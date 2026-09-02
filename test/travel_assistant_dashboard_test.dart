@@ -1,12 +1,12 @@
-import 'package:collab/features/travel_prep/controller/packing_checklist_controller.dart';
-import 'package:collab/features/travel_prep/controller/travel_prep_dashboard_controller.dart';
-import 'package:collab/features/travel_prep/model/packing_checklist.dart';
-import 'package:collab/features/travel_prep/model/packing_checklist_repository.dart';
-import 'package:collab/features/travel_prep/model/packing_location_source.dart';
-import 'package:collab/features/travel_prep/model/packing_weather_service.dart';
-import 'package:collab/features/travel_prep/model/travel_document.dart';
-import 'package:collab/features/travel_prep/model/travel_prep_cover_image.dart';
-import 'package:collab/features/travel_prep/view/travel_prep_screens.dart';
+import 'package:collab/features/travel_assistant/controller/packing_checklist_controller.dart';
+import 'package:collab/features/travel_assistant/controller/travel_assistant_dashboard_controller.dart';
+import 'package:collab/features/travel_assistant/model/packing_checklist.dart';
+import 'package:collab/features/travel_assistant/model/packing_checklist_repository.dart';
+import 'package:collab/features/travel_assistant/model/packing_location_source.dart';
+import 'package:collab/features/travel_assistant/model/packing_weather_service.dart';
+import 'package:collab/features/travel_assistant/model/travel_document.dart';
+import 'package:collab/features/travel_assistant/model/travel_assistant_cover_image.dart';
+import 'package:collab/features/travel_assistant/view/travel_assistant_screens.dart';
 import 'package:collab/shared/models/destination.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,7 +42,7 @@ void main() {
 
   test('controller loads selected trip and actual document metadata', () async {
     final checklist = _checklistController([_location]);
-    final controller = TravelPrepDashboardController(
+    final controller = TravelAssistantDashboardController(
       checklistController: checklist,
       documentLoader: () async => [_document(1), _document(2)],
       coverResolver: _FakeCoverResolver(_cover),
@@ -74,7 +74,7 @@ void main() {
       var documents = <TravelDocument>[];
       var shouldFail = false;
       final checklist = _checklistController([_location]);
-      final controller = TravelPrepDashboardController(
+      final controller = TravelAssistantDashboardController(
         checklistController: checklist,
         documentLoader: () async {
           if (shouldFail) throw StateError('offline');
@@ -110,14 +110,14 @@ void main() {
     tester,
   ) async {
     final checklist = _checklistController([_location]);
-    final controller = TravelPrepDashboardController(
+    final controller = TravelAssistantDashboardController(
       checklistController: checklist,
       documentLoader: () async => [_document(1), _document(2)],
       coverResolver: const _FakeCoverResolver(null),
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: TravelPrepDashboardScreen(controller: controller)),
+      MaterialApp(home: TravelAssistantDashboardScreen(controller: controller)),
     );
     await tester.pumpAndSettle();
 
@@ -161,19 +161,19 @@ void main() {
     tester,
   ) async {
     final checklist = _checklistController([_location]);
-    final controller = TravelPrepDashboardController(
+    final controller = TravelAssistantDashboardController(
       checklistController: checklist,
       documentLoader: () async => const [],
       coverResolver: const _FakeCoverResolver(null),
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: TravelPrepDashboardScreen(controller: controller)),
+      MaterialApp(home: TravelAssistantDashboardScreen(controller: controller)),
     );
     await tester.pumpAndSettle();
     // Exercise the same State callback Flutter invokes during hot reload.
     // ignore: invalid_use_of_protected_member
-    tester.state(find.byType(TravelPrepDashboardScreen)).reassemble();
+    tester.state(find.byType(TravelAssistantDashboardScreen)).reassemble();
     await tester.pump();
 
     expect(find.text('Kota Kinabalu'), findsOneWidget);
@@ -188,14 +188,14 @@ void main() {
     tester,
   ) async {
     final checklist = _checklistController(const []);
-    final controller = TravelPrepDashboardController(
+    final controller = TravelAssistantDashboardController(
       checklistController: checklist,
       documentLoader: () async => const [],
       coverResolver: const _FakeCoverResolver(null),
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: TravelPrepDashboardScreen(controller: controller)),
+      MaterialApp(home: TravelAssistantDashboardScreen(controller: controller)),
     );
     await tester.pumpAndSettle();
 
@@ -224,11 +224,11 @@ const _location = PackingLocationOption(
   primaryCategory: DestinationCategory.attraction,
 );
 
-const _cover = TravelPrepCoverImage(
+const _cover = TravelAssistantCoverImage(
   imageUrl: 'https://upload.wikimedia.org/example.jpg',
   attribution: 'Photo: Example · CC BY-SA 4.0',
   attributionUrl: 'https://commons.wikimedia.org/example',
-  source: TravelPrepCoverSource.wikipedia,
+  source: TravelAssistantCoverSource.wikipedia,
 );
 
 PackingChecklistController _checklistController(
@@ -250,14 +250,15 @@ TravelDocument _document(int index) => TravelDocument(
   createdAt: DateTime.utc(2026, 9, index),
 );
 
-class _FakeCoverResolver implements TravelPrepCoverImageResolverContract {
+class _FakeCoverResolver implements TravelAssistantCoverImageResolverContract {
   const _FakeCoverResolver(this.image);
 
-  final TravelPrepCoverImage? image;
+  final TravelAssistantCoverImage? image;
 
   @override
-  Future<TravelPrepCoverImage?> resolve(PackingLocationOption location) async =>
-      image;
+  Future<TravelAssistantCoverImage?> resolve(
+    PackingLocationOption location,
+  ) async => image;
 }
 
 class _FakeLocationSource implements PackingLocationSource {

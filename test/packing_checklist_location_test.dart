@@ -1,9 +1,9 @@
-import 'package:collab/features/travel_prep/controller/packing_checklist_controller.dart';
-import 'package:collab/features/travel_prep/model/eco_partner.dart';
-import 'package:collab/features/travel_prep/model/packing_checklist.dart';
-import 'package:collab/features/travel_prep/model/packing_checklist_repository.dart';
-import 'package:collab/features/travel_prep/model/packing_location_source.dart';
-import 'package:collab/features/travel_prep/model/packing_weather_service.dart';
+import 'package:collab/features/travel_assistant/controller/packing_checklist_controller.dart';
+import 'package:collab/features/travel_assistant/model/eco_partner.dart';
+import 'package:collab/features/travel_assistant/model/packing_checklist.dart';
+import 'package:collab/features/travel_assistant/model/packing_checklist_repository.dart';
+import 'package:collab/features/travel_assistant/model/packing_location_source.dart';
+import 'package:collab/features/travel_assistant/model/packing_weather_service.dart';
 import 'package:collab/shared/models/destination.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -49,15 +49,17 @@ void main() {
       expect(controller.selectedLocationId, 'eco:1');
       expect(controller.tripLabel, 'Eco Lodge');
       expect(controller.categoryLabels, ['Hotel']);
-      expect(
-        controller.sections
-            .expand((section) => section.items)
-            .map((item) => item.id),
-        contains('hotel_reservation'),
-      );
+      final hotelIds = controller.sections
+          .expand((section) => section.items)
+          .map((item) => item.id)
+          .toSet();
+      expect(hotelIds, containsAll(['photo_id', 'hotel_reservation']));
+      expect(hotelIds, isNot(contains('passport')));
+      expect(hotelIds, isNot(contains('insurance_details')));
+      expect(hotelIds, isNot(contains('reusable_cutlery')));
 
-      await controller.toggleItem('passport', true);
-      expect(controller.packedIds, contains('passport'));
+      await controller.toggleItem('photo_id', true);
+      expect(controller.packedIds, contains('photo_id'));
       await controller.setTripDates(
         PackingTripDateRange(
           start: DateTime(2026, 10, 4),
@@ -67,22 +69,31 @@ void main() {
 
       await controller.selectLocation('eco:2');
       expect(controller.tripLabel, 'Plant Cafe');
-      expect(controller.packedIds, isNot(contains('passport')));
+      expect(controller.packedIds, isNot(contains('photo_id')));
       expect(controller.tripDates, isNull);
       expect(
         controller.destinationCategories,
         contains(DestinationCategory.restaurant),
       );
       expect(controller.categoryLabels, ['Dining']);
+      final diningIds = controller.sections
+          .expand((section) => section.items)
+          .map((item) => item.id)
+          .toSet();
       expect(
-        controller.sections
-            .expand((section) => section.items)
-            .map((item) => item.id),
-        containsAll(['dietary_note', 'reusable_container']),
+        diningIds,
+        containsAll([
+          'dining_reservation',
+          'dietary_note',
+          'reusable_container',
+        ]),
       );
+      expect(diningIds, isNot(contains('passport')));
+      expect(diningIds, isNot(contains('first_aid')));
+      expect(diningIds, isNot(contains('reusable_cutlery')));
 
       await controller.selectLocation('eco:1');
-      expect(controller.packedIds, contains('passport'));
+      expect(controller.packedIds, contains('photo_id'));
       expect(controller.tripDates?.start, DateTime(2026, 10, 4));
       expect(controller.tripDates?.end, DateTime(2026, 10, 7));
 
@@ -92,6 +103,29 @@ void main() {
       expect(controller.tripDates, isNull);
     },
   );
+
+  test('saved itineraries do not expose checklist dates', () async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = PackingChecklistController(
+      locationSource: _FakePackingLocationSource(),
+      weatherService: _NoWeatherService(),
+    );
+
+    await controller.load();
+    await controller.selectLocation('itinerary:1');
+
+    expect(controller.canEditTripDates, isFalse);
+    expect(controller.tripDates, isNull);
+
+    await controller.setTripDates(
+      PackingTripDateRange(
+        start: DateTime(2027, 1, 1),
+        end: DateTime(2027, 1, 2),
+      ),
+    );
+    expect(controller.tripDates, isNull);
+    controller.dispose();
+  });
 
   test('packing cache is isolated by authenticated user ID', () async {
     SharedPreferences.setMockInitialValues({});
@@ -119,8 +153,8 @@ void main() {
 
 class _FakePackingLocationSource implements PackingLocationSource {
   @override
-  Future<List<PackingLocationOption>> load() async => const [
-    PackingLocationOption(
+  Future<List<PackingLocationOption>> load() async => [
+    const PackingLocationOption(
       id: 'eco:1',
       label: 'Eco Lodge',
       subtitle: 'Saved Eco Partner · Hotel',
@@ -129,7 +163,7 @@ class _FakePackingLocationSource implements PackingLocationSource {
       categories: {DestinationCategory.attraction},
       ecoPartnerCategory: EcoPartnerCategory.stay,
     ),
-    PackingLocationOption(
+    const PackingLocationOption(
       id: 'eco:2',
       label: 'Plant Cafe',
       subtitle: 'Saved Eco Partner · Cafe',
@@ -137,6 +171,14 @@ class _FakePackingLocationSource implements PackingLocationSource {
       longitude: 116.08,
       categories: {DestinationCategory.restaurant},
       ecoPartnerCategory: EcoPartnerCategory.dining,
+    ),
+    const PackingLocationOption(
+      id: 'itinerary:1',
+      label: 'Kuala Lumpur → Melaka',
+      subtitle: 'Saved itinerary',
+      latitude: 3.139,
+      longitude: 101.687,
+      categories: {DestinationCategory.attraction},
     ),
   ];
 }

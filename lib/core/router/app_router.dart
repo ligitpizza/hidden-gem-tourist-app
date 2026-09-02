@@ -54,13 +54,13 @@ import '../../features/destination_exploration/view/comparison_screen.dart';
 import '../../features/destination_exploration/view/destination_map_screen.dart';
 import '../../features/profile/view/profile_screen.dart';
 import '../../features/saved/view/saved_screen.dart';
-import '../../features/travel_prep/view/travel_prep_screens.dart';
+import '../../features/travel_assistant/view/travel_assistant_screens.dart';
 import '../../shared/widgets/top_notification_banner.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 import 'shell_routes.dart';
 
 /// The bottom-nav branches, in on-screen order: Map | Explore | Home |
-/// Saved | Travel Prep | Journal | Profile | Culture. The Journal tab
+/// Saved | Travel Assistant | Journal | Profile | Culture. The Journal tab
 /// shows the entries timeline directly; its satellite screens (badges,
 /// quizzes, check-in history) are pushed routes reached via the More menu
 /// instead of living on the tab itself.
@@ -70,7 +70,29 @@ import 'shell_routes.dart';
 /// Navigator and pop it back to root when its tab is re-tapped, instead of
 /// relying only on goBranch's initialLocation flag (which wasn't reliably
 /// clearing a pushed destination-detail screen on the Map tab).
-final _branchNavigatorKeys = List.generate(8, (_) => GlobalKey<NavigatorState>());
+final _branchNavigatorKeys = List.generate(
+  8,
+  (_) => GlobalKey<NavigatorState>(),
+);
+
+List<RouteBase> _legacyTravelAssistantRoutes(String legacyRoot) => [
+  GoRoute(
+    path: legacyRoot,
+    redirect: (context, state) => ShellRoutes.travelAssistant,
+  ),
+  GoRoute(
+    path: '$legacyRoot/checklist',
+    redirect: (context, state) => ShellRoutes.checklist,
+  ),
+  GoRoute(
+    path: '$legacyRoot/eco-partners',
+    redirect: (context, state) => ShellRoutes.ecoPartners,
+  ),
+  GoRoute(
+    path: '$legacyRoot/document-vault',
+    redirect: (context, state) => ShellRoutes.documentVault,
+  ),
+];
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authRepository = AuthRepository();
@@ -110,7 +132,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         // resolves and calls notifyListeners.
         unawaited(onboardingGate.refresh());
         final onSetupScreen =
-            state.matchedLocation == HiddenGemRecommendationRoutes.preferenceSetup;
+            state.matchedLocation ==
+            HiddenGemRecommendationRoutes.preferenceSetup;
         if (onboardingGate.needsSetup && !onSetupScreen) {
           return HiddenGemRecommendationRoutes.preferenceSetup;
         }
@@ -142,7 +165,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: HiddenGemRecommendationRoutes.preferenceSetup,
-        builder: (context, state) => const PreferenceSetupScreen(mandatory: true),
+        builder: (context, state) =>
+            const PreferenceSetupScreen(mandatory: true),
       ),
       GoRoute(
         path: HiddenGemRecommendationRoutes.travelStyle,
@@ -177,6 +201,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) =>
             ComparisonScreen(destinationIds: state.extra as List<String>),
       ),
+      ..._legacyTravelAssistantRoutes(ShellRoutes.legacyTravelAssistant),
+      ..._legacyTravelAssistantRoutes(ShellRoutes.legacyInterimAssistant),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             _MainShell(navigationShell: navigationShell),
@@ -221,8 +247,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             navigatorKey: _branchNavigatorKeys[4],
             routes: [
               GoRoute(
-                path: ShellRoutes.travelPrep,
-                builder: (context, state) => const TravelPrepDashboardScreen(),
+                path: ShellRoutes.travelAssistant,
+                builder: (context, state) =>
+                    const TravelAssistantDashboardScreen(),
                 routes: [
                   GoRoute(
                     path: 'checklist',
@@ -283,69 +310,56 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: ShellRoutes.culture,
                 builder: (context, state) => const CultureCommunityHomeScreen(),
-            routes: [
-              GoRoute(
-                path: CultureCommunityRoutes.eventsSegment,
-                builder: (context, state) => const CulturalEventsHomeScreen(),
-              ),
+                routes: [
+                  GoRoute(
+                    path: CultureCommunityRoutes.eventsSegment,
+                    builder: (context, state) =>
+                        const CulturalEventsHomeScreen(),
+                  ),
 
-              GoRoute(
-                path: CultureCommunityRoutes.foodSegment,
-                builder: (context, state) => const TraditionalFoodHomeScreen(),
-              ),
+                  GoRoute(
+                    path: CultureCommunityRoutes.foodSegment,
+                    builder: (context, state) =>
+                        const TraditionalFoodHomeScreen(),
+                  ),
 
-              GoRoute(
-                path: CultureCommunityRoutes.eventMapSegment,
-                builder: (context, state) => const CulturalEventsMapScreen(),
-              ),
+                  GoRoute(
+                    path: CultureCommunityRoutes.eventMapSegment,
+                    builder: (context, state) =>
+                        const CulturalEventsMapScreen(),
+                  ),
 
-              GoRoute(
-                path: CultureCommunityRoutes.eventDetailSegment,
-                builder: (context, state) {
-                  final event = state.extra as CulturalEvent;
-                  return CulturalEventDetailScreen(
-                    event: event,
-                  );
-                  },
-              ),
-              GoRoute(
-                path:
-                CultureCommunityRoutes
-                    .foodDetailSegment,
-                builder: (context, state) {
-                  final food =
-                  state.extra as TraditionalFood;
+                  GoRoute(
+                    path: CultureCommunityRoutes.eventDetailSegment,
+                    builder: (context, state) {
+                      final event = state.extra as CulturalEvent;
+                      return CulturalEventDetailScreen(event: event);
+                    },
+                  ),
+                  GoRoute(
+                    path: CultureCommunityRoutes.foodDetailSegment,
+                    builder: (context, state) {
+                      final food = state.extra as TraditionalFood;
 
-                  return TraditionalFoodDetailScreen(
-                    food: food,
-                  );
-                },
-              ),
-              GoRoute(
-                path: CultureCommunityRoutes.foodNearbySegment,
-                builder: (context, state) {
-                  final food =
-                  state.extra as TraditionalFood;
+                      return TraditionalFoodDetailScreen(food: food);
+                    },
+                  ),
+                  GoRoute(
+                    path: CultureCommunityRoutes.foodNearbySegment,
+                    builder: (context, state) {
+                      final food = state.extra as TraditionalFood;
 
-                  return TraditionalFoodNearbyScreen(
-                    food: food,
-                  );
-                },
+                      return TraditionalFoodNearbyScreen(food: food);
+                    },
+                  ),
+                  GoRoute(
+                    path: CultureCommunityRoutes.savedSegment,
+                    builder: (context, state) => const CultureSavedScreen(),
+                  ),
+                ],
               ),
-              GoRoute(
-                path:
-                CultureCommunityRoutes
-                    .savedSegment,
-                builder: (
-                    context,
-                    state,
-                    ) =>
-                const CultureSavedScreen(),
-              ),
-  ],
-  ),
-  ],
-  ),
+            ],
+          ),
         ],
       ),
     ],
@@ -419,16 +433,19 @@ class _MainShellState extends State<_MainShell> {
     // open, so a request that arrives while browsing the Map or Journal
     // still surfaces immediately as a top banner.
     friendController.startListeningForIncomingRequests();
-    _incomingRequestSubscription = friendController.incomingRequestEvents.listen((request) {
-      if (!mounted) return;
-      final name = request.profile.fullName.isEmpty ? 'Someone' : request.profile.fullName;
-      showTopNotificationBanner(
-        context,
-        message: '$name sent you a friend request',
-        icon: Icons.person_add_alt_1_outlined,
-        onTap: () => context.push(ShellRoutes.journalFriends),
-      );
-    });
+    _incomingRequestSubscription = friendController.incomingRequestEvents
+        .listen((request) {
+          if (!mounted) return;
+          final name = request.profile.fullName.isEmpty
+              ? 'Someone'
+              : request.profile.fullName;
+          showTopNotificationBanner(
+            context,
+            message: '$name sent you a friend request',
+            icon: Icons.person_add_alt_1_outlined,
+            onTap: () => context.push(ShellRoutes.journalFriends),
+          );
+        });
   }
 
   @override
@@ -446,14 +463,17 @@ class _MainShellState extends State<_MainShell> {
       bottomNavigationBar: AppBottomNavBar(
         currentIndex: widget.navigationShell.currentIndex,
         onTabSelected: (index) {
-          final reselectingCurrentTab = index == widget.navigationShell.currentIndex;
+          final reselectingCurrentTab =
+              index == widget.navigationShell.currentIndex;
           // Belt-and-braces: goBranch's initialLocation flag is supposed to
           // reset a branch to its root on its own, but re-tapping Map while
           // a destination detail screen was pushed on top of it wasn't
           // reliably clearing that screen — so pop the branch's own
           // Navigator directly first, then let goBranch do its normal work.
           if (reselectingCurrentTab) {
-            _branchNavigatorKeys[index].currentState?.popUntil((route) => route.isFirst);
+            _branchNavigatorKeys[index].currentState?.popUntil(
+              (route) => route.isFirst,
+            );
           } else if (widget.navigationShell.currentIndex == 5) {
             // Leaving the Journal tab for a different one resets any
             // screen pushed from the More menu (Badges/Quizzes/History/
@@ -461,9 +481,14 @@ class _MainShellState extends State<_MainShell> {
             // screens) — they're meant to be reached only via the More
             // menu, not to linger as "what Journal shows now" the next
             // time that tab becomes active again.
-            _branchNavigatorKeys[5].currentState?.popUntil((route) => route.isFirst);
+            _branchNavigatorKeys[5].currentState?.popUntil(
+              (route) => route.isFirst,
+            );
           }
-          widget.navigationShell.goBranch(index, initialLocation: reselectingCurrentTab);
+          widget.navigationShell.goBranch(
+            index,
+            initialLocation: reselectingCurrentTab,
+          );
         },
       ),
     );

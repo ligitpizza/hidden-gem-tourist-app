@@ -23,8 +23,8 @@ import '../../itinerary_planning/controller/gem_category_preference_controller.d
 import '../../itinerary_planning/model/saved_itineraries_store.dart';
 import '../../itinerary_planning/view/widgets/gem_category_filter.dart';
 import '../../itinerary_planning/view/widgets/saved_itinerary_tile.dart';
-import '../../travel_prep/model/saved_eco_partners_store.dart';
-import '../../travel_prep/view/widgets/saved_eco_partner_tile.dart';
+import '../../travel_assistant/model/saved_eco_partners_store.dart';
+import '../../travel_assistant/view/widgets/saved_eco_partner_tile.dart';
 import 'widgets/profile_share_sheet.dart';
 
 /// The Tourist's showcase page — everything worth bragging about in one
@@ -199,12 +199,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             dashboardController.status == DashboardStatus.loading &&
                 stats.totalCheckIns == 0
             ? const Center(child: CircularProgressIndicator())
-            : dashboardController.status == DashboardStatus.error && stats.totalCheckIns == 0
-                ? _DashboardErrorState(
-                    message: dashboardController.errorMessage ?? 'Could not load your stats.',
-                    onRetry: _refresh,
-                  )
-                : ListView(
+            : dashboardController.status == DashboardStatus.error &&
+                  stats.totalCheckIns == 0
+            ? _DashboardErrorState(
+                message:
+                    dashboardController.errorMessage ??
+                    'Could not load your stats.',
+                onRetry: _refresh,
+              )
+            : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
                   // --- Identity ---------------------------------------------
@@ -702,9 +705,17 @@ class _DashboardErrorState extends StatelessWidget {
       // pull-to-refresh keeps working from this state too.
       padding: const EdgeInsets.symmetric(vertical: 120, horizontal: 32),
       children: [
-        Icon(Icons.cloud_off_outlined, size: 48, color: colors.onSurfaceVariant),
+        Icon(
+          Icons.cloud_off_outlined,
+          size: 48,
+          color: colors.onSurfaceVariant,
+        ),
         const SizedBox(height: 12),
-        Text('Could not load your stats', style: AppTypography.headlineSm, textAlign: TextAlign.center),
+        Text(
+          'Could not load your stats',
+          style: AppTypography.headlineSm,
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 6),
         Text(message, style: AppTypography.bodySm, textAlign: TextAlign.center),
         const SizedBox(height: 16),

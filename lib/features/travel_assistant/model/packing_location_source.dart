@@ -20,7 +20,8 @@ class PackingLocationOption {
     this.trustedImageUrl,
     this.trustedImageAttribution,
     this.trustedImageSourceUrl,
-  });
+    bool? datesEditable,
+  }) : datesEditable = datesEditable ?? ecoPartnerCategory != null;
 
   final String id;
   final String label;
@@ -37,6 +38,7 @@ class PackingLocationOption {
   final String? trustedImageUrl;
   final String? trustedImageAttribution;
   final String? trustedImageSourceUrl;
+  final bool datesEditable;
 
   String get heroTitle => dashboardTitle?.trim().isNotEmpty == true
       ? dashboardTitle!.trim()

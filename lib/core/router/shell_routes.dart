@@ -7,10 +7,14 @@ class ShellRoutes {
   static const assistant = '/assistant';
   static const saved = '/saved';
   static const profile = '/profile';
-  static const travelPrep = '/travel-prep';
-  static const checklist = '/travel-prep/checklist';
-  static const ecoPartners = '/travel-prep/eco-partners';
-  static const documentVault = '/travel-prep/document-vault';
+  static const travelAssistant = '/travel-assistant';
+  static const checklist = '/travel-assistant/checklist';
+  static const ecoPartners = '/travel-assistant/eco-partners';
+  static const documentVault = '/travel-assistant/document-vault';
+
+  // Compatibility for links created before the module rename.
+  static const legacyTravelAssistant = '/travel-prep';
+  static const legacyInterimAssistant = '/smart-assistant';
 
   // Module 6 — Gamification & Travel Journal. The Journal tab itself shows
   // the entries timeline directly; Badges/Quizzes/Check-in history are

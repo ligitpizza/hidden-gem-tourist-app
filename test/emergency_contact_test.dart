@@ -1,5 +1,5 @@
-import 'package:collab/features/travel_prep/model/emergency_contact.dart';
-import 'package:collab/features/travel_prep/model/emergency_contact_repository.dart';
+import 'package:collab/features/travel_assistant/model/emergency_contact.dart';
+import 'package:collab/features/travel_assistant/model/emergency_contact_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

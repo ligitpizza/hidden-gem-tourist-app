@@ -256,42 +256,48 @@ class SavedEcoPartnerCodec {
     'gstcVerified': partner.gstcVerified,
   };
 
-  static EcoPartner fromJson(Map<String, dynamic> json) => EcoPartner(
-    id: '${json['id']}',
-    name: '${json['name']}',
-    category: EcoPartnerCategory.values.firstWhere(
-      (value) => value.name == json['category'],
-      orElse: () => EcoPartnerCategory.transport,
-    ),
-    subtype: '${json['subtype'] ?? ''}',
-    latitude: (json['latitude'] as num).toDouble(),
-    longitude: (json['longitude'] as num).toDouble(),
-    address: '${json['address'] ?? ''}',
-    distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 0,
-    sustainabilityLabel: '${json['sustainabilityLabel'] ?? ''}',
-    evidence: '${json['evidence'] ?? ''}',
-    sourceName: '${json['sourceName'] ?? ''}',
-    sourceUrl: '${json['sourceUrl'] ?? ''}',
-    lastUpdated:
-        DateTime.tryParse('${json['lastUpdated'] ?? ''}') ?? DateTime.now(),
-    priceBand: json['priceBand'] as String?,
-    website: json['website'] as String?,
-    imageUrl: json['imageUrl'] as String?,
-    imageSourceName: json['imageSourceName'] as String?,
-    imageSourceUrl: json['imageSourceUrl'] as String?,
-    imageCapturedAt: DateTime.tryParse('${json['imageCapturedAt'] ?? ''}'),
-    transitRoutes: (json['transitRoutes'] as List? ?? const [])
-        .whereType<Map>()
-        .map(
-          (route) => EcoTransitRouteInfo(
-            mode: '${route['mode'] ?? 'Transit'}',
-            shortName: route['shortName'] as String?,
-            longName: route['longName'] as String?,
-          ),
-        )
-        .toList(),
-    veganClassification: json['veganClassification'] as String?,
-    chargerDetails: json['chargerDetails'] as String?,
-    gstcVerified: json['gstcVerified'] == true,
-  );
+  static EcoPartner fromJson(Map<String, dynamic> json) {
+    final subtype = '${json['subtype'] ?? ''}';
+    final address = '${json['address'] ?? ''}';
+    return EcoPartner(
+      id: '${json['id']}',
+      name: subtype == 'EV charging'
+          ? resolveEvChargerName(name: json['name'], address: address)
+          : '${json['name'] ?? ''}',
+      category: EcoPartnerCategory.values.firstWhere(
+        (value) => value.name == json['category'],
+        orElse: () => EcoPartnerCategory.transport,
+      ),
+      subtype: subtype,
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+      address: address,
+      distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 0,
+      sustainabilityLabel: '${json['sustainabilityLabel'] ?? ''}',
+      evidence: '${json['evidence'] ?? ''}',
+      sourceName: '${json['sourceName'] ?? ''}',
+      sourceUrl: '${json['sourceUrl'] ?? ''}',
+      lastUpdated:
+          DateTime.tryParse('${json['lastUpdated'] ?? ''}') ?? DateTime.now(),
+      priceBand: json['priceBand'] as String?,
+      website: json['website'] as String?,
+      imageUrl: json['imageUrl'] as String?,
+      imageSourceName: json['imageSourceName'] as String?,
+      imageSourceUrl: json['imageSourceUrl'] as String?,
+      imageCapturedAt: DateTime.tryParse('${json['imageCapturedAt'] ?? ''}'),
+      transitRoutes: (json['transitRoutes'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (route) => EcoTransitRouteInfo(
+              mode: '${route['mode'] ?? 'Transit'}',
+              shortName: route['shortName'] as String?,
+              longName: route['longName'] as String?,
+            ),
+          )
+          .toList(),
+      veganClassification: json['veganClassification'] as String?,
+      chargerDetails: json['chargerDetails'] as String?,
+      gstcVerified: json['gstcVerified'] == true,
+    );
+  }
 }

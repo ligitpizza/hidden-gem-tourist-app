@@ -49,7 +49,7 @@ Accessibility Rating" use case (basic flow, A1, E1/E2/E3), as supplied by the us
 - **Keyword tagging**: a small, fixed, deterministic keyword→tag map (NFR9 — "deterministic
   and auditable... upgrade path to NLP-based classification" later, not now), following the
   same pure/static classification style already used by `OverpassEcoSource.classifyDiet` in
-  `lib/features/travel_prep/model/eco_partner_repository.dart`.
+  `lib/features/travel_assistant/model/eco_partner_repository.dart`.
 - **Small-sample skew (NFR7) and moderation (NFR13)**: both explicitly out of scope — the
   spec itself marks these as identified, currently-unmitigated risks, not requirements to
   solve here.

@@ -12,7 +12,11 @@ class _NavDestination {
   final IconData icon;
   final IconData selectedIcon;
   final String label;
-  const _NavDestination({required this.icon, required this.selectedIcon, required this.label});
+  const _NavDestination({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+  });
 }
 
 /// The seven real shell branches, in branch-index order (matches
@@ -20,14 +24,46 @@ class _NavDestination {
 /// what onTabSelected expects). Split below: [_primaryLeft] + [_primaryRight]
 /// always show; [_secondaryBranches] lives behind the "More" menu.
 const _destinations = [
-  _NavDestination(icon: Icons.map_outlined, selectedIcon: Icons.map, label: 'Map'), // 0
-  _NavDestination(icon: Icons.explore_outlined, selectedIcon: Icons.explore, label: 'Explore'), // 1
-  _NavDestination(icon: Icons.home_outlined, selectedIcon: Icons.home, label: 'Home'), // 2
-  _NavDestination(icon: Icons.bookmark_outline, selectedIcon: Icons.bookmark, label: 'Saved'), // 3
-  _NavDestination(icon: Icons.luggage_outlined, selectedIcon: Icons.luggage, label: 'Travel Prep'), // 4
-  _NavDestination(icon: Icons.auto_stories_outlined, selectedIcon: Icons.auto_stories, label: 'Journal'), // 5
-  _NavDestination(icon: Icons.person_outline, selectedIcon: Icons.person, label: 'Profile'), // 6
-  _NavDestination(icon: Icons.public_outlined, selectedIcon: Icons.public, label: 'Culture'), // 7
+  _NavDestination(
+    icon: Icons.map_outlined,
+    selectedIcon: Icons.map,
+    label: 'Map',
+  ), // 0
+  _NavDestination(
+    icon: Icons.explore_outlined,
+    selectedIcon: Icons.explore,
+    label: 'Explore',
+  ), // 1
+  _NavDestination(
+    icon: Icons.home_outlined,
+    selectedIcon: Icons.home,
+    label: 'Home',
+  ), // 2
+  _NavDestination(
+    icon: Icons.bookmark_outline,
+    selectedIcon: Icons.bookmark,
+    label: 'Saved',
+  ), // 3
+  _NavDestination(
+    icon: Icons.luggage_outlined,
+    selectedIcon: Icons.luggage,
+    label: 'Travel Assistant',
+  ), // 4
+  _NavDestination(
+    icon: Icons.auto_stories_outlined,
+    selectedIcon: Icons.auto_stories,
+    label: 'Journal',
+  ), // 5
+  _NavDestination(
+    icon: Icons.person_outline,
+    selectedIcon: Icons.person,
+    label: 'Profile',
+  ), // 6
+  _NavDestination(
+    icon: Icons.public_outlined,
+    selectedIcon: Icons.public,
+    label: 'Culture',
+  ), // 7
 ];
 
 /// Always-visible tabs, either side of the center "More" button.
@@ -36,7 +72,12 @@ const _primaryRight = [5, 6]; // Journal, Profile
 
 /// Tucked behind "More" — real shell branches selected the same way as the
 /// primary tabs.
-const _secondaryBranches = [1, 3, 4, 7]; // Explore, Saved, Travel Prep, culture
+const _secondaryBranches = [
+  1,
+  3,
+  4,
+  7,
+]; // Explore, Saved, Travel Assistant, culture
 
 /// A "More" menu entry that isn't a shell branch — it pushes a route
 /// instead of switching tabs. [indicatorKey] is looked up against live
@@ -47,20 +88,46 @@ class _MorePushEntry {
   final String label;
   final String path;
   final String? indicatorKey;
-  const _MorePushEntry({required this.icon, required this.label, required this.path, this.indicatorKey});
+  const _MorePushEntry({
+    required this.icon,
+    required this.label,
+    required this.path,
+    this.indicatorKey,
+  });
 }
 
 const _morePushEntries = [
-  _MorePushEntry(icon: Icons.emoji_events_outlined, label: 'Badges', path: ShellRoutes.journalBadges, indicatorKey: 'badges'),
-  _MorePushEntry(icon: Icons.quiz_outlined, label: 'Quizzes', path: ShellRoutes.journalQuizzes, indicatorKey: 'quizzes'),
-  _MorePushEntry(icon: Icons.history_outlined, label: 'Check-ins', path: ShellRoutes.journalHistory),
-  _MorePushEntry(icon: Icons.people_outline, label: 'Friends', path: ShellRoutes.journalFriends, indicatorKey: 'friends'),
+  _MorePushEntry(
+    icon: Icons.emoji_events_outlined,
+    label: 'Badges',
+    path: ShellRoutes.journalBadges,
+    indicatorKey: 'badges',
+  ),
+  _MorePushEntry(
+    icon: Icons.quiz_outlined,
+    label: 'Quizzes',
+    path: ShellRoutes.journalQuizzes,
+    indicatorKey: 'quizzes',
+  ),
+  _MorePushEntry(
+    icon: Icons.history_outlined,
+    label: 'Check-ins',
+    path: ShellRoutes.journalHistory,
+  ),
+  _MorePushEntry(
+    icon: Icons.people_outline,
+    label: 'Friends',
+    path: ShellRoutes.journalFriends,
+    indicatorKey: 'friends',
+  ),
 ];
 
 int _pendingQuizCount(BuildContext context) {
   final checkInController = context.watch<CheckInController>();
   final quizController = context.watch<QuizController>();
-  final checkedInIds = checkInController.history.map((c) => c.destinationId).toSet();
+  final checkedInIds = checkInController.history
+      .map((c) => c.destinationId)
+      .toSet();
   return quizController.pendingQuizCount(checkedInIds);
 }
 
@@ -68,7 +135,7 @@ int _pendingQuizCount(BuildContext context) {
 /// always visible, plus a "More" button that opens a dark overlay — sized
 /// to stop just above the nav bar itself (rather than the whole screen)
 /// so the bar stays visible, undimmed, and tappable — with the remaining
-/// destinations (Explore, Saved, Travel Prep, Badges, Quizzes, Check-ins).
+/// destinations (Explore, Saved, Travel Assistant, Badges, Quizzes, Check-ins).
 /// The whole overlay is clipped to that region too, so the nav bar always
 /// paints in front of it — the panel visually emerges from behind the bar
 /// rather than ever sliding over it, even mid-animation.
@@ -86,11 +153,13 @@ class AppBottomNavBar extends StatefulWidget {
   State<AppBottomNavBar> createState() => _AppBottomNavBarState();
 }
 
-class _AppBottomNavBarState extends State<AppBottomNavBar> with TickerProviderStateMixin {
+class _AppBottomNavBarState extends State<AppBottomNavBar>
+    with TickerProviderStateMixin {
   OverlayEntry? _moreEntry;
   AnimationController? _moreController;
 
-  bool get _onSecondaryBranch => _secondaryBranches.contains(widget.currentIndex);
+  bool get _onSecondaryBranch =>
+      _secondaryBranches.contains(widget.currentIndex);
   bool get _isMoreOpen => _moreEntry != null;
 
   @override
@@ -360,13 +429,23 @@ class _MoreMenuOverlay extends StatelessWidget {
               child: SlideTransition(
                 // Starts shifted down by its own full height, i.e. flush
                 // with the nav bar's top edge, and slides up to Offset.zero.
-                position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero).animate(
-                  CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic),
-                ),
+                position:
+                    Tween<Offset>(
+                      begin: const Offset(0, 1),
+                      end: Offset.zero,
+                    ).animate(
+                      CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                        reverseCurve: Curves.easeInCubic,
+                      ),
+                    ),
                 child: Container(
                   margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                   decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.18),
@@ -384,7 +463,9 @@ class _MoreMenuOverlay extends StatelessWidget {
                   // flush against the nav bar there).
                   child: Material(
                     color: colorScheme.surface,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
                     clipBehavior: Clip.antiAlias,
                     elevation: 0,
                     child: panelContent,
@@ -408,10 +489,12 @@ class _BottomInsetClipper extends CustomClipper<Rect> {
   final double bottomInset;
 
   @override
-  Rect getClip(Size size) => Rect.fromLTRB(0, 0, size.width, size.height - bottomInset);
+  Rect getClip(Size size) =>
+      Rect.fromLTRB(0, 0, size.width, size.height - bottomInset);
 
   @override
-  bool shouldReclip(covariant _BottomInsetClipper oldClipper) => oldClipper.bottomInset != bottomInset;
+  bool shouldReclip(covariant _BottomInsetClipper oldClipper) =>
+      oldClipper.bottomInset != bottomInset;
 }
 
 class _MoreMenuTile extends StatelessWidget {
@@ -435,7 +518,9 @@ class _MoreMenuTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
-          color: selected ? colorScheme.primary : colorScheme.surfaceContainerLow,
+          color: selected
+              ? colorScheme.primary
+              : colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -445,7 +530,9 @@ class _MoreMenuTile extends StatelessWidget {
               indicatorKey: indicatorKey,
               child: Icon(
                 selected ? destination.selectedIcon : destination.icon,
-                color: selected ? colorScheme.onPrimary : colorScheme.onSurfaceVariant,
+                color: selected
+                    ? colorScheme.onPrimary
+                    : colorScheme.onSurfaceVariant,
                 size: 24,
               ),
             ),
@@ -454,7 +541,9 @@ class _MoreMenuTile extends StatelessWidget {
               destination.label,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: selected ? colorScheme.onPrimary : colorScheme.onSurfaceVariant,
+                color: selected
+                    ? colorScheme.onPrimary
+                    : colorScheme.onSurfaceVariant,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
               ),
@@ -487,14 +576,23 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final color = selected ? colorScheme.onPrimary : colorScheme.onSurfaceVariant;
-    final hasUnviewedBadges = showIndicator && context.watch<BadgeController>().hasUnviewedBadges;
+    final color = selected
+        ? colorScheme.onPrimary
+        : colorScheme.onSurfaceVariant;
+    final hasUnviewedBadges =
+        showIndicator && context.watch<BadgeController>().hasUnviewedBadges;
     final pendingQuizzes = showIndicator ? _pendingQuizCount(context) : 0;
     final friendController = context.watch<FriendController>();
-    final pendingFriendRequests = showIndicator ? friendController.pendingIncomingCount : 0;
-    final hasNewFriends = showIndicator && friendController.hasNewAcceptedFriends;
+    final pendingFriendRequests = showIndicator
+        ? friendController.pendingIncomingCount
+        : 0;
+    final hasNewFriends =
+        showIndicator && friendController.hasNewAcceptedFriends;
     final showDot =
-        hasUnviewedBadges || pendingQuizzes > 0 || pendingFriendRequests > 0 || hasNewFriends;
+        hasUnviewedBadges ||
+        pendingQuizzes > 0 ||
+        pendingFriendRequests > 0 ||
+        hasNewFriends;
 
     return InkWell(
       onTap: onTap,
@@ -525,7 +623,9 @@ class _NavItem extends StatelessWidget {
           Text(
             destination.label,
             style: TextStyle(
-              color: selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+              color: selected
+                  ? colorScheme.primary
+                  : colorScheme.onSurfaceVariant,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),

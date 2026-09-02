@@ -1,5 +1,5 @@
-import 'package:collab/features/travel_prep/model/vault_pin_service.dart';
-import 'package:collab/features/travel_prep/view/travel_prep_screens.dart';
+import 'package:collab/features/travel_assistant/model/vault_pin_service.dart';
+import 'package:collab/features/travel_assistant/view/travel_assistant_screens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';

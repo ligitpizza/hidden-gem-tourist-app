@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/router/shell_routes.dart';
 import '../../itinerary_planning/model/transitous_routing_service.dart';
 import '../../itinerary_planning/view/widgets/route_map_view.dart';
 import '../../../shared/widgets/app_header.dart';
@@ -26,7 +27,10 @@ class EcoPartnerDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: const AppHeader.pushed(title: 'Partner Details'),
+    appBar: const AppHeader.pushed(
+      title: 'Partner Details',
+      fallbackPath: ShellRoutes.travelAssistant,
+    ),
     body: ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [

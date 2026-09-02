@@ -3,32 +3,32 @@ import 'package:flutter/foundation.dart';
 import '../model/packing_location_source.dart';
 import '../model/travel_document.dart';
 import '../model/travel_document_repository.dart';
-import '../model/travel_prep_cover_image.dart';
+import '../model/travel_assistant_cover_image.dart';
 import 'packing_checklist_controller.dart';
 
 typedef TravelDocumentLoader = Future<List<TravelDocument>> Function();
 
-class TravelPrepDashboardController extends ChangeNotifier {
-  TravelPrepDashboardController({
+class TravelAssistantDashboardController extends ChangeNotifier {
+  TravelAssistantDashboardController({
     PackingChecklistController? checklistController,
     TravelDocumentLoader? documentLoader,
-    TravelPrepCoverImageResolverContract? coverResolver,
+    TravelAssistantCoverImageResolverContract? coverResolver,
   }) : checklist = checklistController ?? PackingChecklistController(),
        _ownsChecklistController = checklistController == null,
        _documentLoader = documentLoader ?? TravelDocumentRepository().load,
-       _coverResolver = coverResolver ?? TravelPrepCoverImageResolver() {
+       _coverResolver = coverResolver ?? TravelAssistantCoverImageResolver() {
     checklist.addListener(_relayChecklistChange);
   }
 
   final PackingChecklistController checklist;
   final bool _ownsChecklistController;
   final TravelDocumentLoader _documentLoader;
-  final TravelPrepCoverImageResolverContract _coverResolver;
+  final TravelAssistantCoverImageResolverContract _coverResolver;
 
   int? documentCount;
   int documentBytes = 0;
   bool isLoadingDocuments = false;
-  TravelPrepCoverImage? coverImage;
+  TravelAssistantCoverImage? coverImage;
   bool isLoadingCover = false;
   String? documentError;
   int _coverRequestId = 0;

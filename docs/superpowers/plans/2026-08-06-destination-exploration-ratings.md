@@ -217,7 +217,7 @@ Expected: FAIL — `KeywordTaggingEngine`/`difficultyBucketFor` don't exist yet 
 /// Deterministic, rule-based keyword-to-tag pipeline (FR4.3, NFR9 — "not an
 /// NLP classifier", auditable/upgradeable later). Mirrors the pure/static
 /// classification style of OverpassEcoSource.classifyDiet
-/// (lib/features/travel_prep/model/eco_partner_repository.dart). Negated
+/// (lib/features/travel_assistant/model/eco_partner_repository.dart). Negated
 /// phrasing (e.g. "not wheelchair friendly" still tagging
 /// "wheelchair-friendly") is an accepted limitation, not handled specially.
 class KeywordTaggingEngine {

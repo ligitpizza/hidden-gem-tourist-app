@@ -1,7 +1,7 @@
-import 'package:collab/features/travel_prep/model/eco_partner.dart';
-import 'package:collab/features/travel_prep/model/saved_eco_partner.dart';
-import 'package:collab/features/travel_prep/model/saved_eco_partner_repository.dart';
-import 'package:collab/features/travel_prep/model/saved_eco_partners_store.dart';
+import 'package:collab/features/travel_assistant/model/eco_partner.dart';
+import 'package:collab/features/travel_assistant/model/saved_eco_partner.dart';
+import 'package:collab/features/travel_assistant/model/saved_eco_partner_repository.dart';
+import 'package:collab/features/travel_assistant/model/saved_eco_partners_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -43,6 +43,16 @@ void main() {
       expect((await afterRestart.fetchAll()).single.partner.name, 'Eco Lodge');
     },
   );
+
+  test('repairs an unnamed saved EV charger from its address', () {
+    final value = SavedEcoPartnerCodec.toJson(_evPartner);
+    value['name'] = ' ';
+    value['address'] = 'Jalan Tun Razak, Kuala Lumpur';
+
+    final restored = SavedEcoPartnerCodec.fromJson(value);
+
+    expect(restored.name, 'EV charger near Jalan Tun Razak');
+  });
 }
 
 final _partner = EcoPartner(
@@ -57,6 +67,21 @@ final _partner = EcoPartner(
   evidence: 'Verified evidence',
   sourceName: 'Test source',
   sourceUrl: 'https://example.com',
+  lastUpdated: DateTime(2026),
+);
+
+final _evPartner = EcoPartner(
+  id: 'charger:1',
+  name: 'Original charger',
+  category: EcoPartnerCategory.transport,
+  subtype: 'EV charging',
+  latitude: 3.16,
+  longitude: 101.72,
+  address: 'Kuala Lumpur',
+  sustainabilityLabel: 'EV charging infrastructure',
+  evidence: 'Mapped charging station',
+  sourceName: 'OpenStreetMap',
+  sourceUrl: 'https://www.openstreetmap.org/node/1',
   lastUpdated: DateTime(2026),
 );
 

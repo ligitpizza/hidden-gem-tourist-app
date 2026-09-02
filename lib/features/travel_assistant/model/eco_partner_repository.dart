@@ -785,7 +785,10 @@ nwr$queryScope["amenity"="charging_station"];
 );out center tags 150;''';
     try {
       final rows = await _request(query, 0);
-      final overpass = rows.map(mapElement).whereType<EcoPartner>().toList();
+      final overpass = rows
+          .map((row) => mapElement(row, nearbyLabel: d.label))
+          .whereType<EcoPartner>()
+          .toList();
       return overpass;
     } catch (_) {
       throw const EcoProviderException(
@@ -828,7 +831,7 @@ nwr$queryScope["amenity"="charging_station"];
       );
       final rows = response.data is List ? response.data as List : const [];
       for (final raw in rows.whereType<Map<String, dynamic>>()) {
-        final partner = _mapNominatim(raw);
+        final partner = _mapNominatim(raw, nearbyLabel: d.label);
         if (partner != null) results.add(partner);
       }
       // Nominatim's public usage policy requires requests to be spaced out.
@@ -841,7 +844,10 @@ nwr$queryScope["amenity"="charging_station"];
     }.values.toList();
   }
 
-  static EcoPartner? _mapNominatim(Map<String, dynamic> row) {
+  static EcoPartner? _mapNominatim(
+    Map<String, dynamic> row, {
+    String? nearbyLabel,
+  }) {
     final lat = _nullableNumber(row['lat']);
     final lon = _nullableNumber(row['lon']);
     if (lat == null || lon == null) return null;
@@ -854,16 +860,22 @@ nwr$queryScope["amenity"="charging_station"];
     final category = '${row['category'] ?? ''}'.toLowerCase();
     final name =
         '${row['name'] ?? row['display_name'] ?? 'OpenStreetMap place'}';
+    final address = '${row['display_name'] ?? ''}';
     final sourceUrl = 'https://www.openstreetmap.org/$osmType/$osmId';
     if (type == 'charging_station') {
       return EcoPartner(
         id: 'osm:$osmType:$osmId',
-        name: name,
+        name: resolveEvChargerName(
+          name: row['name'],
+          operatorName: extras['operator'],
+          address: address,
+          nearbyLabel: nearbyLabel,
+        ),
         category: EcoPartnerCategory.transport,
         subtype: 'EV charging',
         latitude: lat,
         longitude: lon,
-        address: '${row['display_name'] ?? ''}',
+        address: address,
         sustainabilityLabel: 'EV charging infrastructure',
         evidence: 'Charging station mapped in OpenStreetMap.',
         sourceName: 'OpenStreetMap via Nominatim',
@@ -958,7 +970,10 @@ nwr$queryScope["amenity"="charging_station"];
     return completer.future;
   }
 
-  static EcoPartner? mapElement(Map<String, dynamic> element) {
+  static EcoPartner? mapElement(
+    Map<String, dynamic> element, {
+    String? nearbyLabel,
+  }) {
     final tags =
         (element['tags'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
@@ -970,6 +985,7 @@ nwr$queryScope["amenity"="charging_station"];
     final id = '${element['id']}';
     final updated = DateTime.now();
     if (tags['amenity'] == 'charging_station') {
+      final address = _osmAddress(tags);
       final details = ['operator', 'access', 'capacity']
           .where((k) => '${tags[k] ?? ''}'.isNotEmpty)
           .map((k) => '$k: ${tags[k]}')
@@ -979,12 +995,17 @@ nwr$queryScope["amenity"="charging_station"];
           .map((e) => '${e.key.substring(7)}: ${e.value}');
       return EcoPartner(
         id: 'osm:$type:$id',
-        name: '${tags['name'] ?? tags['operator'] ?? 'EV charging station'}',
+        name: resolveEvChargerName(
+          name: tags['name'],
+          operatorName: tags['operator'],
+          address: address,
+          nearbyLabel: nearbyLabel,
+        ),
         category: EcoPartnerCategory.transport,
         subtype: 'EV charging',
         latitude: lat,
         longitude: lon,
-        address: _osmAddress(tags),
+        address: address,
         sustainabilityLabel: 'EV charging infrastructure',
         evidence: 'Mapped charging station; no emissions claim is implied.',
         sourceName: 'OpenStreetMap',

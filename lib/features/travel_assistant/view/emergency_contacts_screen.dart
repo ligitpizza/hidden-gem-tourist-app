@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/router/shell_routes.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../controller/emergency_contact_controller.dart';
 import '../model/emergency_contact.dart';
@@ -52,6 +53,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
     return Scaffold(
       appBar: AppHeader.pushed(
         title: 'Emergency Contacts',
+        fallbackPath: ShellRoutes.travelAssistant,
         actions: [
           if (_controller.isUnlocked)
             IconButton(

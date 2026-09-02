@@ -4,6 +4,30 @@ enum EcoPartnerAreaMode { nearby, statewide }
 
 enum EcoPartnerSearchScopeType { nearby, state, nationwide }
 
+String resolveEvChargerName({
+  Object? name,
+  Object? operatorName,
+  String? address,
+  String? nearbyLabel,
+}) {
+  String? clean(Object? value) {
+    final text = '${value ?? ''}'.trim();
+    if (text.isEmpty || text.toLowerCase() == 'null') return null;
+    return text;
+  }
+
+  final explicitName = clean(name);
+  if (explicitName != null) return explicitName;
+  final operator = clean(operatorName);
+  if (operator != null) return '$operator EV charger';
+  final addressLabel = clean(address)?.split(',').first.trim();
+  if (addressLabel?.isNotEmpty == true) {
+    return 'EV charger near $addressLabel';
+  }
+  final nearby = clean(nearbyLabel);
+  return nearby == null ? 'EV charging station' : 'EV charger near $nearby';
+}
+
 class EcoGeoBounds {
   const EcoGeoBounds({
     required this.south,
