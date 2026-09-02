@@ -1,0 +1,105 @@
+import 'package:collab/features/travel_prep/controller/packing_checklist_controller.dart';
+import 'package:collab/features/travel_prep/model/packing_checklist.dart';
+import 'package:collab/features/travel_prep/model/packing_checklist_repository.dart';
+import 'package:collab/features/travel_prep/model/packing_location_source.dart';
+import 'package:collab/features/travel_prep/model/packing_weather_service.dart';
+import 'package:collab/features/travel_prep/view/travel_prep_screens.dart';
+import 'package:collab/shared/models/destination.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  testWidgets(
+    'custom checklist header fits a narrow screen and add dialog cancels cleanly',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final controller = PackingChecklistController(
+        locationSource: const _LocationSource(),
+        weatherService: _WeatherService(),
+        persistence: _ChecklistRepository(),
+      );
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(1.2)),
+            child: child!,
+          ),
+          home: ReadyToWanderScreen(controller: controller),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('Customized Checklist'),
+        500,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Add Item'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Add Item'));
+      await tester.pumpAndSettle();
+      expect(find.text('Add custom packing item'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Add custom packing item'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+}
+
+class _LocationSource implements PackingLocationSource {
+  const _LocationSource();
+
+  @override
+  Future<List<PackingLocationOption>> load() async => const [
+    PackingLocationOption(
+      id: 'test-trip',
+      label: 'Kuala Lumpur',
+      subtitle: 'Saved itinerary',
+      latitude: 3.139,
+      longitude: 101.687,
+      categories: {DestinationCategory.attraction},
+    ),
+  ];
+}
+
+class _WeatherService extends PackingWeatherService {
+  @override
+  Future<PackingWeatherSummary?> getForecast({
+    required double latitude,
+    required double longitude,
+  }) async => null;
+}
+
+class _ChecklistRepository implements PackingChecklistRepositoryContract {
+  @override
+  Future<List<PackingChecklistItem>> loadCustomItems() async => const [];
+
+  @override
+  Future<Set<String>> loadPackedIds(String locationId) async => {};
+
+  @override
+  Future<String?> loadSelection() async => null;
+
+  @override
+  Future<void> saveCustomItems(List<PackingChecklistItem> items) async {}
+
+  @override
+  Future<void> savePackedIds(String locationId, Set<String> ids) async {}
+
+  @override
+  Future<void> saveSelection(String locationId) async {}
+}

@@ -459,18 +459,23 @@ class _DashboardCard extends StatelessWidget {
 }
 
 class ReadyToWanderScreen extends StatefulWidget {
-  const ReadyToWanderScreen({super.key});
+  const ReadyToWanderScreen({super.key, this.controller});
+
+  final PackingChecklistController? controller;
 
   @override
   State<ReadyToWanderScreen> createState() => _ReadyToWanderScreenState();
 }
 
 class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
-  final _controller = PackingChecklistController();
+  late final PackingChecklistController _controller;
+  late final bool _ownsController;
 
   @override
   void initState() {
     super.initState();
+    _controller = widget.controller ?? PackingChecklistController();
+    _ownsController = widget.controller == null;
     _controller.addListener(_refresh);
     _controller.load();
   }
@@ -482,7 +487,7 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
   @override
   void dispose() {
     _controller.removeListener(_refresh);
-    _controller.dispose();
+    if (_ownsController) _controller.dispose();
     super.dispose();
   }
 
@@ -678,15 +683,17 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
                 const SizedBox(height: 18),
                 Row(
                   children: [
-                    Text(
-                      'Packing Checklist',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
+                    Expanded(
+                      child: Text(
+                        'Packing Checklist',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                    const Spacer(),
                     Text(
                       '${_controller.packedItems}/${_controller.totalItems} packed',
+                      textAlign: TextAlign.right,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
@@ -709,14 +716,15 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Text(
-                      'Customized Checklist',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF003B2B),
+                    Expanded(
+                      child: Text(
+                        'Customized Checklist',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF003B2B),
+                        ),
                       ),
                     ),
-                    const Spacer(),
                     TextButton.icon(
                       onPressed: _addCustomItem,
                       icon: const Icon(Icons.add),
@@ -749,56 +757,88 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
   }
 
   Future<void> _addCustomItem() async {
-    final name = TextEditingController();
-    final note = TextEditingController();
-    final submitted = await showDialog<bool>(
+    final item = await showDialog<_CustomPackingItemDraft>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Add custom packing item'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: name,
-              autofocus: true,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Item name',
-                hintText: 'e.g. Contact lenses',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: note,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Note (optional)',
-                hintText: 'Why you need this item',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (name.text.trim().isEmpty) return;
-              Navigator.pop(dialogContext, true);
-            },
-            child: const Text('Add'),
-          ),
-        ],
-      ),
+      builder: (_) => const _AddCustomPackingItemDialog(),
     );
-    if (submitted == true) {
-      await _controller.addCustomItem(name.text, note.text);
-    }
-    name.dispose();
-    note.dispose();
+    if (item == null || !mounted) return;
+    await _controller.addCustomItem(item.name, item.note);
   }
+}
+
+class _CustomPackingItemDraft {
+  const _CustomPackingItemDraft({required this.name, required this.note});
+
+  final String name;
+  final String note;
+}
+
+class _AddCustomPackingItemDialog extends StatefulWidget {
+  const _AddCustomPackingItemDialog();
+
+  @override
+  State<_AddCustomPackingItemDialog> createState() =>
+      _AddCustomPackingItemDialogState();
+}
+
+class _AddCustomPackingItemDialogState
+    extends State<_AddCustomPackingItemDialog> {
+  final _nameController = TextEditingController();
+  final _noteController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
+    Navigator.pop(
+      context,
+      _CustomPackingItemDraft(name: name, note: _noteController.text.trim()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Add custom packing item'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextField(
+          controller: _nameController,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          textInputAction: TextInputAction.next,
+          decoration: const InputDecoration(
+            labelText: 'Item name',
+            hintText: 'e.g. Contact lenses',
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _noteController,
+          textCapitalization: TextCapitalization.sentences,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _submit(),
+          decoration: const InputDecoration(
+            labelText: 'Note (optional)',
+            hintText: 'Why you need this item',
+          ),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(onPressed: _submit, child: const Text('Add')),
+    ],
+  );
 }
 
 class _PackingChecklistEmptyState extends StatelessWidget {
