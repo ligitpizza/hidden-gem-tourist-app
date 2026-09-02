@@ -1,5 +1,6 @@
 import 'package:collab/features/travel_prep/controller/packing_checklist_controller.dart';
 import 'package:collab/features/travel_prep/model/eco_partner.dart';
+import 'package:collab/features/travel_prep/model/packing_checklist.dart';
 import 'package:collab/features/travel_prep/model/packing_checklist_repository.dart';
 import 'package:collab/features/travel_prep/model/packing_location_source.dart';
 import 'package:collab/features/travel_prep/model/packing_weather_service.dart';
@@ -8,6 +9,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  test('trip date range rejects an end before its start', () {
+    expect(
+      () => PackingTripDateRange(
+        start: DateTime(2026, 10, 7),
+        end: DateTime(2026, 10, 4),
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('only hotel and dining Eco Partners support packing checklists', () {
     expect(
       SavedPackingLocationSource.supportsEcoPartner(EcoPartnerCategory.stay),
@@ -47,10 +58,17 @@ void main() {
 
       await controller.toggleItem('passport', true);
       expect(controller.packedIds, contains('passport'));
+      await controller.setTripDates(
+        PackingTripDateRange(
+          start: DateTime(2026, 10, 4),
+          end: DateTime(2026, 10, 7),
+        ),
+      );
 
       await controller.selectLocation('eco:2');
       expect(controller.tripLabel, 'Plant Cafe');
       expect(controller.packedIds, isNot(contains('passport')));
+      expect(controller.tripDates, isNull);
       expect(
         controller.destinationCategories,
         contains(DestinationCategory.restaurant),
@@ -65,6 +83,13 @@ void main() {
 
       await controller.selectLocation('eco:1');
       expect(controller.packedIds, contains('passport'));
+      expect(controller.tripDates?.start, DateTime(2026, 10, 4));
+      expect(controller.tripDates?.end, DateTime(2026, 10, 7));
+
+      await controller.clearTripDates();
+      await controller.selectLocation('eco:2');
+      await controller.selectLocation('eco:1');
+      expect(controller.tripDates, isNull);
     },
   );
 
@@ -75,11 +100,20 @@ void main() {
 
     await first.saveSelection('eco:1');
     await first.savePackedIds('eco:1', {'passport'});
+    await first.saveTripDates(
+      'eco:1',
+      PackingTripDateRange(
+        start: DateTime(2026, 11, 2, 18),
+        end: DateTime(2026, 11, 5, 9),
+      ),
+    );
 
     expect(await first.loadSelection(), 'eco:1');
     expect(await first.loadPackedIds('eco:1'), {'passport'});
     expect(await second.loadSelection(), isNull);
     expect(await second.loadPackedIds('eco:1'), isEmpty);
+    expect((await first.loadTripDates('eco:1'))?.start, DateTime(2026, 11, 2));
+    expect(await second.loadTripDates('eco:1'), isNull);
   });
 }
 

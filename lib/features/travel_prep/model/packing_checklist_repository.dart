@@ -12,6 +12,9 @@ abstract interface class PackingChecklistRepositoryContract {
   Future<void> saveCustomItems(List<PackingChecklistItem> items);
   Future<Set<String>> loadPackedIds(String locationId);
   Future<void> savePackedIds(String locationId, Set<String> ids);
+  Future<PackingTripDateRange?> loadTripDates(String locationId);
+  Future<void> saveTripDates(String locationId, PackingTripDateRange dates);
+  Future<void> clearTripDates(String locationId);
 }
 
 /// A compact local-first repository. SharedPreferences is the cache and
@@ -45,6 +48,8 @@ class PackingChecklistRepository implements PackingChecklistRepositoryContract {
   String get _customKey => 'packing_custom_items_$userId';
   String _packedKey(String locationId) =>
       'packing_checklist_${userId}_$locationId';
+  String _datesKey(String locationId) =>
+      'packing_trip_dates_${userId}_$locationId';
   String _updatedKey(String key) => '${key}_updated_at';
 
   @override
@@ -173,10 +178,100 @@ class PackingChecklistRepository implements PackingChecklistRepositoryContract {
     final client = _client;
     if (client == null) return;
     try {
+      final dates = _decodeDates(prefs.getString(_datesKey(locationId)));
       await client.from('packing_checklist_states').upsert({
         'user_id': userId,
         'location_id': locationId,
         'packed_ids': ids.toList(),
+        'trip_start_date': dates == null ? null : _dateValue(dates.start),
+        'trip_end_date': dates == null ? null : _dateValue(dates.end),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (_) {}
+  }
+
+  @override
+  Future<PackingTripDateRange?> loadTripDates(String locationId) async {
+    final prefs = await _preferences();
+    final key = _datesKey(locationId);
+    final local = _decodeDates(prefs.getString(key));
+    final client = _client;
+    if (client == null) return local;
+    try {
+      final row = await client
+          .from('packing_checklist_states')
+          .select('trip_start_date,trip_end_date,updated_at')
+          .eq('user_id', userId)
+          .eq('location_id', locationId)
+          .maybeSingle();
+      if (row != null) {
+        if (_localIsNewer(prefs, key, row['updated_at'])) {
+          if (local == null) {
+            await clearTripDates(locationId);
+          } else {
+            await saveTripDates(locationId, local);
+          }
+          return local;
+        }
+        final remote = _datesFromValues(
+          row['trip_start_date'],
+          row['trip_end_date'],
+        );
+        if (remote == null) {
+          await prefs.remove(key);
+        } else {
+          await prefs.setString(key, _encodeDates(remote));
+        }
+        await _storeRemoteTime(prefs, key, row['updated_at']);
+        return remote;
+      }
+      if (local != null) await saveTripDates(locationId, local);
+    } catch (_) {}
+    return local;
+  }
+
+  @override
+  Future<void> saveTripDates(
+    String locationId,
+    PackingTripDateRange dates,
+  ) async {
+    final prefs = await _preferences();
+    final key = _datesKey(locationId);
+    await prefs.setString(key, _encodeDates(dates));
+    await _touch(prefs, key);
+    final client = _client;
+    if (client == null) return;
+    try {
+      await client.from('packing_checklist_states').upsert({
+        'user_id': userId,
+        'location_id': locationId,
+        'packed_ids': _decodeIds(
+          prefs.getString(_packedKey(locationId)),
+        ).toList(),
+        'trip_start_date': _dateValue(dates.start),
+        'trip_end_date': _dateValue(dates.end),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> clearTripDates(String locationId) async {
+    final prefs = await _preferences();
+    final key = _datesKey(locationId);
+    await prefs.remove(key);
+    await _touch(prefs, key);
+    final client = _client;
+    if (client == null) return;
+    try {
+      await client.from('packing_checklist_states').upsert({
+        'user_id': userId,
+        'location_id': locationId,
+        'packed_ids': _decodeIds(
+          prefs.getString(_packedKey(locationId)),
+        ).toList(),
+        'trip_start_date': null,
+        'trip_end_date': null,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       });
     } catch (_) {}
@@ -221,6 +316,36 @@ class PackingChecklistRepository implements PackingChecklistRepositoryContract {
       return {};
     }
   }
+
+  static PackingTripDateRange? _decodeDates(String? raw) {
+    if (raw == null) return null;
+    try {
+      final values = jsonDecode(raw) as Map;
+      return _datesFromValues(values['start'], values['end']);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static PackingTripDateRange? _datesFromValues(
+    Object? startValue,
+    Object? endValue,
+  ) {
+    final start = DateTime.tryParse('${startValue ?? ''}');
+    final end = DateTime.tryParse('${endValue ?? ''}');
+    if (start == null || end == null || end.isBefore(start)) return null;
+    return PackingTripDateRange(start: start, end: end);
+  }
+
+  static String _encodeDates(PackingTripDateRange dates) => jsonEncode({
+    'start': _dateValue(dates.start),
+    'end': _dateValue(dates.end),
+  });
+
+  static String _dateValue(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-'
+      '${value.day.toString().padLeft(2, '0')}';
 
   static String _currentUserId() {
     try {

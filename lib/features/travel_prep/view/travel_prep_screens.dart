@@ -566,7 +566,13 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
                     },
                   ),
                 ],
-                const SizedBox(height: 4),
+                const SizedBox(height: 12),
+                _PackingTripDatesCard(
+                  dates: _controller.tripDates,
+                  onSetDates: _selectTripDates,
+                  onClearDates: _controller.clearTripDates,
+                ),
+                const SizedBox(height: 10),
                 Text(
                   'Recommendations for ${_controller.tripLabel}',
                   style: Theme.of(context).textTheme.bodyLarge,
@@ -763,6 +769,106 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
     );
     if (item == null || !mounted) return;
     await _controller.addCustomItem(item.name, item.note);
+  }
+
+  Future<void> _selectTripDates() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final current = _controller.tripDates;
+    final standardLastDate = DateTime(today.year + 5, today.month, today.day);
+    final firstDate = current != null && current.start.isBefore(today)
+        ? current.start
+        : today;
+    final lastDate = current != null && current.end.isAfter(standardLastDate)
+        ? current.end
+        : standardLastDate;
+    final selected = await showDateRangePicker(
+      context: context,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      initialDateRange: current == null
+          ? null
+          : DateTimeRange(start: current.start, end: current.end),
+      helpText: 'Select trip dates',
+      saveText: 'Save dates',
+    );
+    if (selected == null || !mounted) return;
+    await _controller.setTripDates(
+      PackingTripDateRange(start: selected.start, end: selected.end),
+    );
+  }
+}
+
+class _PackingTripDatesCard extends StatelessWidget {
+  const _PackingTripDatesCard({
+    required this.dates,
+    required this.onSetDates,
+    required this.onClearDates,
+  });
+
+  final PackingTripDateRange? dates;
+  final VoidCallback onSetDates;
+  final VoidCallback onClearDates;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final localizations = MaterialLocalizations.of(context);
+    final value = dates == null
+        ? 'Add dates so this checklist matches your journey.'
+        : dates!.isSingleDay
+        ? localizations.formatShortDate(dates!.start)
+        : '${localizations.formatShortDate(dates!.start)} – '
+              '${localizations.formatShortDate(dates!.end)}';
+    return Card(
+      margin: EdgeInsets.zero,
+      color: colorScheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 10, 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Icon(
+                Icons.calendar_month_outlined,
+                color: colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    dates == null ? 'Trip dates not set' : 'Trip dates',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(value),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 4,
+                    runSpacing: 2,
+                    children: [
+                      TextButton(
+                        onPressed: onSetDates,
+                        child: Text(dates == null ? 'Set dates' : 'Edit'),
+                      ),
+                      if (dates != null)
+                        TextButton(
+                          onPressed: onClearDates,
+                          child: const Text('Clear'),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

@@ -58,6 +58,53 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('trip dates display, clear, and open the date-range picker', (
+    tester,
+  ) async {
+    final repository = _ChecklistRepository();
+    repository.dates['test-trip'] = PackingTripDateRange(
+      start: DateTime(2026, 10, 4),
+      end: DateTime(2026, 10, 7),
+    );
+    final controller = PackingChecklistController(
+      locationSource: const _LocationSource(),
+      weatherService: _WeatherService(),
+      persistence: repository,
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: ReadyToWanderScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Trip dates'), findsOneWidget);
+    expect(find.textContaining('Oct 4, 2026'), findsOneWidget);
+    expect(find.textContaining('Oct 7, 2026'), findsOneWidget);
+
+    await tester.tap(find.text('Clear'));
+    await tester.pumpAndSettle();
+    expect(find.text('Trip dates not set'), findsOneWidget);
+    expect(repository.dates['test-trip'], isNull);
+
+    await tester.tap(find.text('Set dates'));
+    await tester.pumpAndSettle();
+    expect(find.text('Select trip dates'), findsOneWidget);
+    Navigator.of(tester.element(find.text('Select trip dates'))).pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Trip dates not set'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await controller.setTripDates(
+      PackingTripDateRange(
+        start: DateTime(2026, 12, 1),
+        end: DateTime(2026, 12, 1),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Dec 1, 2026'), findsOneWidget);
+  });
 }
 
 class _LocationSource implements PackingLocationSource {
@@ -85,11 +132,22 @@ class _WeatherService extends PackingWeatherService {
 }
 
 class _ChecklistRepository implements PackingChecklistRepositoryContract {
+  final Map<String, PackingTripDateRange> dates = {};
+
+  @override
+  Future<void> clearTripDates(String locationId) async {
+    dates.remove(locationId);
+  }
+
   @override
   Future<List<PackingChecklistItem>> loadCustomItems() async => const [];
 
   @override
   Future<Set<String>> loadPackedIds(String locationId) async => {};
+
+  @override
+  Future<PackingTripDateRange?> loadTripDates(String locationId) async =>
+      dates[locationId];
 
   @override
   Future<String?> loadSelection() async => null;
@@ -102,4 +160,12 @@ class _ChecklistRepository implements PackingChecklistRepositoryContract {
 
   @override
   Future<void> saveSelection(String locationId) async {}
+
+  @override
+  Future<void> saveTripDates(
+    String locationId,
+    PackingTripDateRange dates,
+  ) async {
+    this.dates[locationId] = dates;
+  }
 }

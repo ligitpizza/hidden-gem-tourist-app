@@ -29,6 +29,7 @@ class PackingChecklistController extends ChangeNotifier {
   EcoPartnerCategory? ecoPartnerCategory;
   bool isLoading = true;
   PackingWeatherSummary? weather;
+  PackingTripDateRange? tripDates;
 
   static const _weatherIds = {
     'umbrella',
@@ -96,7 +97,7 @@ class PackingChecklistController extends ChangeNotifier {
         : locationOptions.firstOrNull?.id;
     await _rebuildForSelectedLocation();
     await _loadCustomItems();
-    await _loadPackedState();
+    await _loadLocationState();
     isLoading = false;
     notifyListeners();
   }
@@ -111,7 +112,7 @@ class PackingChecklistController extends ChangeNotifier {
     selectedLocationId = id;
     await _persistence.saveSelection(id);
     await _rebuildForSelectedLocation();
-    await _loadPackedState();
+    await _loadLocationState();
     isLoading = false;
     notifyListeners();
   }
@@ -187,11 +188,28 @@ class PackingChecklistController extends ChangeNotifier {
     await Future.wait([_saveCustomItems(), _savePackedState()]);
   }
 
-  Future<void> _loadPackedState() async {
-    packedIds.clear();
-    packedIds.addAll(
-      await _persistence.loadPackedIds(selectedLocationId ?? 'essentials'),
-    );
+  Future<void> setTripDates(PackingTripDateRange value) async {
+    tripDates = value;
+    notifyListeners();
+    await _persistence.saveTripDates(selectedLocationId ?? 'essentials', value);
+  }
+
+  Future<void> clearTripDates() async {
+    tripDates = null;
+    notifyListeners();
+    await _persistence.clearTripDates(selectedLocationId ?? 'essentials');
+  }
+
+  Future<void> _loadLocationState() async {
+    final locationId = selectedLocationId ?? 'essentials';
+    final values = await Future.wait<Object?>([
+      _persistence.loadPackedIds(locationId),
+      _persistence.loadTripDates(locationId),
+    ]);
+    packedIds
+      ..clear()
+      ..addAll(values[0] as Set<String>);
+    tripDates = values[1] as PackingTripDateRange?;
     final validIds =
         sections
             .expand((section) => section.items)

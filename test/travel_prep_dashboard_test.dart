@@ -281,12 +281,22 @@ class _MemoryChecklistRepository implements PackingChecklistRepositoryContract {
   String? selection;
   Set<String> packedIds = {};
   List<PackingChecklistItem> customItems = const [];
+  final Map<String, PackingTripDateRange> dates = {};
+
+  @override
+  Future<void> clearTripDates(String locationId) async {
+    dates.remove(locationId);
+  }
 
   @override
   Future<List<PackingChecklistItem>> loadCustomItems() async => customItems;
 
   @override
   Future<Set<String>> loadPackedIds(String locationId) async => packedIds;
+
+  @override
+  Future<PackingTripDateRange?> loadTripDates(String locationId) async =>
+      dates[locationId];
 
   @override
   Future<String?> loadSelection() async => selection;
@@ -304,5 +314,13 @@ class _MemoryChecklistRepository implements PackingChecklistRepositoryContract {
   @override
   Future<void> saveSelection(String locationId) async {
     selection = locationId;
+  }
+
+  @override
+  Future<void> saveTripDates(
+    String locationId,
+    PackingTripDateRange dates,
+  ) async {
+    this.dates[locationId] = dates;
   }
 }

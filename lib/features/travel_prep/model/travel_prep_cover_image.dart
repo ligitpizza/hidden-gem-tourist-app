@@ -168,7 +168,9 @@ class WikimediaTravelPrepCoverSource
               connectTimeout: const Duration(seconds: 6),
               receiveTimeout: const Duration(seconds: 6),
               headers: const {
-                'User-Agent': 'HiddenGemTouristAppFYP/1.0 (travel prep covers)',
+                'User-Agent':
+                    'HiddenGemTouristApp/1.0 '
+                    '(https://github.com/ligitpizza/hidden-gem-tourist-app; travel prep covers)',
               },
             ),
           );

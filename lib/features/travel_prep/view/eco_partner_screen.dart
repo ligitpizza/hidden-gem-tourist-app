@@ -265,7 +265,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
               const LinearProgressIndicator(minHeight: 2),
               const SizedBox(height: 8),
               Text(
-                'Recommendations ready · loading nearby photos…',
+                'Recommendations ready · loading partner photos…',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 8),

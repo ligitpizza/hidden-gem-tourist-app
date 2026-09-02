@@ -114,7 +114,7 @@ class EcoPartnerRepository implements EcoPartnerRepositoryContract {
   }) : _hotels = hotels ?? SupabaseEcoHotelSource(),
        _map = map ?? OverpassEcoSource(),
        _transit = transit ?? SupabaseGtfsSource(),
-       _images = images ?? MapillaryPartnerImageSource(),
+       _images = images ?? WikimediaFirstPartnerImageSource(),
        _geocoder = geocoder ?? NominatimGeocodingService(),
        _stateBoundsResolver =
            stateBoundsResolver ?? NominatimEcoStateBoundsResolver();
@@ -259,7 +259,7 @@ class EcoPartnerRepository implements EcoPartnerRepositoryContract {
     try {
       final partners = await _images
           .enrich(value.partners)
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 12));
       final enriched = EcoPartnerSearchResult(
         destination: value.destination,
         partners: partners,
@@ -348,6 +348,162 @@ class EcoSearchException implements Exception {
 class EcoProviderException implements Exception {
   const EcoProviderException(this.message);
   final String message;
+}
+
+class WikimediaFirstPartnerImageSource implements EcoPartnerImageSource {
+  WikimediaFirstPartnerImageSource({
+    EcoPartnerImageSource? wikimedia,
+    EcoPartnerImageSource? mapillary,
+  }) : _wikimedia = wikimedia ?? WikimediaPartnerImageSource(),
+       _mapillary = mapillary ?? MapillaryPartnerImageSource();
+
+  final EcoPartnerImageSource _wikimedia;
+  final EcoPartnerImageSource _mapillary;
+
+  @override
+  Future<List<EcoPartner>> enrich(List<EcoPartner> partners) async {
+    var enriched = partners;
+    try {
+      enriched = await _wikimedia
+          .enrich(partners)
+          .timeout(const Duration(seconds: 6));
+    } catch (_) {}
+    try {
+      return await _mapillary
+          .enrich(enriched)
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {
+      return enriched;
+    }
+  }
+}
+
+class WikimediaPartnerImageSource implements EcoPartnerImageSource {
+  WikimediaPartnerImageSource({Dio? dio})
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              connectTimeout: const Duration(seconds: 5),
+              receiveTimeout: const Duration(seconds: 5),
+              headers: const {
+                'User-Agent':
+                    'HiddenGemTouristApp/1.0 '
+                    '(https://github.com/ligitpizza/hidden-gem-tourist-app; Eco Partner images)',
+              },
+            ),
+          );
+
+  final Dio _dio;
+  static const _candidateLimitPerCategory = 8;
+
+  @override
+  Future<List<EcoPartner>> enrich(List<EcoPartner> partners) async {
+    final candidates = <EcoPartner>[];
+    for (final category in EcoPartnerCategory.values) {
+      candidates.addAll(
+        partners
+            .where(
+              (partner) =>
+                  partner.category == category && partner.imageUrl == null,
+            )
+            .take(_candidateLimitPerCategory),
+      );
+    }
+    if (candidates.isEmpty) return partners;
+
+    final wikipediaResponse = await _dio.get<dynamic>(
+      'https://en.wikipedia.org/w/api.php',
+      queryParameters: {
+        'action': 'query',
+        'format': 'json',
+        'formatversion': 2,
+        'redirects': 1,
+        'titles': candidates
+            .map((partner) => partner.name.replaceAll('|', ' '))
+            .join('|'),
+        'prop': 'pageimages|info',
+        'piprop': 'thumbnail|name',
+        'pithumbsize': 1200,
+        'inprop': 'url',
+        'origin': '*',
+      },
+    );
+    final wikipediaPages = _wikimediaPages(wikipediaResponse.data);
+    final pagesByName = <String, Map<String, dynamic>>{
+      for (final page in wikipediaPages)
+        if (page['missing'] != true) _normalize('${page['title'] ?? ''}'): page,
+    };
+    final matches =
+        <
+          String,
+          List<({EcoPartner partner, String thumbnail, String fileTitle})>
+        >{};
+    for (final partner in candidates) {
+      final page = pagesByName[_normalize(partner.name)];
+      final thumbnailValue = page?['thumbnail'];
+      final thumbnail = thumbnailValue is Map
+          ? '${thumbnailValue['source'] ?? ''}'.trim()
+          : '';
+      final imageTitle = '${page?['pageimage'] ?? ''}'.trim();
+      if (!_isWebUrl(thumbnail) || imageTitle.isEmpty) continue;
+      final fileTitle = imageTitle.startsWith('File:')
+          ? imageTitle
+          : 'File:$imageTitle';
+      matches.putIfAbsent(_normalize(fileTitle), () => []).add((
+        partner: partner,
+        thumbnail: thumbnail,
+        fileTitle: fileTitle,
+      ));
+    }
+    if (matches.isEmpty) return partners;
+
+    final commonsResponse = await _dio.get<dynamic>(
+      'https://commons.wikimedia.org/w/api.php',
+      queryParameters: {
+        'action': 'query',
+        'format': 'json',
+        'formatversion': 2,
+        'titles': matches.values
+            .map((values) => values.first.fileTitle)
+            .join('|'),
+        'prop': 'imageinfo',
+        'iiprop': 'url|extmetadata',
+        'origin': '*',
+      },
+    );
+    final replacements = <String, EcoPartner>{};
+    for (final page in _wikimediaPages(commonsResponse.data)) {
+      final pageMatches = matches[_normalize('${page['title'] ?? ''}')];
+      final imageInfoValues = page['imageinfo'];
+      if (pageMatches == null ||
+          imageInfoValues is! List ||
+          imageInfoValues.isEmpty) {
+        continue;
+      }
+      final imageInfo = imageInfoValues.first;
+      if (imageInfo is! Map) continue;
+      final metadata = imageInfo['extmetadata'];
+      if (metadata is! Map) continue;
+      final artist = _wikimediaMetadataValue(metadata, 'Artist');
+      final license = _wikimediaMetadataValue(metadata, 'LicenseShortName');
+      final sourceUrl = '${imageInfo['descriptionurl'] ?? ''}'.trim();
+      if (artist.isEmpty || license.isEmpty || !_isWebUrl(sourceUrl)) continue;
+      for (final match in pageMatches) {
+        replacements[match.partner.id] = match.partner.withImage(
+          url: match.thumbnail,
+          imageSourceName: 'Photo: $artist · $license · Wikimedia Commons',
+          imageSourceUrl: sourceUrl,
+        );
+      }
+    }
+    return partners
+        .map((partner) => replacements[partner.id] ?? partner)
+        .toList();
+  }
+
+  static String _normalize(String value) =>
+      value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
 }
 
 class MapillaryPartnerImageSource implements EcoPartnerImageSource {
@@ -942,6 +1098,35 @@ double? _nullableNumber(dynamic value) =>
 String? _text(dynamic value) {
   final text = '${value ?? ''}'.trim();
   return text.isEmpty ? null : text;
+}
+
+bool _isWebUrl(String value) {
+  final uri = Uri.tryParse(value);
+  return uri != null && (uri.scheme == 'https' || uri.scheme == 'http');
+}
+
+List<Map<String, dynamic>> _wikimediaPages(dynamic payload) {
+  if (payload is! Map) return const [];
+  final query = payload['query'];
+  if (query is! Map) return const [];
+  final pages = query['pages'];
+  if (pages is! List) return const [];
+  return pages
+      .whereType<Map>()
+      .map((value) => value.cast<String, dynamic>())
+      .toList();
+}
+
+String _wikimediaMetadataValue(Map<dynamic, dynamic> metadata, String key) {
+  final value = metadata[key];
+  if (value is! Map) return '';
+  return '${value['value'] ?? ''}'
+      .replaceAll(RegExp('<[^>]*>'), ' ')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
 }
 
 String? _osmImageUrl(Map<String, dynamic> tags) {

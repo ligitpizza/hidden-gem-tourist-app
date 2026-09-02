@@ -16,3 +16,18 @@ class PackingChecklistSection {
   final String name;
   final List<PackingChecklistItem> items;
 }
+
+class PackingTripDateRange {
+  PackingTripDateRange({required DateTime start, required DateTime end})
+    : start = DateTime(start.year, start.month, start.day),
+      end = DateTime(end.year, end.month, end.day) {
+    if (this.end.isBefore(this.start)) {
+      throw ArgumentError.value(end, 'end', 'must not be before start');
+    }
+  }
+
+  final DateTime start;
+  final DateTime end;
+
+  bool get isSingleDay => start == end;
+}
