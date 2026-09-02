@@ -5,17 +5,24 @@
 ///
 /// A keyword preceded *or followed* by a negation cue within a few words
 /// ("unable to use wheelchair", "no parking", "wheelchair accessibility is
-/// not good") is not tagged with its positive meaning — a small,
-/// deterministic word-window check in both directions, not real negation
-/// scope parsing. It won't catch every phrasing (e.g. a negation more than
-/// [_negationWindowWords] words away in either direction). For keywords
-/// whose [_KeywordRule]
-/// defines a [_KeywordRule.negatedTag] (currently wheelchair/stroller), a
-/// negated mention tags that explicit opposite instead of just being
-/// dropped — e.g. "unable to use wheelchair" tags "wheelchair-unfriendly".
-/// A keyword mentioned both negated and plainly elsewhere in the same
-/// review tags both the positive and negative tag (an honest reflection of
-/// a mixed review), since each occurrence is judged independently.
+/// not good", "poor wheelchair access", "wasn't wheelchair friendly") is
+/// not tagged with its positive meaning — a small, deterministic
+/// word-window check in both directions, not real negation scope parsing.
+/// Cues are matched as whole words (via [_negationWords]/
+/// [_hasContractedNegationWord]) or, for multi-word phrases
+/// ([_negationPhrases]), as a substring — never a bare substring on a
+/// single word, so "enough"/"narrow" don't false-positive just for
+/// containing "no". It still won't catch every phrasing (e.g. a negation
+/// more than [_negationWindowWords] words away in either direction, or a
+/// negation word not in [_negationWords]/[_negationPhrases] — this is a
+/// curated list, not exhaustive English negation). For keywords whose
+/// [_KeywordRule] defines a [_KeywordRule.negatedTag] (currently
+/// wheelchair/stroller), a negated mention tags that explicit opposite
+/// instead of just being dropped — e.g. "unable to use wheelchair" tags
+/// "wheelchair-unfriendly". A keyword mentioned both negated and plainly
+/// elsewhere in the same review tags both the positive and negative tag
+/// (an honest reflection of a mixed review), since each occurrence is
+/// judged independently.
 class KeywordTaggingEngine {
   KeywordTaggingEngine._();
 
@@ -48,21 +55,44 @@ class KeywordTaggingEngine {
     'dog': _KeywordRule('pet-friendly'),
   };
 
-  static const List<String> _negationCues = [
+  // Single-word cues — matched as whole words against the window, never as
+  // a bare substring (a naive `.contains('no')` would false-positive on
+  // "enough" or "info"). Any contraction ending in "n't" (isn't, aren't,
+  // doesn't, wasn't, weren't, hasn't, haven't, hadn't, won't, wouldn't,
+  // shouldn't, couldn't, can't, mustn't, needn't, ain't, ...) is caught
+  // generically by [_hasContractedNegationWord] instead of being
+  // enumerated here — one rule instead of a dozen near-identical entries.
+  static const Set<String> _negationWords = {
     'not',
     'no',
     'without',
-    "isn't",
-    "aren't",
-    "doesn't",
-    "don't",
     'cannot',
-    "can't",
     'unable',
-    'lack of',
     'lacking',
     'never',
-  ];
+    'none',
+    'nothing',
+    'neither',
+    'nowhere',
+    'zero',
+    'hardly',
+    'barely',
+    'scarcely',
+    'poor',
+    'poorly',
+    'bad',
+    'terrible',
+    'awful',
+    'insufficient',
+    'missing',
+    'absent',
+    'limited',
+  };
+
+  // Multi-word cues can't be matched as a single token, so these stay as
+  // substring checks against the window text — short enough phrases that
+  // an accidental match inside an unrelated word is effectively impossible.
+  static const List<String> _negationPhrases = ['lack of', 'far from'];
 
   static const int _negationWindowWords = 4;
 
@@ -113,7 +143,7 @@ class KeywordTaggingEngine {
     final words = before.split(RegExp(r'\s+'));
     final window =
         words.length <= _negationWindowWords ? words : words.sublist(words.length - _negationWindowWords);
-    return _negationCues.any(window.join(' ').contains);
+    return _windowHasNegationCue(window);
   }
 
   static bool _hasNegationCueAfter(String lower, int afterKeywordIndex) {
@@ -122,8 +152,23 @@ class KeywordTaggingEngine {
 
     final words = after.split(RegExp(r'\s+'));
     final window = words.length <= _negationWindowWords ? words : words.sublist(0, _negationWindowWords);
-    return _negationCues.any(window.join(' ').contains);
+    return _windowHasNegationCue(window);
   }
+
+  static bool _windowHasNegationCue(List<String> window) {
+    // Trailing punctuation ("stroller." / "friendly,") would otherwise
+    // stop a whole-word match on a cue that's followed by a comma/period.
+    final normalized = window.map((w) => w.replaceAll(RegExp(r"[^\w']"), '')).toList();
+
+    if (normalized.any((w) => _negationWords.contains(w) || _hasContractedNegationWord(w))) {
+      return true;
+    }
+    return _negationPhrases.any(normalized.join(' ').contains);
+  }
+
+  /// True for any contraction ending in "n't" (isn't, doesn't, wasn't,
+  /// hasn't, won't, couldn't, ...) — see [_negationWords]'s doc comment.
+  static bool _hasContractedNegationWord(String word) => word.endsWith("n't");
 }
 
 class _KeywordRule {

@@ -75,6 +75,33 @@ void main() {
       expect(tags, contains('stroller-unfriendly'));
     });
 
+    test('catches any contraction ending in n\'t, not just the ones explicitly listed', () {
+      expect(KeywordTaggingEngine.tagsFor("wasn't wheelchair accessible"), ['wheelchair-unfriendly']);
+      expect(KeywordTaggingEngine.tagsFor("hasn't had a ramp installed"), isEmpty);
+      expect(KeywordTaggingEngine.tagsFor("won't fit a stroller through"), ['stroller-unfriendly']);
+      expect(KeywordTaggingEngine.tagsFor("wheelchair access wouldn't work here"), ['wheelchair-unfriendly']);
+    });
+
+    test('recognises negative-sentiment words as negation cues, not just explicit negatives', () {
+      expect(KeywordTaggingEngine.tagsFor('poor wheelchair access'), ['wheelchair-unfriendly']);
+      expect(KeywordTaggingEngine.tagsFor('wheelchair access is limited'), ['wheelchair-unfriendly']);
+      expect(KeywordTaggingEngine.tagsFor('hardly any parking'), isEmpty);
+      expect(KeywordTaggingEngine.tagsFor('stroller support here is terrible'), ['stroller-unfriendly']);
+    });
+
+    test('a bare-substring negation word does not false-positive inside an unrelated word', () {
+      // "enough" contains "no" as a substring, and "narrow" contains "no" —
+      // neither should be treated as a negation cue for a nearby keyword.
+      expect(KeywordTaggingEngine.tagsFor('enough wheelchair access, narrow path though'),
+          containsAll(['wheelchair-friendly', 'narrow pathway']));
+      expect(KeywordTaggingEngine.tagsFor('enough wheelchair access, narrow path though'),
+          isNot(contains('wheelchair-unfriendly')));
+    });
+
+    test('a negation cue followed by punctuation still counts', () {
+      expect(KeywordTaggingEngine.tagsFor('not, in my opinion, wheelchair friendly'), ['wheelchair-unfriendly']);
+    });
+
     test('a negation cue far outside the word window does not suppress the tag', () {
       // "Not" here modifies "crowded", not "wheelchair" — 7 words separate
       // them, past the 4-word negation window, so wheelchair still tags
