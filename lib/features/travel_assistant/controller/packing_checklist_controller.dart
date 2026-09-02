@@ -80,6 +80,7 @@ class PackingChecklistController extends ChangeNotifier {
   PackingLocationOption? get selectedLocation => locationOptions
       .where((option) => option.id == selectedLocationId)
       .firstOrNull;
+  bool get canEditTripDates => selectedLocation?.datesEditable ?? false;
   String get readinessStatus => switch (readinessScore) {
     >= 85 => 'READY TO WANDER',
     >= 60 => 'ALMOST READY',
@@ -189,12 +190,14 @@ class PackingChecklistController extends ChangeNotifier {
   }
 
   Future<void> setTripDates(PackingTripDateRange value) async {
+    if (!canEditTripDates) return;
     tripDates = value;
     notifyListeners();
     await _persistence.saveTripDates(selectedLocationId ?? 'essentials', value);
   }
 
   Future<void> clearTripDates() async {
+    if (!canEditTripDates) return;
     tripDates = null;
     notifyListeners();
     await _persistence.clearTripDates(selectedLocationId ?? 'essentials');
@@ -202,14 +205,18 @@ class PackingChecklistController extends ChangeNotifier {
 
   Future<void> _loadLocationState() async {
     final locationId = selectedLocationId ?? 'essentials';
+    final selected = selectedLocation;
     final values = await Future.wait<Object?>([
       _persistence.loadPackedIds(locationId),
-      _persistence.loadTripDates(locationId),
+      if (selected?.datesEditable == true)
+        _persistence.loadTripDates(locationId),
     ]);
     packedIds
       ..clear()
       ..addAll(values[0] as Set<String>);
-    tripDates = values[1] as PackingTripDateRange?;
+    tripDates = selected?.datesEditable == true
+        ? values[1] as PackingTripDateRange?
+        : null;
     final validIds =
         sections
             .expand((section) => section.items)
@@ -246,6 +253,133 @@ class PackingChecklistController extends ChangeNotifier {
         name: name,
         reason: reason,
       );
+    }
+
+    List<PackingChecklistSection> build() => groups.entries
+        .map(
+          (entry) => PackingChecklistSection(
+            name: entry.key,
+            items: entry.value.values.toList(),
+          ),
+        )
+        .toList();
+
+    if (ecoPartnerCategory == EcoPartnerCategory.dining) {
+      add(
+        'Dining Essentials',
+        'dining_reservation',
+        'Restaurant reservation details',
+        'Keep the booking time and confirmation handy',
+      );
+      add(
+        'Dining Essentials',
+        'dietary_note',
+        'Dietary or allergy note',
+        'Clearly communicate allergies and dietary requirements',
+      );
+      add(
+        'Dining Essentials',
+        'cashless_payment',
+        'Cash or cashless payment method',
+        'Some dining venues have limited payment options',
+      );
+      add(
+        'Dining Essentials',
+        'reusable_container',
+        'Reusable food container',
+        'Bring leftovers home without single-use takeaway packaging',
+      );
+      if (weather != null && weather.rainProbability >= 40) {
+        add(
+          'Weather Essentials',
+          'umbrella',
+          'Compact umbrella',
+          'Rain probability reaches ${weather.rainProbability.round()}%',
+        );
+      }
+      return build();
+    }
+
+    if (ecoPartnerCategory == EcoPartnerCategory.stay) {
+      add(
+        'Hotel Check-in',
+        'photo_id',
+        'Photo identification',
+        'Hotels may request identification during check-in',
+      );
+      add(
+        'Hotel Check-in',
+        'hotel_reservation',
+        'Hotel reservation and check-in details',
+        'Keep the booking reference and check-in time handy',
+      );
+      add(
+        'Overnight Essentials',
+        'medication',
+        'Personal medication',
+        'Pack the medication needed during the stay',
+      );
+      add(
+        'Overnight Essentials',
+        'refillable_toiletries',
+        'Refillable toiletries',
+        'Use refillable containers to reduce single-use packaging',
+      );
+      add(
+        'Overnight Essentials',
+        'sleepwear',
+        'Sleepwear',
+        'Pack for a comfortable overnight stay',
+      );
+      add(
+        'Overnight Essentials',
+        'change_clothes',
+        'Change of clothes',
+        'Prepare an outfit for the following day',
+      );
+      add(
+        'Overnight Essentials',
+        'device_charger',
+        'Device charger',
+        'Charge the devices needed during the stay',
+      );
+      add(
+        'Overnight Essentials',
+        'reusable_slippers',
+        'Reusable slippers',
+        'Avoid disposable hotel slippers where possible',
+      );
+      if (weather != null && weather.rainProbability >= 40) {
+        add(
+          'Weather Essentials',
+          'umbrella',
+          'Compact umbrella',
+          'Rain probability reaches ${weather.rainProbability.round()}%',
+        );
+        add(
+          'Weather Essentials',
+          'rain_jacket',
+          'Light rain jacket',
+          'Recommended for the destination forecast',
+        );
+      }
+      if (weather != null && weather.maximumTemperature >= 31) {
+        add(
+          'Weather Essentials',
+          'breathable_clothes',
+          'Light breathable clothing',
+          'Suitable for the warm forecast',
+        );
+      }
+      if (weather != null && weather.minimumTemperature <= 18) {
+        add(
+          'Weather Essentials',
+          'light_layer',
+          'Light warm layer',
+          'Suitable for the cooler forecast',
+        );
+      }
+      return build();
     }
 
     add(
@@ -303,60 +437,6 @@ class PackingChecklistController extends ChangeNotifier {
       'Suitable for exploring destinations',
     );
 
-    if (ecoPartnerCategory == EcoPartnerCategory.stay) {
-      add(
-        'Hotel Stay',
-        'hotel_reservation',
-        'Hotel reservation and check-in details',
-        'Keep the Eco Partner booking reference and check-in time handy',
-      );
-      add(
-        'Hotel Stay',
-        'refillable_toiletries',
-        'Refillable toiletries',
-        'Use your own refillable containers to reduce single-use packaging',
-      );
-      add(
-        'Hotel Stay',
-        'sleepwear',
-        'Sleepwear',
-        'Pack for a comfortable overnight hotel stay',
-      );
-      add(
-        'Hotel Stay',
-        'reusable_slippers',
-        'Reusable slippers',
-        'Avoid disposable hotel slippers where possible',
-      );
-    }
-
-    if (ecoPartnerCategory == EcoPartnerCategory.dining) {
-      add(
-        'Dining Essentials',
-        'dietary_note',
-        'Dietary requirement note',
-        'Useful when communicating allergies or preferences',
-      );
-      add(
-        'Dining Essentials',
-        'cashless_payment',
-        'Cash or cashless payment method',
-        'Some dining venues have limited payment options',
-      );
-      add(
-        'Dining Essentials',
-        'reusable_container',
-        'Reusable food container',
-        'Bring leftovers home without single-use takeaway packaging',
-      );
-      add(
-        'Dining Essentials',
-        'reusable_cutlery',
-        'Reusable cutlery set',
-        'Helps avoid disposable utensils when dining on the go',
-      );
-    }
-
     if (weather != null) {
       if (weather.rainProbability >= 40) {
         add(
@@ -411,15 +491,6 @@ class PackingChecklistController extends ChangeNotifier {
     }
 
     for (final category in categories) {
-      if (ecoPartnerCategory == EcoPartnerCategory.stay &&
-          category == DestinationCategory.attraction) {
-        continue;
-      }
-      if (ecoPartnerCategory == EcoPartnerCategory.dining &&
-          (category == DestinationCategory.restaurant ||
-              category == DestinationCategory.cafe)) {
-        continue;
-      }
       switch (category) {
         case DestinationCategory.beach:
         case DestinationCategory.island:
@@ -595,13 +666,6 @@ class PackingChecklistController extends ChangeNotifier {
       }
     }
 
-    return groups.entries
-        .map(
-          (entry) => PackingChecklistSection(
-            name: entry.key,
-            items: entry.value.values.toList(),
-          ),
-        )
-        .toList();
+    return build();
   }
 }

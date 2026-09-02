@@ -29,5 +29,5 @@ class PackingTripDateRange {
   final DateTime start;
   final DateTime end;
 
-  bool get isSingleDay => start == end;
+  bool get isSingleDay => start.isAtSameMomentAs(end);
 }

@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:collab/features/travel_prep/model/travel_document.dart';
-import 'package:collab/features/travel_prep/model/travel_document_repository.dart';
+import 'package:collab/features/travel_assistant/model/travel_document.dart';
+import 'package:collab/features/travel_assistant/model/travel_document_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

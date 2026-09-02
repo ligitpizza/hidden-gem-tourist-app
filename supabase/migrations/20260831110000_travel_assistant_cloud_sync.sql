@@ -1,4 +1,4 @@
--- Travel Prep cloud persistence. Everything used here is available on the
+-- Travel Assistant cloud persistence. Everything used here is available on the
 -- Supabase Free plan: Postgres, Auth and a private Storage bucket.
 create table if not exists public.travel_documents (
   id text not null,

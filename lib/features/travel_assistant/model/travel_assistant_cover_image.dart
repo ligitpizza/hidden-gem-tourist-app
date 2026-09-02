@@ -6,10 +6,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'packing_location_source.dart';
 
-enum TravelPrepCoverSource { curated, wikipedia }
+enum TravelAssistantCoverSource { curated, wikipedia }
 
-class TravelPrepCoverImage {
-  const TravelPrepCoverImage({
+class TravelAssistantCoverImage {
+  const TravelAssistantCoverImage({
     required this.imageUrl,
     required this.attribution,
     required this.source,
@@ -19,7 +19,7 @@ class TravelPrepCoverImage {
   final String imageUrl;
   final String attribution;
   final String? attributionUrl;
-  final TravelPrepCoverSource source;
+  final TravelAssistantCoverSource source;
 
   Map<String, dynamic> toJson() => {
     'imageUrl': imageUrl,
@@ -28,17 +28,17 @@ class TravelPrepCoverImage {
     'source': source.name,
   };
 
-  static TravelPrepCoverImage? fromJson(Map<String, dynamic> json) {
+  static TravelAssistantCoverImage? fromJson(Map<String, dynamic> json) {
     final imageUrl = '${json['imageUrl'] ?? ''}'.trim();
     final attribution = '${json['attribution'] ?? ''}'.trim();
     final sourceName = '${json['source'] ?? ''}';
     if (imageUrl.isEmpty || attribution.isEmpty) return null;
-    final source = TravelPrepCoverSource.values
+    final source = TravelAssistantCoverSource.values
         .where((value) => value.name == sourceName)
         .firstOrNull;
     if (source == null) return null;
     final attributionUrl = '${json['attributionUrl'] ?? ''}'.trim();
-    return TravelPrepCoverImage(
+    return TravelAssistantCoverImage(
       imageUrl: imageUrl,
       attribution: attribution,
       attributionUrl: attributionUrl.isEmpty ? null : attributionUrl,
@@ -47,40 +47,42 @@ class TravelPrepCoverImage {
   }
 }
 
-abstract interface class TravelPrepCoverImageResolverContract {
-  Future<TravelPrepCoverImage?> resolve(PackingLocationOption location);
+abstract interface class TravelAssistantCoverImageResolverContract {
+  Future<TravelAssistantCoverImage?> resolve(PackingLocationOption location);
 }
 
-abstract interface class TravelPrepCuratedCoverSourceContract {
-  Future<TravelPrepCoverImage?> resolve(PackingLocationOption location);
+abstract interface class TravelAssistantCuratedCoverSourceContract {
+  Future<TravelAssistantCoverImage?> resolve(PackingLocationOption location);
 }
 
-abstract interface class TravelPrepWikimediaCoverSourceContract {
-  Future<TravelPrepCoverImage?> resolve(PackingLocationOption location);
+abstract interface class TravelAssistantWikimediaCoverSourceContract {
+  Future<TravelAssistantCoverImage?> resolve(PackingLocationOption location);
 }
 
-abstract interface class TravelPrepCoverCacheContract {
-  Future<TravelPrepCoverImage?> read(String locationId);
+abstract interface class TravelAssistantCoverCacheContract {
+  Future<TravelAssistantCoverImage?> read(String locationId);
 
-  Future<void> write(String locationId, TravelPrepCoverImage image);
+  Future<void> write(String locationId, TravelAssistantCoverImage image);
 }
 
-class TravelPrepCoverImageResolver
-    implements TravelPrepCoverImageResolverContract {
-  TravelPrepCoverImageResolver({
-    TravelPrepCuratedCoverSourceContract? curated,
-    TravelPrepWikimediaCoverSourceContract? wikimedia,
-    TravelPrepCoverCacheContract? cache,
-  }) : _curated = curated ?? SupabaseTravelPrepCuratedCoverSource(),
-       _wikimedia = wikimedia ?? WikimediaTravelPrepCoverSource(),
-       _cache = cache ?? SharedPreferencesTravelPrepCoverCache();
+class TravelAssistantCoverImageResolver
+    implements TravelAssistantCoverImageResolverContract {
+  TravelAssistantCoverImageResolver({
+    TravelAssistantCuratedCoverSourceContract? curated,
+    TravelAssistantWikimediaCoverSourceContract? wikimedia,
+    TravelAssistantCoverCacheContract? cache,
+  }) : _curated = curated ?? SupabaseTravelAssistantCuratedCoverSource(),
+       _wikimedia = wikimedia ?? WikimediaTravelAssistantCoverSource(),
+       _cache = cache ?? SharedPreferencesTravelAssistantCoverCache();
 
-  final TravelPrepCuratedCoverSourceContract _curated;
-  final TravelPrepWikimediaCoverSourceContract _wikimedia;
-  final TravelPrepCoverCacheContract _cache;
+  final TravelAssistantCuratedCoverSourceContract _curated;
+  final TravelAssistantWikimediaCoverSourceContract _wikimedia;
+  final TravelAssistantCoverCacheContract _cache;
 
   @override
-  Future<TravelPrepCoverImage?> resolve(PackingLocationOption location) async {
+  Future<TravelAssistantCoverImage?> resolve(
+    PackingLocationOption location,
+  ) async {
     try {
       final curated = await _curated.resolve(location);
       if (curated != null) return curated;
@@ -102,15 +104,17 @@ class TravelPrepCoverImageResolver
   }
 }
 
-class SupabaseTravelPrepCuratedCoverSource
-    implements TravelPrepCuratedCoverSourceContract {
-  SupabaseTravelPrepCuratedCoverSource({SupabaseClient? client})
+class SupabaseTravelAssistantCuratedCoverSource
+    implements TravelAssistantCuratedCoverSourceContract {
+  SupabaseTravelAssistantCuratedCoverSource({SupabaseClient? client})
     : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
 
   @override
-  Future<TravelPrepCoverImage?> resolve(PackingLocationOption location) async {
+  Future<TravelAssistantCoverImage?> resolve(
+    PackingLocationOption location,
+  ) async {
     final destinationId = location.destinationId?.trim() ?? '';
     if (destinationId.isNotEmpty) {
       try {
@@ -127,10 +131,10 @@ class SupabaseTravelPrepCuratedCoverSource
               .where(_isWebUrl)
               .firstOrNull;
           if (imageUrl != null) {
-            return TravelPrepCoverImage(
+            return TravelAssistantCoverImage(
               imageUrl: imageUrl,
               attribution: 'Destination photo',
-              source: TravelPrepCoverSource.curated,
+              source: TravelAssistantCoverSource.curated,
             );
           }
         }
@@ -141,13 +145,13 @@ class SupabaseTravelPrepCuratedCoverSource
     if (!_isWebUrl(trustedUrl) || _isMapillary(location)) return null;
     final attribution = location.trustedImageAttribution?.trim();
     final attributionUrl = location.trustedImageSourceUrl?.trim();
-    return TravelPrepCoverImage(
+    return TravelAssistantCoverImage(
       imageUrl: trustedUrl,
       attribution: attribution?.isNotEmpty == true
           ? attribution!
           : 'Destination photo',
       attributionUrl: _isWebUrl(attributionUrl ?? '') ? attributionUrl : null,
-      source: TravelPrepCoverSource.curated,
+      source: TravelAssistantCoverSource.curated,
     );
   }
 
@@ -158,9 +162,9 @@ class SupabaseTravelPrepCuratedCoverSource
   ].whereType<String>().join(' ').toLowerCase().contains('mapillary');
 }
 
-class WikimediaTravelPrepCoverSource
-    implements TravelPrepWikimediaCoverSourceContract {
-  WikimediaTravelPrepCoverSource({Dio? dio})
+class WikimediaTravelAssistantCoverSource
+    implements TravelAssistantWikimediaCoverSourceContract {
+  WikimediaTravelAssistantCoverSource({Dio? dio})
     : _dio =
           dio ??
           Dio(
@@ -178,7 +182,9 @@ class WikimediaTravelPrepCoverSource
   final Dio _dio;
 
   @override
-  Future<TravelPrepCoverImage?> resolve(PackingLocationOption location) async {
+  Future<TravelAssistantCoverImage?> resolve(
+    PackingLocationOption location,
+  ) async {
     final lookupName = location.coverLookupName.trim();
     if (lookupName.isEmpty) return null;
     final pageResponse = await _dio.get<dynamic>(
@@ -239,7 +245,7 @@ class WikimediaTravelPrepCoverSource
     if (artist.isEmpty || license.isEmpty) return null;
     final descriptionUrl = '${imageInfo['descriptionurl'] ?? ''}'.trim();
     final pageUrl = '${page['fullurl'] ?? ''}'.trim();
-    return TravelPrepCoverImage(
+    return TravelAssistantCoverImage(
       imageUrl: thumbnailUrl,
       attribution: 'Photo: $artist · $license',
       attributionUrl: _isWebUrl(descriptionUrl)
@@ -247,7 +253,7 @@ class WikimediaTravelPrepCoverSource
           : _isWebUrl(pageUrl)
           ? pageUrl
           : null,
-      source: TravelPrepCoverSource.wikipedia,
+      source: TravelAssistantCoverSource.wikipedia,
     );
   }
 
@@ -284,9 +290,9 @@ class WikimediaTravelPrepCoverSource
       .trim();
 }
 
-class SharedPreferencesTravelPrepCoverCache
-    implements TravelPrepCoverCacheContract {
-  SharedPreferencesTravelPrepCoverCache({
+class SharedPreferencesTravelAssistantCoverCache
+    implements TravelAssistantCoverCacheContract {
+  SharedPreferencesTravelAssistantCoverCache({
     Future<SharedPreferences> Function()? preferences,
     this.ttl = const Duration(days: 7),
   }) : _preferences = preferences ?? SharedPreferences.getInstance;
@@ -294,32 +300,49 @@ class SharedPreferencesTravelPrepCoverCache
   final Future<SharedPreferences> Function() _preferences;
   final Duration ttl;
 
-  String _key(String locationId) => 'travel_prep_cover_v1_$locationId';
+  String _key(String locationId) => 'travel_assistant_cover_v1_$locationId';
+  List<String> _legacyKeys(String locationId) => [
+    'travel_prep_cover_v1_$locationId',
+    'smart_assistant_cover_v1_$locationId',
+  ];
 
   @override
-  Future<TravelPrepCoverImage?> read(String locationId) async {
+  Future<TravelAssistantCoverImage?> read(String locationId) async {
     final preferences = await _preferences();
-    final encoded = preferences.getString(_key(locationId));
+    final key = _key(locationId);
+    var sourceKey = key;
+    var encoded = preferences.getString(key);
+    if (encoded == null) {
+      for (final legacyKey in _legacyKeys(locationId)) {
+        encoded = preferences.getString(legacyKey);
+        if (encoded == null) continue;
+        sourceKey = legacyKey;
+        await preferences.setString(key, encoded);
+        await preferences.remove(legacyKey);
+        sourceKey = key;
+        break;
+      }
+    }
     if (encoded == null) return null;
     try {
       final value = (jsonDecode(encoded) as Map).cast<String, dynamic>();
       final savedAt = DateTime.tryParse('${value['savedAt'] ?? ''}');
       if (savedAt == null || DateTime.now().difference(savedAt) > ttl) {
-        await preferences.remove(_key(locationId));
+        await preferences.remove(sourceKey);
         return null;
       }
       final image = value['image'];
       return image is Map
-          ? TravelPrepCoverImage.fromJson(image.cast<String, dynamic>())
+          ? TravelAssistantCoverImage.fromJson(image.cast<String, dynamic>())
           : null;
     } catch (_) {
-      await preferences.remove(_key(locationId));
+      await preferences.remove(sourceKey);
       return null;
     }
   }
 
   @override
-  Future<void> write(String locationId, TravelPrepCoverImage image) async {
+  Future<void> write(String locationId, TravelAssistantCoverImage image) async {
     final preferences = await _preferences();
     await preferences.setString(
       _key(locationId),

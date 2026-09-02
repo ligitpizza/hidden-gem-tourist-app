@@ -12,33 +12,34 @@ import '../../../core/router/shell_routes.dart';
 import '../../../shared/models/destination.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../controller/packing_checklist_controller.dart';
-import '../controller/travel_prep_dashboard_controller.dart';
+import '../controller/travel_assistant_dashboard_controller.dart';
 import '../model/packing_checklist.dart';
 import '../model/packing_location_source.dart';
 import '../model/travel_document.dart';
 import '../model/travel_document_repository.dart';
-import '../model/travel_prep_cover_image.dart';
+import '../model/travel_assistant_cover_image.dart';
 import '../model/vault_pin_service.dart';
 import 'travel_document_viewer_screen.dart';
 import 'emergency_contacts_screen.dart';
 
 export 'eco_partner_screen.dart';
 
-class TravelPrepDashboardScreen extends StatefulWidget {
-  const TravelPrepDashboardScreen({super.key, this.controller});
+class TravelAssistantDashboardScreen extends StatefulWidget {
+  const TravelAssistantDashboardScreen({super.key, this.controller});
 
-  final TravelPrepDashboardController? controller;
+  final TravelAssistantDashboardController? controller;
 
   @override
-  State<TravelPrepDashboardScreen> createState() =>
-      _TravelPrepDashboardScreenState();
+  State<TravelAssistantDashboardScreen> createState() =>
+      _TravelAssistantDashboardScreenState();
 }
 
-class _TravelPrepDashboardScreenState extends State<TravelPrepDashboardScreen> {
-  TravelPrepDashboardController? _dashboardController;
+class _TravelAssistantDashboardScreenState
+    extends State<TravelAssistantDashboardScreen> {
+  TravelAssistantDashboardController? _dashboardController;
   bool _ownsController = false;
 
-  TravelPrepDashboardController get _controller {
+  TravelAssistantDashboardController get _controller {
     _ensureControllerInitialized();
     return _dashboardController!;
   }
@@ -58,7 +59,7 @@ class _TravelPrepDashboardScreenState extends State<TravelPrepDashboardScreen> {
   }
 
   @override
-  void didUpdateWidget(covariant TravelPrepDashboardScreen oldWidget) {
+  void didUpdateWidget(covariant TravelAssistantDashboardScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.controller, widget.controller)) {
       _releaseController();
@@ -69,7 +70,8 @@ class _TravelPrepDashboardScreenState extends State<TravelPrepDashboardScreen> {
   void _ensureControllerInitialized() {
     if (_dashboardController != null) return;
 
-    final controller = widget.controller ?? TravelPrepDashboardController();
+    final controller =
+        widget.controller ?? TravelAssistantDashboardController();
     _dashboardController = controller;
     _ownsController = widget.controller == null;
     controller.addListener(_refresh);
@@ -117,11 +119,11 @@ class _TravelPrepDashboardScreenState extends State<TravelPrepDashboardScreen> {
     final checklist = _controller.checklist;
 
     return Scaffold(
-      appBar: const AppHeader.tabRoot(title: 'Travel Prep'),
+      appBar: const AppHeader.tabRoot(title: 'Travel Assistant'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          _TravelPrepHeroCard(
+          _TravelAssistantHeroCard(
             controller: _controller,
             onChooseDestination: _openChecklist,
           ),
@@ -166,13 +168,13 @@ class _TravelPrepDashboardScreenState extends State<TravelPrepDashboardScreen> {
   }
 }
 
-class _TravelPrepHeroCard extends StatelessWidget {
-  const _TravelPrepHeroCard({
+class _TravelAssistantHeroCard extends StatelessWidget {
+  const _TravelAssistantHeroCard({
     required this.controller,
     required this.onChooseDestination,
   });
 
-  final TravelPrepDashboardController controller;
+  final TravelAssistantDashboardController controller;
   final VoidCallback onChooseDestination;
 
   @override
@@ -319,7 +321,7 @@ class _TravelPrepHeroCard extends StatelessWidget {
 class _CoverAttribution extends StatelessWidget {
   const _CoverAttribution({required this.image});
 
-  final TravelPrepCoverImage image;
+  final TravelAssistantCoverImage image;
 
   @override
   Widget build(BuildContext context) {
@@ -495,7 +497,10 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
   Widget build(BuildContext context) {
     final score = _controller.readinessScore;
     return Scaffold(
-      appBar: const AppHeader.pushed(title: 'Packing Checklist'),
+      appBar: const AppHeader.pushed(
+        title: 'Packing Checklist',
+        fallbackPath: ShellRoutes.travelAssistant,
+      ),
       body: _controller.isLoading
           ? const Center(child: CircularProgressIndicator())
           : _controller.locationOptions.isEmpty
@@ -567,12 +572,15 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
                   ),
                 ],
                 const SizedBox(height: 12),
-                _PackingTripDatesCard(
-                  dates: _controller.tripDates,
-                  onSetDates: _selectTripDates,
-                  onClearDates: _controller.clearTripDates,
-                ),
-                const SizedBox(height: 10),
+                if (_controller.canEditTripDates) ...[
+                  _PackingTripDatesCard(
+                    dates: _controller.tripDates,
+                    isEditable: true,
+                    onSetDates: _selectTripDates,
+                    onClearDates: _controller.clearTripDates,
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 Text(
                   'Recommendations for ${_controller.tripLabel}',
                   style: Theme.of(context).textTheme.bodyLarge,
@@ -802,11 +810,13 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
 class _PackingTripDatesCard extends StatelessWidget {
   const _PackingTripDatesCard({
     required this.dates,
+    required this.isEditable,
     required this.onSetDates,
     required this.onClearDates,
   });
 
   final PackingTripDateRange? dates;
+  final bool isEditable;
   final VoidCallback onSetDates;
   final VoidCallback onClearDates;
 
@@ -815,7 +825,9 @@ class _PackingTripDatesCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final localizations = MaterialLocalizations.of(context);
     final value = dates == null
-        ? 'Add dates so this checklist matches your journey.'
+        ? isEditable
+              ? 'Add dates so this checklist matches your visit.'
+              : 'Dates unavailable. Edit and regenerate this itinerary to set them.'
         : dates!.isSingleDay
         ? localizations.formatShortDate(dates!.start)
         : '${localizations.formatShortDate(dates!.start)} – '
@@ -846,22 +858,33 @@ class _PackingTripDatesCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(value),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 4,
-                    runSpacing: 2,
-                    children: [
-                      TextButton(
-                        onPressed: onSetDates,
-                        child: Text(dates == null ? 'Set dates' : 'Edit'),
+                  if (!isEditable && dates != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'From saved itinerary',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
                       ),
-                      if (dates != null)
+                    ),
+                  ],
+                  if (isEditable) ...[
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 2,
+                      children: [
                         TextButton(
-                          onPressed: onClearDates,
-                          child: const Text('Clear'),
+                          onPressed: onSetDates,
+                          child: Text(dates == null ? 'Set dates' : 'Edit'),
                         ),
-                    ],
-                  ),
+                        if (dates != null)
+                          TextButton(
+                            onPressed: onClearDates,
+                            child: const Text('Clear'),
+                          ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1147,7 +1170,10 @@ class _EcoPartnersScreenState extends State<_LegacyEcoPartnersScreen> {
         ? partners
         : partners.where((item) => item.type == filter).toList();
     return Scaffold(
-      appBar: const AppHeader.pushed(title: 'Eco Partners'),
+      appBar: const AppHeader.pushed(
+        title: 'Eco Partners',
+        fallbackPath: ShellRoutes.travelAssistant,
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -1482,14 +1508,20 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        appBar: AppHeader.pushed(title: 'Document Vault'),
+        appBar: AppHeader.pushed(
+          title: 'Document Vault',
+          fallbackPath: ShellRoutes.travelAssistant,
+        ),
         body: Center(child: CircularProgressIndicator()),
       );
     }
     if (_unlocked) return _UnlockedDocumentVault(onLock: _lockVault);
 
     return Scaffold(
-      appBar: const AppHeader.pushed(title: 'Document Vault'),
+      appBar: const AppHeader.pushed(
+        title: 'Document Vault',
+        fallbackPath: ShellRoutes.travelAssistant,
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -1962,6 +1994,7 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
     return Scaffold(
       appBar: AppHeader.pushed(
         title: 'Document Vault',
+        fallbackPath: ShellRoutes.travelAssistant,
         actions: [
           IconButton(
             tooltip: 'Lock vault',

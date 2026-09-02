@@ -1,7 +1,7 @@
 /// Deterministic, rule-based keyword-to-tag pipeline (FR4.3, NFR9 — "not an
 /// NLP classifier", auditable/upgradeable later). Mirrors the pure/static
 /// classification style of OverpassEcoSource.classifyDiet
-/// (lib/features/travel_prep/model/eco_partner_repository.dart).
+/// (lib/features/travel_assistant/model/eco_partner_repository.dart).
 ///
 /// A keyword preceded by a negation cue within a few words ("unable to use
 /// wheelchair", "no parking") is not tagged with its positive meaning — a
@@ -19,8 +19,14 @@ class KeywordTaggingEngine {
 
   static const Map<String, _KeywordRule> _keywordToTag = {
     'slippery': _KeywordRule('slippery when wet'),
-    'wheelchair': _KeywordRule('wheelchair-friendly', negatedTag: 'wheelchair-unfriendly'),
-    'stroller': _KeywordRule('stroller-friendly', negatedTag: 'stroller-unfriendly'),
+    'wheelchair': _KeywordRule(
+      'wheelchair-friendly',
+      negatedTag: 'wheelchair-unfriendly',
+    ),
+    'stroller': _KeywordRule(
+      'stroller-friendly',
+      negatedTag: 'stroller-unfriendly',
+    ),
     'steep': _KeywordRule('steep terrain'),
     'stairs': _KeywordRule('many stairs'),
     'parking': _KeywordRule('parking available'),
@@ -69,7 +75,8 @@ class KeywordTaggingEngine {
     final tags = <String>[];
     for (final entry in _keywordToTag.entries) {
       final rule = entry.value;
-      if (!tags.contains(rule.tag) && _hasMatch(lower, entry.key, negated: false)) {
+      if (!tags.contains(rule.tag) &&
+          _hasMatch(lower, entry.key, negated: false)) {
         tags.add(rule.tag);
       }
       final negatedTag = rule.negatedTag;
@@ -100,8 +107,9 @@ class KeywordTaggingEngine {
     if (before.isEmpty) return false;
 
     final words = before.split(RegExp(r'\s+'));
-    final window =
-        words.length <= _negationWindowWords ? words : words.sublist(words.length - _negationWindowWords);
+    final window = words.length <= _negationWindowWords
+        ? words
+        : words.sublist(words.length - _negationWindowWords);
     final windowText = window.join(' ');
 
     return _negationCues.any(windowText.contains);

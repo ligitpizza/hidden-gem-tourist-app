@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../core/router/shell_routes.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../controller/eco_partner_controller.dart';
 import '../model/eco_partner.dart';
@@ -79,7 +80,10 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
     final shown = _controller.visiblePartners;
     final showSectionedHome = _controller.showSectionedHome;
     return Scaffold(
-      appBar: const AppHeader.pushed(title: 'Eco Partners'),
+      appBar: const AppHeader.pushed(
+        title: 'Eco Partners',
+        fallbackPath: ShellRoutes.travelAssistant,
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

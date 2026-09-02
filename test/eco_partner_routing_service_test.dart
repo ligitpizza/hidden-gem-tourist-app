@@ -1,4 +1,4 @@
-import 'package:collab/features/travel_prep/model/eco_partner_routing_service.dart';
+import 'package:collab/features/travel_assistant/model/eco_partner_routing_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';

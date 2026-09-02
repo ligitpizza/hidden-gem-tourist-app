@@ -1,5 +1,5 @@
-import 'package:collab/features/travel_prep/model/eco_partner.dart';
-import 'package:collab/features/travel_prep/model/eco_partner_repository.dart';
+import 'package:collab/features/travel_assistant/model/eco_partner.dart';
+import 'package:collab/features/travel_assistant/model/eco_partner_repository.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 

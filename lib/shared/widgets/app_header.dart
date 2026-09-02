@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../config/theme.dart';
 
@@ -12,21 +13,29 @@ import '../../config/theme.dart';
 ///   Journal Detail, Check-in History, …): a real back button.
 class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   const AppHeader.tabRoot({super.key, required this.title, this.actions})
-    : showBackButton = false;
+    : showBackButton = false,
+      fallbackPath = null;
 
-  const AppHeader.pushed({super.key, required this.title, this.actions})
-    : showBackButton = true;
+  const AppHeader.pushed({
+    super.key,
+    required this.title,
+    this.actions,
+    this.fallbackPath,
+  }) : showBackButton = true;
 
   final String title;
   final bool showBackButton;
   final List<Widget>? actions;
+  final String? fallbackPath;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.of(context).surface,
-        border: Border(bottom: BorderSide(color: AppColors.of(context).outlineVariant)),
+        border: Border(
+          bottom: BorderSide(color: AppColors.of(context).outlineVariant),
+        ),
       ),
       child: AppBar(
         backgroundColor: Colors.transparent,
@@ -37,7 +46,10 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
         titleSpacing: showBackButton ? 12 : 20,
         leading: showBackButton
             ? IconButton(
-                icon: Icon(Icons.arrow_back_ios_new, color: AppColors.of(context).onSurface),
+                icon: Icon(
+                  Icons.arrow_back_ios_new,
+                  color: AppColors.of(context).onSurface,
+                ),
                 iconSize: 18,
                 visualDensity: VisualDensity.compact,
                 style: IconButton.styleFrom(
@@ -47,7 +59,12 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                   overlayColor: AppColors.of(context).onSurface,
                   shape: const CircleBorder(),
                 ),
-                onPressed: () => Navigator.of(context).maybePop(),
+                onPressed: () async {
+                  final popped = await Navigator.of(context).maybePop();
+                  if (!popped && context.mounted && fallbackPath != null) {
+                    context.go(fallbackPath!);
+                  }
+                },
               )
             : null,
         title: Text(

@@ -1,9 +1,10 @@
-import 'package:collab/features/travel_prep/controller/packing_checklist_controller.dart';
-import 'package:collab/features/travel_prep/model/packing_checklist.dart';
-import 'package:collab/features/travel_prep/model/packing_checklist_repository.dart';
-import 'package:collab/features/travel_prep/model/packing_location_source.dart';
-import 'package:collab/features/travel_prep/model/packing_weather_service.dart';
-import 'package:collab/features/travel_prep/view/travel_prep_screens.dart';
+import 'package:collab/features/travel_assistant/controller/packing_checklist_controller.dart';
+import 'package:collab/features/travel_assistant/model/eco_partner.dart';
+import 'package:collab/features/travel_assistant/model/packing_checklist.dart';
+import 'package:collab/features/travel_assistant/model/packing_checklist_repository.dart';
+import 'package:collab/features/travel_assistant/model/packing_location_source.dart';
+import 'package:collab/features/travel_assistant/model/packing_weather_service.dart';
+import 'package:collab/features/travel_assistant/view/travel_assistant_screens.dart';
 import 'package:collab/shared/models/destination.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -105,6 +106,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Dec 1, 2026'), findsOneWidget);
   });
+
+  testWidgets('saved itineraries do not show checklist date controls', (
+    tester,
+  ) async {
+    final controller = PackingChecklistController(
+      locationSource: const _ItineraryLocationSource(),
+      weatherService: _WeatherService(),
+      persistence: _ChecklistRepository(),
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: ReadyToWanderScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Trip dates'), findsNothing);
+    expect(find.text('Trip dates not set'), findsNothing);
+    expect(find.text('Set dates'), findsNothing);
+  });
 }
 
 class _LocationSource implements PackingLocationSource {
@@ -114,6 +135,23 @@ class _LocationSource implements PackingLocationSource {
   Future<List<PackingLocationOption>> load() async => const [
     PackingLocationOption(
       id: 'test-trip',
+      label: 'Eco Lodge',
+      subtitle: 'Saved Eco Partner',
+      latitude: 3.139,
+      longitude: 101.687,
+      categories: {DestinationCategory.attraction},
+      ecoPartnerCategory: EcoPartnerCategory.stay,
+    ),
+  ];
+}
+
+class _ItineraryLocationSource implements PackingLocationSource {
+  const _ItineraryLocationSource();
+
+  @override
+  Future<List<PackingLocationOption>> load() async => const [
+    PackingLocationOption(
+      id: 'saved-itinerary',
       label: 'Kuala Lumpur',
       subtitle: 'Saved itinerary',
       latitude: 3.139,

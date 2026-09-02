@@ -1,6 +1,6 @@
-import 'package:collab/features/travel_prep/controller/eco_partner_controller.dart';
-import 'package:collab/features/travel_prep/model/eco_partner.dart';
-import 'package:collab/features/travel_prep/model/eco_partner_repository.dart';
+import 'package:collab/features/travel_assistant/controller/eco_partner_controller.dart';
+import 'package:collab/features/travel_assistant/model/eco_partner.dart';
+import 'package:collab/features/travel_assistant/model/eco_partner_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

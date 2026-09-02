@@ -20,17 +20,18 @@ class EmergencyContact {
   final bool availableWhenLocked;
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'relationship': relationship,
-        'phone': phone,
-        'country': country,
-        'email': email,
-        'notes': notes,
-        'availableWhenLocked': availableWhenLocked,
-      };
+    'id': id,
+    'name': name,
+    'relationship': relationship,
+    'phone': phone,
+    'country': country,
+    'email': email,
+    'notes': notes,
+    'availableWhenLocked': availableWhenLocked,
+  };
 
-  factory EmergencyContact.fromJson(Map<String, dynamic> json) => EmergencyContact(
+  factory EmergencyContact.fromJson(Map<String, dynamic> json) =>
+      EmergencyContact(
         id: '${json['id']}',
         name: '${json['name'] ?? ''}',
         relationship: '${json['relationship'] ?? ''}',
