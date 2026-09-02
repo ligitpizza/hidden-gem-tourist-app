@@ -9,8 +9,7 @@ import 'package:collab/features/itinerary_planning/model/osrm_routing_service.da
 import 'package:collab/shared/models/hidden_gem.dart';
 
 class _FakeOsrmRoutingService extends OsrmRoutingService {
-  _FakeOsrmRoutingService({this.result, this.shouldThrow = false});
-  final List<OsrmRoute>? result;
+  _FakeOsrmRoutingService({this.shouldThrow = false});
   final bool shouldThrow;
   List<LatLng>? lastWaypoints;
 
@@ -18,14 +17,13 @@ class _FakeOsrmRoutingService extends OsrmRoutingService {
   Future<List<OsrmRoute>> drivingRoute(List<LatLng> waypoints, {bool alternatives = false}) async {
     lastWaypoints = waypoints;
     if (shouldThrow) throw const OsrmException('network error');
-    return result ??
-        [
-          OsrmRoute(
-            polyline: [const LatLng(5.40, 100.30), const LatLng(5.41, 100.305), const LatLng(5.42, 100.31)],
-            distanceKm: 12.3,
-            durationMinutes: 18,
-          ),
-        ];
+    return [
+      OsrmRoute(
+        polyline: [const LatLng(5.40, 100.30), const LatLng(5.41, 100.305), const LatLng(5.42, 100.31)],
+        distanceKm: 12.3,
+        durationMinutes: 18,
+      ),
+    ];
   }
 }
 
