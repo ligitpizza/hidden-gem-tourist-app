@@ -14,7 +14,9 @@ class _EmptyRepository extends DestinationExplorationRepository {
 }
 
 void main() {
-  testWidgets('tapping a chip toggles that category on the controller', (tester) async {
+  testWidgets('tapping a category in the filter sheet toggles it on the controller', (
+    tester,
+  ) async {
     final controller = DestinationMapController(repository: _EmptyRepository());
 
     await tester.pumpWidget(
@@ -31,22 +33,30 @@ void main() {
 
     expect(controller.selectedCategories, isEmpty);
 
+    // The bar is now a single filter icon that opens a bottom sheet with
+    // one checkbox per category, rather than inline chips — open it first.
+    await tester.tap(find.byIcon(Icons.tune));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text(HiddenGemCategory.nature.label));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(controller.selectedCategories, {HiddenGemCategory.nature});
 
     await tester.tap(find.text(HiddenGemCategory.nature.label));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(controller.selectedCategories, isEmpty);
   });
 
-  testWidgets('all category chips render at once without needing a scroll', (tester) async {
-    // Regression test: the bar used to be a horizontally-scrolling ListView,
-    // so chips past the visible width were only reachable by scrolling —
-    // reported as "not responsive" on a real device. A Wrap reflows them
-    // onto additional lines instead, so every chip is always laid out.
+  testWidgets('every category is reachable in the filter sheet, not just the first few', (
+    tester,
+  ) async {
+    // Regression test: the bar used to be a horizontally-scrolling row of
+    // chips, so ones past the visible width were only reachable by
+    // scrolling — reported as "not responsive" on a real device. It's now
+    // a filter icon that opens a bottom sheet listing every category as
+    // its own checkbox row, so none of them can end up unreachable.
     final controller = DestinationMapController(repository: _EmptyRepository());
 
     await tester.pumpWidget(
@@ -60,6 +70,9 @@ void main() {
       ),
     );
     await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.tune));
+    await tester.pumpAndSettle();
 
     for (final category in HiddenGemCategory.values) {
       expect(find.text(category.label), findsOneWidget);

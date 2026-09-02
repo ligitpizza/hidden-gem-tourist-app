@@ -139,33 +139,9 @@ void main() {
     expect(find.byIcon(Icons.image_not_supported_outlined), findsNothing);
   });
 
-  testWidgets('tapping "Select for Comparison" toggles selection on the controller', (tester) async {
-    const destination = MapDestination(
-      id: '3',
-      name: 'Comparable Place',
-      description: 'Worth comparing.',
-      category: HiddenGemCategory.craft,
-      location: LatLng(5.4, 100.3),
-    );
-    final controller = DestinationMapController(repository: _EmptyRepository());
-
-    await tester.pumpWidget(
-      _wrap(const DestinationPopupSheet(destination: destination), controller: controller),
-    );
-
-    expect(controller.selectedForComparison, isEmpty);
-    expect(find.text('Select for Comparison'), findsOneWidget);
-
-    await tester.tap(find.text('Select for Comparison'));
-    await tester.pump();
-
-    expect(controller.selectedForComparison, {'3'});
-    expect(find.text('Selected for Comparison'), findsOneWidget);
-
-    await tester.tap(find.text('Selected for Comparison'));
-    await tester.pump();
-
-    expect(controller.selectedForComparison, isEmpty);
-    expect(find.text('Select for Comparison'), findsOneWidget);
-  });
+  // No "Select for Comparison" coverage here anymore — that control used to
+  // live on this sheet, but comparison mode now toggles selection directly
+  // on marker tap instead (see DestinationMapScreen), and this sheet is
+  // only ever shown in Explore mode. DestinationMapController's
+  // toggleComparisonSelection is covered in destination_map_controller_test.dart.
 }
