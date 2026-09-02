@@ -78,4 +78,29 @@ void main() {
 
     expect(find.byType(DestinationDetailScreen), findsOneWidget);
   });
+
+  testWidgets('category filter chips narrow the favourites list', (tester) async {
+    const foodFavourite = ComparisonDestination(
+      id: 'd2',
+      name: 'Seng Thor Restaurant',
+      city: 'George Town',
+      category: HiddenGemCategory.food,
+      location: LatLng(5.41, 100.31),
+    );
+    await FavouriteDestinationsStore.instance.add(foodFavourite);
+
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('Kek Lok Si Temple'), findsOneWidget);
+    expect(find.text('Seng Thor Restaurant'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilterChip, 'Culture'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('Kek Lok Si Temple'), findsOneWidget);
+    expect(find.text('Seng Thor Restaurant'), findsNothing);
+  });
 }

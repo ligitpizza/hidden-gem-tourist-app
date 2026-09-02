@@ -73,8 +73,23 @@ class _SavedScreenState extends State<SavedScreen> {
   }
 }
 
-class _FavouritesTab extends StatelessWidget {
+class _FavouritesTab extends StatefulWidget {
   const _FavouritesTab();
+
+  @override
+  State<_FavouritesTab> createState() => _FavouritesTabState();
+}
+
+class _FavouritesTabState extends State<_FavouritesTab> {
+  final Set<HiddenGemCategory> _selectedCategories = {};
+
+  void _toggleCategory(HiddenGemCategory category) {
+    setState(() {
+      if (!_selectedCategories.remove(category)) {
+        _selectedCategories.add(category);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -118,11 +133,46 @@ class _FavouritesTab extends StatelessWidget {
           );
         }
 
-        return ListView(
-          padding: const EdgeInsets.all(16),
+        final filtered = _selectedCategories.isEmpty
+            ? store.favourites
+            : store.favourites.where((d) => _selectedCategories.contains(d.category)).toList();
+
+        return Column(
           children: [
-            for (final destination in store.favourites)
-              _FavouriteCard(destination: destination),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final category in HiddenGemCategory.values)
+                    FilterChip(
+                      avatar: Icon(categoryIcon(category), size: 16, color: categoryColor(category)),
+                      label: Text(category.label),
+                      selected: _selectedCategories.contains(category),
+                      onSelected: (_) => _toggleCategory(category),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: filtered.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'No favourites match the selected filters.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        for (final destination in filtered) _FavouriteCard(destination: destination),
+                      ],
+                    ),
+            ),
           ],
         );
       },
