@@ -10,10 +10,14 @@ import 'saved_itinerary_repository.dart';
 /// moment something is saved from Route Optimized, without either screen
 /// owning the state.
 class SavedItinerariesStore extends ChangeNotifier {
-  SavedItinerariesStore._internal({SavedItineraryRepository? repository})
+  SavedItinerariesStore({SavedItineraryRepository? repository})
       : _repository = repository ?? SavedItineraryRepository();
 
-  static final SavedItinerariesStore instance = SavedItinerariesStore._internal();
+  // Mutable (not `final`) so tests can swap in a fake-repository-backed
+  // instance instead of hitting real Supabase through the default —
+  // mirrors FavouriteDestinationsStore's identical shape (lib/features/
+  // destination_exploration/model/favourite_destinations_store.dart).
+  static SavedItinerariesStore instance = SavedItinerariesStore();
 
   final SavedItineraryRepository _repository;
 

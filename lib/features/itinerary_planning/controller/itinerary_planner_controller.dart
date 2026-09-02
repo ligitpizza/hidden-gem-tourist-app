@@ -236,13 +236,19 @@ class ItineraryPlannerController extends ChangeNotifier {
     notifyListeners();
     try {
       final editingId = _editingSavedItineraryId;
-      final saved = editingId != null
+      editingId != null
           ? await SavedItinerariesStore.instance.update(editingId, currentPlan)
           : await SavedItinerariesStore.instance.save(currentPlan);
-      // Track the id either way — a second tap of "Save to Account" on the
-      // same plan (fresh or edited) should update it too, not duplicate it.
-      _editingSavedItineraryId = saved.id;
       isSaved = true;
+      // A saved itinerary is a finished planning session — clear the
+      // working state so the next visit to Plan Your Route starts blank.
+      // Without this, leftover `selectedDestinations` chips plus a
+      // leftover `_editingSavedItineraryId` silently turn the *next*,
+      // unrelated itinerary's save into an update of *this* one instead of
+      // a new record.
+      selectedDestinations.clear();
+      previewGemCount = 0;
+      _editingSavedItineraryId = null;
     } catch (_) {
       saveError = 'Could not save this itinerary. Check your connection and try again.';
     }

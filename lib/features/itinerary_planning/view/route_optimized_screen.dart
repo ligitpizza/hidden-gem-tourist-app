@@ -507,7 +507,7 @@ class _ActionRow extends StatelessWidget {
       children: [
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: controller.isSaving
+            onPressed: controller.isSaving || controller.isSaved
                 ? null
                 : () async {
                     await controller.saveToAccount();
