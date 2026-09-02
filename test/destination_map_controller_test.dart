@@ -5,7 +5,29 @@ import 'package:latlong2/latlong.dart';
 import 'package:collab/features/destination_exploration/controller/destination_map_controller.dart';
 import 'package:collab/features/destination_exploration/model/destination_exploration_repository.dart';
 import 'package:collab/features/destination_exploration/model/map_destination.dart';
+import 'package:collab/features/itinerary_planning/model/osrm_routing_service.dart';
 import 'package:collab/shared/models/hidden_gem.dart';
+
+class _FakeOsrmRoutingService extends OsrmRoutingService {
+  _FakeOsrmRoutingService({this.result, this.shouldThrow = false});
+  final List<OsrmRoute>? result;
+  final bool shouldThrow;
+  List<LatLng>? lastWaypoints;
+
+  @override
+  Future<List<OsrmRoute>> drivingRoute(List<LatLng> waypoints, {bool alternatives = false}) async {
+    lastWaypoints = waypoints;
+    if (shouldThrow) throw const OsrmException('network error');
+    return result ??
+        [
+          OsrmRoute(
+            polyline: [const LatLng(5.40, 100.30), const LatLng(5.41, 100.305), const LatLng(5.42, 100.31)],
+            distanceKm: 12.3,
+            durationMinutes: 18,
+          ),
+        ];
+  }
+}
 
 class _FakeRepository extends DestinationExplorationRepository {
   _FakeRepository(this._result, {this.shouldThrow = false});
@@ -360,6 +382,47 @@ void main() {
       controller.toggleComparisonSelection('d');
 
       expect(controller.selectedForComparison, {'a', 'b', 'c'});
+    });
+  });
+
+  group('road-following trail polyline', () {
+    test('viewThemedCluster fetches a real-road polyline for the anchor+stops', () async {
+      final osrm = _FakeOsrmRoutingService();
+      final controller = DestinationMapController(
+        repository: _ClusterFakeRepository(nearbyResult: [_stop1]),
+        routingService: osrm,
+      );
+
+      await controller.viewThemedCluster(origin: _anchor);
+
+      expect(osrm.lastWaypoints, [_anchor.location, _stop1.location]);
+      expect(controller.roadPolyline, isNotEmpty);
+      expect(controller.isLoadingRoadPolyline, isFalse);
+    });
+
+    test('falls back to an empty road polyline when OSRM fails, without breaking the trail', () async {
+      final osrm = _FakeOsrmRoutingService(shouldThrow: true);
+      final controller = DestinationMapController(
+        repository: _ClusterFakeRepository(nearbyResult: [_stop1]),
+        routingService: osrm,
+      );
+
+      await controller.viewThemedCluster(origin: _anchor);
+
+      expect(controller.roadPolyline, isEmpty);
+      expect(controller.clusterAnchor, _anchor); // trail itself still loaded fine
+    });
+
+    test('clearCluster also clears the road polyline', () async {
+      final controller = DestinationMapController(
+        repository: _ClusterFakeRepository(nearbyResult: [_stop1]),
+        routingService: _FakeOsrmRoutingService(),
+      );
+      await controller.viewThemedCluster(origin: _anchor);
+
+      controller.clearCluster();
+
+      expect(controller.roadPolyline, isEmpty);
     });
   });
 }

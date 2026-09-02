@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../shared/models/destination.dart' as shared;
 import '../../../shared/models/hidden_gem.dart';
 import '../../itinerary_planning/controller/itinerary_planner_controller.dart';
+import '../../itinerary_planning/model/osrm_routing_service.dart';
 import '../model/destination_exploration_repository.dart'
     show DestinationExplorationRepository, legDistanceKm, orderByNearestNeighbor;
 import '../model/map_destination.dart';
@@ -22,13 +23,16 @@ class DestinationMapController extends ChangeNotifier {
   DestinationMapController({
     DestinationExplorationRepository? repository,
     Future<LatLng?> Function()? currentLocation,
+    OsrmRoutingService? routingService,
   })  : _repository = repository ?? DestinationExplorationRepository(),
-        _currentLocation = currentLocation ?? _defaultCurrentLocation {
+        _currentLocation = currentLocation ?? _defaultCurrentLocation,
+        _routingService = routingService ?? OsrmRoutingService() {
     loadDestinations();
   }
 
   final DestinationExplorationRepository _repository;
   final Future<LatLng?> Function() _currentLocation;
+  final OsrmRoutingService _routingService;
 
   static Future<LatLng?> _defaultCurrentLocation() async {
     try {
@@ -59,6 +63,8 @@ class DestinationMapController extends ChangeNotifier {
   List<MapDestination> clusterStops = const [];
   bool isLoadingCluster = false;
   String? clusterMessage;
+  List<LatLng> roadPolyline = const [];
+  bool isLoadingRoadPolyline = false;
 
   final Set<String> selectedForComparison = {};
   MapViewMode mode = MapViewMode.explore;
@@ -220,6 +226,31 @@ class DestinationMapController extends ChangeNotifier {
 
     isLoadingCluster = false;
     notifyListeners();
+
+    if (clusterAnchor != null) {
+      await _fetchRoadPolyline();
+    }
+  }
+
+  /// Best-effort: replaces the trail's straight-line [clusterPolyline] with
+  /// real road geometry from OSRM. On any failure (no connectivity, OSRM
+  /// down) [roadPolyline] stays empty and the view falls back to the
+  /// straight-line [clusterPolyline] it already draws — a trail is still
+  /// fully usable without this, so a routing failure must never block it.
+  Future<void> _fetchRoadPolyline() async {
+    final points = clusterPolyline;
+    if (points.length < 2) return;
+
+    isLoadingRoadPolyline = true;
+    notifyListeners();
+    try {
+      final routes = await _routingService.drivingRoute(points);
+      roadPolyline = routes.first.polyline;
+    } catch (_) {
+      roadPolyline = const [];
+    }
+    isLoadingRoadPolyline = false;
+    notifyListeners();
   }
 
   void clearCluster() {
@@ -227,6 +258,8 @@ class DestinationMapController extends ChangeNotifier {
     clusterStops = const [];
     clusterMessage = null;
     isLoadingCluster = false;
+    roadPolyline = const [];
+    isLoadingRoadPolyline = false;
     notifyListeners();
   }
 

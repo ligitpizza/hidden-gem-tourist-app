@@ -338,7 +338,9 @@ class _MapBodyState extends State<_MapBody> {
               PolylineLayer(
                 polylines: [
                   Polyline(
-                    points: controller.clusterPolyline,
+                    points: controller.roadPolyline.isNotEmpty
+                        ? controller.roadPolyline
+                        : controller.clusterPolyline,
                     strokeWidth: 4,
                     color: Colors.deepOrange,
                     pattern: StrokePattern.dashed(segments: const [10, 6]),
