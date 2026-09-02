@@ -694,7 +694,7 @@ class _BestPickView extends StatelessWidget {
                               }
                             },
                       icon: Icon(alreadyAdded ? Icons.check_circle : Icons.card_travel),
-                      label: Text(alreadyAdded ? 'Added to Itinerary' : 'Add to Itinerary'),
+                      label: Text(alreadyAdded ? 'Added to Itinerary Route' : 'Add to Itinerary Route'),
                     );
                   },
                 ),
