@@ -6,18 +6,27 @@ import '../../model/cultural_fact_model.dart';
 import '../../model/quiz_attempt_model.dart';
 import '../../model/quiz_question_model.dart';
 
-/// Phase 1 mock implementation of the cultural quiz challenge.
+/// Backs the cultural quiz challenge against Supabase.
 ///
 /// Questions and cultural facts are shared reference content, so they're
-/// loaded from the real Supabase `journal_quiz_questions` /
-/// `journal_cultural_facts` tables and cached in memory (same pattern as
-/// MockCheckInService's destination cache). Attempt tracking/scoring below
-/// stays mock/in-memory, matching the rest of this Phase-1 module.
+/// loaded from the real `journal_quiz_questions` / `journal_cultural_facts`
+/// tables and cached in memory (same pattern as MockCheckInService's
+/// destination cache). Attempts are written to `journal_quiz_attempts` so
+/// they (and the badge progress derived from them) survive an app restart.
+/// Tests bypass Supabase entirely by passing [seedAttempts] — even an
+/// empty list — which switches attempt storage to a plain in-memory store
+/// instead, same as [MockCheckInService]'s seedCheckIns.
 class MockQuizService {
+  MockQuizService({List<QuizAttemptModel>? seedAttempts})
+    : _attempts = List.of(seedAttempts ?? []),
+      _useMockStorage = seedAttempts != null;
+
   static const double passThresholdPercent = 60;
 
-  final List<QuizAttemptModel> _attempts = [];
+  final List<QuizAttemptModel> _attempts;
+  final bool _useMockStorage;
   int _idCounter = 0;
+
   final Random _random = Random();
 
   List<QuizQuestionModel> _questionBank = [];
@@ -77,8 +86,6 @@ class MockQuizService {
     required List<QuizQuestionModel> questions,
     required List<int> selectedOptionIndexes,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 300));
-
     if (questions.length != selectedOptionIndexes.length) {
       throw ArgumentError('Answers must match the number of questions.');
     }
@@ -99,46 +106,91 @@ class MockQuizService {
     }
 
     final percentage = questions.isEmpty ? 0 : (score / questions.length) * 100;
+    final passed = percentage >= passThresholdPercent;
 
-    final attempt = QuizAttemptModel(
-      id: 'a${(_idCounter++).toString().padLeft(4, '0')}',
-      userId: userId,
-      destinationId: destinationId,
-      score: score,
-      totalQuestions: questions.length,
-      passed: percentage >= passThresholdPercent,
-      attemptedAt: DateTime.now(),
-      answers: answers,
-    );
+    if (_useMockStorage) {
+      final attempt = QuizAttemptModel(
+        id: 'a${(_idCounter++).toString().padLeft(4, '0')}',
+        userId: userId,
+        destinationId: destinationId,
+        score: score,
+        totalQuestions: questions.length,
+        passed: passed,
+        attemptedAt: DateTime.now(),
+        answers: answers,
+      );
+      _attempts.add(attempt);
+      return attempt;
+    }
 
-    _attempts.add(attempt);
-    return attempt;
+    final row = await Supabase.instance.client
+        .from('journal_quiz_attempts')
+        .insert({
+          'user_id': userId,
+          'destination_id': destinationId,
+          'score': score,
+          'total_questions': questions.length,
+          'passed': passed,
+          'answers': answers.map((a) => a.toJson()).toList(),
+        })
+        .select()
+        .single();
+
+    return QuizAttemptModel.fromJson(row);
   }
 
   Future<List<QuizAttemptModel>> fetchAttemptHistory(String userId) async {
-    await Future.delayed(const Duration(milliseconds: 200));
-    return _attempts.where((a) => a.userId == userId).toList()
-      ..sort((a, b) => b.attemptedAt.compareTo(a.attemptedAt));
+    if (_useMockStorage) {
+      return _attempts.where((a) => a.userId == userId).toList()
+        ..sort((a, b) => b.attemptedAt.compareTo(a.attemptedAt));
+    }
+
+    final rows = await Supabase.instance.client
+        .from('journal_quiz_attempts')
+        .select()
+        .eq('user_id', userId)
+        .order('attempted_at', ascending: false);
+    return rows.map((r) => QuizAttemptModel.fromJson(r)).toList();
   }
 
   /// Counts completed quizzes for badge eligibility. Only the first passed
   /// attempt per destination counts, so retrying a failed quiz repeatedly
   /// doesn't inflate the "5 quizzes completed" badge progress.
   Future<int> countCompletedQuizzes(String userId) async {
-    final passedDestinationIds = _attempts
-        .where((a) => a.userId == userId && a.passed)
-        .map((a) => a.destinationId)
-        .toSet();
-    return passedDestinationIds.length;
+    if (_useMockStorage) {
+      return _attempts
+          .where((a) => a.userId == userId && a.passed)
+          .map((a) => a.destinationId)
+          .toSet()
+          .length;
+    }
+
+    final rows = await Supabase.instance.client
+        .from('journal_quiz_attempts')
+        .select('destination_id')
+        .eq('user_id', userId)
+        .eq('passed', true);
+    return rows.map((r) => r['destination_id'] as String).toSet().length;
   }
 
   /// Counts full-marks attempts (score == totalQuestions) for the
   /// quizPerfectScore badge criteria. Every perfect attempt counts, even
   /// repeats on the same destination, since scoring full marks again is
-  /// still a genuine achievement.
+  /// still a genuine achievement. Compared client-side since PostgREST
+  /// can't filter one column against another directly.
   Future<int> countPerfectQuizzes(String userId) async {
-    return _attempts
-        .where((a) => a.userId == userId && a.score == a.totalQuestions && a.totalQuestions > 0)
+    if (_useMockStorage) {
+      return _attempts
+          .where((a) => a.userId == userId && a.score == a.totalQuestions && a.totalQuestions > 0)
+          .length;
+    }
+
+    final rows = await Supabase.instance.client
+        .from('journal_quiz_attempts')
+        .select('score, total_questions')
+        .eq('user_id', userId);
+    return rows
+        .where((r) => (r['total_questions'] as int) > 0 && r['score'] == r['total_questions'])
         .length;
   }
 }

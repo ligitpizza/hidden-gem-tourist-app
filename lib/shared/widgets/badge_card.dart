@@ -70,7 +70,7 @@ class BadgeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = AppColors.of(context);
     final content = Container(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         color: isUnlocked ? colors.surfaceContainerLow : colors.surfaceContainer,
         border: Border.all(
@@ -82,8 +82,8 @@ class BadgeCard extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 32,
+            height: 32,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: isUnlocked ? colors.secondaryContainer : colors.surfaceVariant,
@@ -91,20 +91,25 @@ class BadgeCard extends StatelessWidget {
             ),
             child: Icon(
               isUnlocked ? iconForBadge(badge) : Icons.lock_outline,
-              size: 17,
+              size: 15,
               color: isUnlocked ? colors.onSecondaryContainer : colors.outline,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             badge.name,
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: AppTypography.labelSm.copyWith(color: colors.onSurface, fontWeight: FontWeight.w700, fontSize: 10.5),
+            style: AppTypography.labelSm.copyWith(
+              color: colors.onSurface,
+              fontWeight: FontWeight.w700,
+              fontSize: 10.5,
+              height: 1.05,
+            ),
           ),
           if (!isUnlocked && progress != null) ...[
-            const SizedBox(height: 5),
+            const SizedBox(height: 4),
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.full),
               child: LinearProgressIndicator(
@@ -114,10 +119,13 @@ class BadgeCard extends StatelessWidget {
                 color: colors.primary,
               ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 2),
             Text(
               '${progress!.current} of ${progress!.target}',
-              style: AppTypography.labelSm.copyWith(fontSize: 9),
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.labelSm.copyWith(fontSize: 8),
             ),
           ],
         ],

@@ -46,6 +46,8 @@ class _BadgeGalleryScreenState extends State<BadgeGalleryScreen> {
     );
   }
 
+  Future<void> _refresh() => context.read<BadgeController>().loadBadges();
+
   void _showBadgeDetail(
     BuildContext context, {
     required BadgeModel badge,
@@ -238,7 +240,10 @@ class _BadgeGalleryScreenState extends State<BadgeGalleryScreen> {
 
     return Scaffold(
       appBar: const AppHeader.pushed(title: 'Badges'),
-      body: badgeController.allBadges.isEmpty
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        color: AppColors.of(context).primary,
+        child: badgeController.allBadges.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
@@ -341,6 +346,7 @@ class _BadgeGalleryScreenState extends State<BadgeGalleryScreen> {
                 ],
               ],
             ),
+      ),
     );
   }
 }

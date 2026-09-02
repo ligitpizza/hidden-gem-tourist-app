@@ -15,6 +15,14 @@ import '../checkin/destination_detail_screen.dart';
 class QuizListScreen extends StatelessWidget {
   const QuizListScreen({super.key});
 
+  Future<void> _refresh(BuildContext context) async {
+    await Future.wait([
+      context.read<CheckInController>().loadDestinations(),
+      context.read<CheckInController>().loadHistory(),
+      context.read<QuizController>().loadHistory(),
+    ]);
+  }
+
   QuizAttemptModel? _bestAttemptFor(
     String destinationId,
     List<QuizAttemptModel> history,
@@ -45,7 +53,10 @@ class QuizListScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: const AppHeader.pushed(title: 'Quizzes'),
-      body: checkInController.destinations.isEmpty
+      body: RefreshIndicator(
+        onRefresh: () => _refresh(context),
+        color: AppColors.of(context).primary,
+        child: checkInController.destinations.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : visited.isEmpty
           ? const _NoCheckInsYet()
@@ -61,6 +72,7 @@ class QuizListScreen extends StatelessWidget {
                   ),
               ],
             ),
+      ),
     );
   }
 }

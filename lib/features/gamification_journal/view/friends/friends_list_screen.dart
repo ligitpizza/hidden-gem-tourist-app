@@ -66,7 +66,10 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
           ),
         ],
       ),
-      body: friendController.isLoading && !hasAnything
+      body: RefreshIndicator(
+        onRefresh: () => context.read<FriendController>().loadFriends(),
+        color: AppColors.of(context).primary,
+        child: friendController.isLoading && !hasAnything
           ? const Center(child: CircularProgressIndicator())
           : !hasAnything
               ? const _EmptyState()
@@ -108,6 +111,7 @@ class _FriendsListScreenState extends State<FriendsListScreen> {
                     ],
                   ],
                 ),
+      ),
     );
   }
 }

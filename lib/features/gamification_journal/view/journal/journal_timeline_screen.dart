@@ -30,9 +30,14 @@ class JournalTimelineScreen extends StatelessWidget {
         onPressed: () => GoRouter.of(context).go('/explore'),
         child: const Icon(Icons.add),
       ),
-      body: const SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 96),
-        child: JournalTimelineBody(),
+      body: RefreshIndicator(
+        onRefresh: () => context.read<JournalController>().loadEntries(),
+        color: AppColors.of(context).primary,
+        child: const SingleChildScrollView(
+          physics: AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 96),
+          child: JournalTimelineBody(),
+        ),
       ),
     );
   }

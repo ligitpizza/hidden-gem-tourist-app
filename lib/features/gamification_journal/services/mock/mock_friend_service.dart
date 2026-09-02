@@ -11,6 +11,47 @@ import '../../model/user_badge_model.dart';
 /// no offline/test-seed switch here because Friends has no widget/
 /// integration test coverage yet.
 class MockFriendService {
+  RealtimeChannel? _friendshipChannel;
+
+  /// Watches every insert/update/delete on `friendships` this user is
+  /// party to (RLS scopes the feed to rows where they're the requester or
+  /// addressee, since there's no way to filter "OR" server-side). [onIncomingRequest]
+  /// fires the top banner when a new request arrives; [onAnyChange] keeps
+  /// the rest of the screen (accepted/declined/removed, from either side)
+  /// live without the Tourist having to manually pull to refresh — e.g.
+  /// without this, declining a request only updates the decliner's own
+  /// screen, and the sender keeps seeing "Pending" until they reopen it.
+  void subscribeToFriendshipChanges({
+    required String userId,
+    required void Function(String friendshipId, String requesterId) onIncomingRequest,
+    required void Function() onAnyChange,
+  }) {
+    _friendshipChannel = Supabase.instance.client
+        .channel('friendships-$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'friendships',
+          callback: (payload) {
+            final row = payload.newRecord;
+            if (payload.eventType == PostgresChangeEvent.insert &&
+                row['addressee_id'] == userId &&
+                row['status'] == 'pending') {
+              onIncomingRequest(row['id'] as String, row['requester_id'] as String);
+            }
+            onAnyChange();
+          },
+        )
+        .subscribe();
+  }
+
+  void unsubscribeFriendshipChanges() {
+    final channel = _friendshipChannel;
+    if (channel == null) return;
+    Supabase.instance.client.removeChannel(channel);
+    _friendshipChannel = null;
+  }
+
   Future<List<ProfileModel>> searchByName(String query, {required String excludeUserId}) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return [];

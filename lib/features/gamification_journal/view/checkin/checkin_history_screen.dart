@@ -18,7 +18,10 @@ class CheckInHistoryScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppHeader.pushed(title: 'Check-in history'),
-      body: checkInController.history.isEmpty
+      body: RefreshIndicator(
+        onRefresh: () => context.read<CheckInController>().loadHistory(),
+        color: AppColors.of(context).primary,
+        child: checkInController.history.isEmpty
           ? const _EmptyState()
           : ListView.builder(
               padding: const EdgeInsets.all(16),
@@ -34,6 +37,7 @@ class CheckInHistoryScreen extends StatelessWidget {
                 );
               },
             ),
+      ),
     );
   }
 }

@@ -52,6 +52,41 @@ class FriendController extends ChangeNotifier {
   /// null again the moment a new action starts.
   String? errorMessage;
 
+  /// Fires the moment another Tourist sends this user a friend request —
+  /// the app shell listens to this to pop the top banner regardless of
+  /// which tab is currently open.
+  final _incomingRequestController = StreamController<FriendRequestEntry>.broadcast();
+  Stream<FriendRequestEntry> get incomingRequestEvents => _incomingRequestController.stream;
+  bool _isListeningForIncomingRequests = false;
+
+  /// Call once (e.g. at app start) — safe to call more than once, later
+  /// calls are ignored so only one realtime subscription is ever open.
+  void startListeningForIncomingRequests() {
+    if (_isListeningForIncomingRequests) return;
+    _isListeningForIncomingRequests = true;
+    _service.subscribeToFriendshipChanges(
+      userId: userId,
+      onIncomingRequest: (friendshipId, requesterId) async {
+        final profiles = await _service.fetchProfiles([requesterId]);
+        if (profiles.isEmpty) return;
+        _incomingRequestController.add(
+          FriendRequestEntry(profile: profiles.first, friendshipId: friendshipId),
+        );
+      },
+      // Covers every other change too (accepted, declined, unfriended,
+      // from either side) so this device's Friends state stays live
+      // without needing its own manual refresh.
+      onAnyChange: () => loadFriends(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _service.unsubscribeFriendshipChanges();
+    _incomingRequestController.close();
+    super.dispose();
+  }
+
   int get pendingIncomingCount => incomingRequests.length;
 
   /// True when at least one request *this user sent* was accepted and

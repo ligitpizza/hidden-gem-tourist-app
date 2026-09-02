@@ -55,6 +55,7 @@ import '../../features/destination_exploration/view/destination_map_screen.dart'
 import '../../features/profile/view/profile_screen.dart';
 import '../../features/saved/view/saved_screen.dart';
 import '../../features/travel_prep/view/travel_prep_screens.dart';
+import '../../shared/widgets/top_notification_banner.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 import 'shell_routes.dart';
 
@@ -389,6 +390,8 @@ class _MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<_MainShell> {
+  StreamSubscription<FriendRequestEntry>? _incomingRequestSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -412,6 +415,27 @@ class _MainShellState extends State<_MainShell> {
     // So the More menu's pending-request dot is already correct the first
     // time it's visible, not just after the Tourist opens Friends once.
     await friendController.loadFriends();
+
+    // Listens for the whole session, not just while the Friends screen is
+    // open, so a request that arrives while browsing the Map or Journal
+    // still surfaces immediately as a top banner.
+    friendController.startListeningForIncomingRequests();
+    _incomingRequestSubscription = friendController.incomingRequestEvents.listen((request) {
+      if (!mounted) return;
+      final name = request.profile.fullName.isEmpty ? 'Someone' : request.profile.fullName;
+      showTopNotificationBanner(
+        context,
+        message: '$name sent you a friend request',
+        icon: Icons.person_add_alt_1_outlined,
+        onTap: () => context.push(ShellRoutes.journalFriends),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _incomingRequestSubscription?.cancel();
+    super.dispose();
   }
 
   @override

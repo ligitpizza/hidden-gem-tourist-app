@@ -23,6 +23,7 @@ import 'package:collab/features/gamification_journal/model/destination_model.dar
 import 'package:collab/features/gamification_journal/services/mock/mock_badge_service.dart';
 import 'package:collab/features/gamification_journal/services/mock/mock_checkin_service.dart';
 import 'package:collab/features/gamification_journal/services/mock/mock_journal_service.dart';
+import 'package:collab/features/gamification_journal/services/mock/mock_quiz_service.dart';
 import 'package:collab/features/gamification_journal/view/badges/badge_gallery_screen.dart';
 import 'package:collab/features/gamification_journal/view/dashboard/dashboard_screen.dart';
 import 'package:collab/features/gamification_journal/view/journal/journal_timeline_screen.dart';
@@ -120,7 +121,10 @@ void main() {
       userId: 'test-user',
       service: MockJournalService(seedEntries: const []),
     );
-    final quizController = QuizController(userId: 'test-user');
+    final quizController = QuizController(
+      userId: 'test-user',
+      service: MockQuizService(seedAttempts: const []),
+    );
 
     await tester.pumpWidget(
       _testApp(
