@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:collab/core/router/shell_routes.dart';
 import 'package:collab/features/travel_assistant/controller/packing_checklist_controller.dart';
 import 'package:collab/features/travel_assistant/controller/travel_assistant_dashboard_controller.dart';
 import 'package:collab/features/travel_assistant/model/packing_checklist.dart';
@@ -10,6 +13,7 @@ import 'package:collab/features/travel_assistant/view/travel_assistant_screens.d
 import 'package:collab/shared/models/destination.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 void main() {
   test('dashboard title metadata supports single and multi-stop trips', () {
@@ -45,6 +49,7 @@ void main() {
     final controller = TravelAssistantDashboardController(
       checklistController: checklist,
       documentLoader: () async => [_document(1), _document(2)],
+      ecoPartnerCountLoader: () async => 3,
       coverResolver: _FakeCoverResolver(_cover),
     );
 
@@ -54,6 +59,7 @@ void main() {
     expect(controller.heroSubtitle, 'Saved itinerary');
     expect(controller.documentCount, 2);
     expect(controller.documentBytes, 3000);
+    expect(controller.ecoPartnerCount, 3);
     expect(
       controller.documentDescription,
       '2 documents stored securely for your journey.',
@@ -80,6 +86,7 @@ void main() {
           if (shouldFail) throw StateError('offline');
           return documents;
         },
+        ecoPartnerCountLoader: () async => 0,
         coverResolver: const _FakeCoverResolver(null),
       );
 
@@ -113,6 +120,7 @@ void main() {
     final controller = TravelAssistantDashboardController(
       checklistController: checklist,
       documentLoader: () async => [_document(1), _document(2)],
+      ecoPartnerCountLoader: () async => 3,
       coverResolver: const _FakeCoverResolver(null),
     );
 
@@ -123,6 +131,9 @@ void main() {
 
     expect(find.text('PACKING FOR'), findsOneWidget);
     expect(find.text('Kota Kinabalu'), findsOneWidget);
+    expect(find.text('0/10 packed'), findsNWidgets(2));
+    expect(find.text('3 saved'), findsOneWidget);
+    expect(find.text('2 files'), findsOneWidget);
     expect(find.text('Emerald\nFalls'), findsNothing);
     expect(
       find.text(
@@ -164,6 +175,7 @@ void main() {
     final controller = TravelAssistantDashboardController(
       checklistController: checklist,
       documentLoader: () async => const [],
+      ecoPartnerCountLoader: () async => 0,
       coverResolver: const _FakeCoverResolver(null),
     );
 
@@ -184,6 +196,159 @@ void main() {
     checklist.dispose();
   });
 
+  testWidgets('hero loading summaries fit a narrow screen with scaled text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final locations = Completer<List<PackingLocationOption>>();
+    final documents = Completer<List<TravelDocument>>();
+    final checklist = PackingChecklistController(
+      locationSource: _DelayedLocationSource(locations.future),
+      weatherService: _NoWeatherService(),
+      persistence: _MemoryChecklistRepository(),
+    );
+    final controller = TravelAssistantDashboardController(
+      checklistController: checklist,
+      documentLoader: () => documents.future,
+      ecoPartnerCountLoader: () async => 12,
+      coverResolver: const _FakeCoverResolver(null),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(1.4)),
+          child: child!,
+        ),
+        home: TravelAssistantDashboardScreen(controller: controller),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Loading'), findsNWidgets(3));
+    expect(tester.takeException(), isNull);
+
+    locations.complete([_location]);
+    documents.complete(const []);
+    await tester.pumpAndSettle();
+
+    expect(find.text('0/10 packed'), findsNWidgets(2));
+    expect(find.text('12 saved'), findsOneWidget);
+    expect(find.text('0 files'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    checklist.dispose();
+  });
+
+  testWidgets('hero summaries open each feature and refresh on return', (
+    tester,
+  ) async {
+    var ecoPartnerCount = 2;
+    var documents = [_document(1), _document(2)];
+    final checklist = _checklistController([_location]);
+    final controller = TravelAssistantDashboardController(
+      checklistController: checklist,
+      documentLoader: () async => documents,
+      ecoPartnerCountLoader: () async => ecoPartnerCount,
+      coverResolver: const _FakeCoverResolver(null),
+    );
+    final router = GoRouter(
+      initialLocation: ShellRoutes.travelAssistant,
+      routes: [
+        GoRoute(
+          path: ShellRoutes.travelAssistant,
+          builder: (_, _) =>
+              TravelAssistantDashboardScreen(controller: controller),
+        ),
+        GoRoute(
+          path: ShellRoutes.checklist,
+          builder: (_, _) => const Scaffold(body: Text('Checklist route')),
+        ),
+        GoRoute(
+          path: ShellRoutes.ecoPartners,
+          builder: (_, _) => const Scaffold(body: Text('Eco Partners route')),
+        ),
+        GoRoute(
+          path: ShellRoutes.documentVault,
+          builder: (_, _) => const Scaffold(body: Text('Vault route')),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.ancestor(of: find.text('Packing'), matching: find.byType(InkWell)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Checklist route'), findsOneWidget);
+    router.pop();
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.ancestor(
+        of: find.text('Eco Partners'),
+        matching: find.byType(InkWell),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Eco Partners route'), findsOneWidget);
+    ecoPartnerCount = 4;
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('4 saved'), findsOneWidget);
+
+    await tester.tap(
+      find.ancestor(of: find.text('Vault'), matching: find.byType(InkWell)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Vault route'), findsOneWidget);
+    documents = [_document(1)];
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('1 file'), findsOneWidget);
+
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    router.dispose();
+    controller.dispose();
+    checklist.dispose();
+  });
+
+  testWidgets('hero keeps independent unavailable and file count states', (
+    tester,
+  ) async {
+    final checklist = _checklistController([_location]);
+    final controller = TravelAssistantDashboardController(
+      checklistController: checklist,
+      documentLoader: () async => [_document(1)],
+      ecoPartnerCountLoader: () async => throw StateError('offline'),
+      coverResolver: const _FakeCoverResolver(null),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: TravelAssistantDashboardScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unavailable'), findsOneWidget);
+    expect(find.text('1 file'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    checklist.dispose();
+  });
+
   testWidgets('dashboard shows a checklist CTA without a selected location', (
     tester,
   ) async {
@@ -191,6 +356,7 @@ void main() {
     final controller = TravelAssistantDashboardController(
       checklistController: checklist,
       documentLoader: () async => const [],
+      ecoPartnerCountLoader: () async => 0,
       coverResolver: const _FakeCoverResolver(null),
     );
 
@@ -200,8 +366,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Choose a destination'), findsOneWidget);
-    expect(find.text('Choose in checklist'), findsOneWidget);
-    expect(find.text('0% Ready'), findsOneWidget);
+    expect(find.text('Choose trip'), findsOneWidget);
+    expect(find.text('0% Ready'), findsNothing);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -268,6 +434,15 @@ class _FakeLocationSource implements PackingLocationSource {
 
   @override
   Future<List<PackingLocationOption>> load() async => locations;
+}
+
+class _DelayedLocationSource implements PackingLocationSource {
+  const _DelayedLocationSource(this.result);
+
+  final Future<List<PackingLocationOption>> result;
+
+  @override
+  Future<List<PackingLocationOption>> load() => result;
 }
 
 class _NoWeatherService extends PackingWeatherService {

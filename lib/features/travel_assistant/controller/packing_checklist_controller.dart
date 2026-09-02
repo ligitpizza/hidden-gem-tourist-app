@@ -46,6 +46,7 @@ class PackingChecklistController extends ChangeNotifier {
     'first_aid',
     'insurance_details',
     'dietary_note',
+    'hand_sanitizer',
   };
   static const _transitIds = {
     'bookings',
@@ -54,11 +55,16 @@ class PackingChecklistController extends ChangeNotifier {
     'transport_payment',
   };
 
-  int get weatherScore => _metricScore(_weatherIds);
-  int get healthScore => _metricScore(_healthIds);
-  int get transitScore => _metricScore(_transitIds);
-  String get weatherDetail =>
-      weather?.shortDescription ?? 'Forecast unavailable';
+  int? get weatherScore => _metricScore(_weatherIds);
+  int? get healthScore => _metricScore(_healthIds);
+  int? get transitScore => _metricScore(_transitIds);
+  String get weatherDetail {
+    if (weatherScore == null) {
+      return weather == null ? 'Forecast unavailable' : 'No weather items';
+    }
+    return weather?.shortDescription ?? 'Forecast unavailable';
+  }
+
   List<String> get categoryLabels => switch (ecoPartnerCategory) {
     EcoPartnerCategory.stay => const ['Hotel'],
     EcoPartnerCategory.dining => const ['Dining'],
@@ -140,12 +146,12 @@ class PackingChecklistController extends ChangeNotifier {
           );
   }
 
-  int _metricScore(Set<String> ids) {
+  int? _metricScore(Set<String> ids) {
     final applicable = sections
         .expand((section) => section.items)
         .where((item) => ids.contains(item.id))
         .toList();
-    if (applicable.isEmpty) return 0;
+    if (applicable.isEmpty) return null;
     final packed = applicable
         .where((item) => packedIds.contains(item.id))
         .length;
@@ -157,6 +163,7 @@ class PackingChecklistController extends ChangeNotifier {
         .expand((section) => section.items)
         .where((item) => ids.contains(item.id))
         .toList();
+    if (applicable.isEmpty) return 'Not applicable';
     final packed = applicable
         .where((item) => packedIds.contains(item.id))
         .length;
@@ -289,6 +296,42 @@ class PackingChecklistController extends ChangeNotifier {
         'Reusable food container',
         'Bring leftovers home without single-use takeaway packaging',
       );
+      add(
+        'Getting There',
+        'power_bank',
+        'Power bank and charging cable',
+        'Keep directions and booking details available on the journey',
+      );
+      add(
+        'Getting There',
+        'offline_maps',
+        'Offline venue directions',
+        'Find the venue even when mobile coverage is unreliable',
+      );
+      add(
+        'Getting There',
+        'transport_payment',
+        'Transit card or ride payment',
+        'Prepare a payment method for travelling to and from the venue',
+      );
+      add(
+        'Personal Comfort',
+        'water_bottle',
+        'Reusable water bottle',
+        'Stay hydrated while travelling to the venue',
+      );
+      add(
+        'Personal Comfort',
+        'hand_sanitizer',
+        'Hand sanitizer',
+        'Useful before eating when hand-washing facilities are limited',
+      );
+      add(
+        'Personal Comfort',
+        'indoor_layer',
+        'Light indoor layer',
+        'Useful in strongly air-conditioned dining spaces',
+      );
       if (weather != null && weather.rainProbability >= 40) {
         add(
           'Weather Essentials',
@@ -312,6 +355,36 @@ class PackingChecklistController extends ChangeNotifier {
         'hotel_reservation',
         'Hotel reservation and check-in details',
         'Keep the booking reference and check-in time handy',
+      );
+      add(
+        'Hotel Check-in',
+        'hotel_payment',
+        'Payment or deposit method',
+        'Hotels may request a card or deposit during check-in',
+      );
+      add(
+        'Hotel Check-in',
+        'insurance_details',
+        'Insurance and emergency details',
+        'Keep important contacts and policy information accessible',
+      );
+      add(
+        'Getting There',
+        'power_bank',
+        'Power bank and charging cable',
+        'Keep directions and check-in details available on the journey',
+      );
+      add(
+        'Getting There',
+        'offline_maps',
+        'Offline hotel directions',
+        'Find the hotel even when mobile coverage is unreliable',
+      );
+      add(
+        'Getting There',
+        'transport_payment',
+        'Transit card or ride payment',
+        'Prepare a payment method for travelling to and from the hotel',
       );
       add(
         'Overnight Essentials',
@@ -348,6 +421,18 @@ class PackingChecklistController extends ChangeNotifier {
         'reusable_slippers',
         'Reusable slippers',
         'Avoid disposable hotel slippers where possible',
+      );
+      add(
+        'Overnight Essentials',
+        'water_bottle',
+        'Reusable water bottle',
+        'Refill during the stay instead of using single-use bottles',
+      );
+      add(
+        'Overnight Essentials',
+        'laundry_bag',
+        'Reusable laundry bag',
+        'Keep worn clothing separate without disposable plastic bags',
       );
       if (weather != null && weather.rainProbability >= 40) {
         add(

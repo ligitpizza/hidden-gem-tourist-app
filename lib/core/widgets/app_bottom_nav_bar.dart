@@ -47,7 +47,7 @@ const _destinations = [
   _NavDestination(
     icon: Icons.luggage_outlined,
     selectedIcon: Icons.luggage,
-    label: 'Travel Assistant',
+    label: 'Assistant',
   ), // 4
   _NavDestination(
     icon: Icons.auto_stories_outlined,

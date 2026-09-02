@@ -54,12 +54,30 @@ void main() {
           .map((item) => item.id)
           .toSet();
       expect(hotelIds, containsAll(['photo_id', 'hotel_reservation']));
+      expect(
+        hotelIds,
+        containsAll([
+          'hotel_payment',
+          'insurance_details',
+          'power_bank',
+          'offline_maps',
+          'transport_payment',
+          'water_bottle',
+          'laundry_bag',
+        ]),
+      );
+      expect(hotelIds, hasLength(15));
+      expect(controller.transitScore, 0);
+      expect(controller.transitDetail, '0/3 ready');
       expect(hotelIds, isNot(contains('passport')));
-      expect(hotelIds, isNot(contains('insurance_details')));
       expect(hotelIds, isNot(contains('reusable_cutlery')));
 
       await controller.toggleItem('photo_id', true);
+      await controller.toggleItem('power_bank', true);
+      await controller.toggleItem('offline_maps', true);
+      await controller.toggleItem('transport_payment', true);
       expect(controller.packedIds, contains('photo_id'));
+      expect(controller.transitScore, 100);
       await controller.setTripDates(
         PackingTripDateRange(
           start: DateTime(2026, 10, 4),
@@ -86,14 +104,23 @@ void main() {
           'dining_reservation',
           'dietary_note',
           'reusable_container',
+          'power_bank',
+          'offline_maps',
+          'transport_payment',
+          'water_bottle',
+          'hand_sanitizer',
+          'indoor_layer',
         ]),
       );
+      expect(diningIds, hasLength(10));
+      expect(controller.transitScore, 0);
       expect(diningIds, isNot(contains('passport')));
       expect(diningIds, isNot(contains('first_aid')));
       expect(diningIds, isNot(contains('reusable_cutlery')));
 
       await controller.selectLocation('eco:1');
       expect(controller.packedIds, contains('photo_id'));
+      expect(controller.transitScore, 100);
       expect(controller.tripDates?.start, DateTime(2026, 10, 4));
       expect(controller.tripDates?.end, DateTime(2026, 10, 7));
 
@@ -116,6 +143,8 @@ void main() {
 
     expect(controller.canEditTripDates, isFalse);
     expect(controller.tripDates, isNull);
+    expect(controller.weatherScore, isNull);
+    expect(controller.weatherDetail, 'Forecast unavailable');
 
     await controller.setTripDates(
       PackingTripDateRange(
@@ -178,7 +207,7 @@ class _FakePackingLocationSource implements PackingLocationSource {
       subtitle: 'Saved itinerary',
       latitude: 3.139,
       longitude: 101.687,
-      categories: {DestinationCategory.attraction},
+      categories: {DestinationCategory.craft},
     ),
   ];
 }

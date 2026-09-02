@@ -1,21 +1,35 @@
 import 'package:flutter/foundation.dart';
 
 import '../model/packing_location_source.dart';
+import '../model/saved_eco_partners_store.dart';
 import '../model/travel_document.dart';
 import '../model/travel_document_repository.dart';
 import '../model/travel_assistant_cover_image.dart';
 import 'packing_checklist_controller.dart';
 
 typedef TravelDocumentLoader = Future<List<TravelDocument>> Function();
+typedef EcoPartnerCountLoader = Future<int> Function();
+
+Future<int> _loadSavedEcoPartnerCount() async {
+  final store = SavedEcoPartnersStore.instance;
+  await store.ensureLoaded();
+  if (store.error != null && store.saved.isEmpty) {
+    throw StateError(store.error!);
+  }
+  return store.saved.length;
+}
 
 class TravelAssistantDashboardController extends ChangeNotifier {
   TravelAssistantDashboardController({
     PackingChecklistController? checklistController,
     TravelDocumentLoader? documentLoader,
+    EcoPartnerCountLoader? ecoPartnerCountLoader,
     TravelAssistantCoverImageResolverContract? coverResolver,
   }) : checklist = checklistController ?? PackingChecklistController(),
        _ownsChecklistController = checklistController == null,
        _documentLoader = documentLoader ?? TravelDocumentRepository().load,
+       _ecoPartnerCountLoader =
+           ecoPartnerCountLoader ?? _loadSavedEcoPartnerCount,
        _coverResolver = coverResolver ?? TravelAssistantCoverImageResolver() {
     checklist.addListener(_relayChecklistChange);
   }
@@ -23,14 +37,18 @@ class TravelAssistantDashboardController extends ChangeNotifier {
   final PackingChecklistController checklist;
   final bool _ownsChecklistController;
   final TravelDocumentLoader _documentLoader;
+  final EcoPartnerCountLoader _ecoPartnerCountLoader;
   final TravelAssistantCoverImageResolverContract _coverResolver;
 
   int? documentCount;
   int documentBytes = 0;
   bool isLoadingDocuments = false;
+  int? ecoPartnerCount;
+  bool isLoadingEcoPartners = false;
   TravelAssistantCoverImage? coverImage;
   bool isLoadingCover = false;
   String? documentError;
+  String? ecoPartnerError;
   int _coverRequestId = 0;
 
   PackingLocationOption? get selectedLocation => checklist.selectedLocation;
@@ -65,7 +83,11 @@ class TravelAssistantDashboardController extends ChangeNotifier {
   }
 
   Future<void> load() async {
+    isLoadingEcoPartners = true;
+    ecoPartnerError = null;
+    notifyListeners();
     await Future.wait([checklist.load(), refreshDocuments()]);
+    await _fetchEcoPartnerCount();
     await _resolveCover();
   }
 
@@ -89,6 +111,24 @@ class TravelAssistantDashboardController extends ChangeNotifier {
       documentError = 'Could not load document metadata.';
     } finally {
       isLoadingDocuments = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshEcoPartners() async {
+    isLoadingEcoPartners = true;
+    ecoPartnerError = null;
+    notifyListeners();
+    await _fetchEcoPartnerCount();
+  }
+
+  Future<void> _fetchEcoPartnerCount() async {
+    try {
+      ecoPartnerCount = await _ecoPartnerCountLoader();
+    } catch (_) {
+      ecoPartnerError = 'Could not load saved Eco Partners.';
+    } finally {
+      isLoadingEcoPartners = false;
       notifyListeners();
     }
   }

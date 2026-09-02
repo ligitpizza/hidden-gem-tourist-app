@@ -108,6 +108,13 @@ class _TravelAssistantDashboardScreenState
     if (mounted) await _controller.refreshDocuments();
   }
 
+  Future<void> _openEcoPartners() async {
+    await context.push(ShellRoutes.ecoPartners);
+    if (!mounted) return;
+    await _controller.refreshChecklist();
+    if (mounted) await _controller.refreshEcoPartners();
+  }
+
   @override
   void dispose() {
     _releaseController();
@@ -125,7 +132,9 @@ class _TravelAssistantDashboardScreenState
         children: [
           _TravelAssistantHeroCard(
             controller: _controller,
-            onChooseDestination: _openChecklist,
+            onPackingTap: _openChecklist,
+            onEcoPartnersTap: _openEcoPartners,
+            onVaultTap: _openVault,
           ),
           const SizedBox(height: 20),
           _DashboardCard(
@@ -147,7 +156,7 @@ class _TravelAssistantDashboardScreenState
             description:
                 'Discover sustainable hotels, dining, public transport and EV charging partners across Malaysia.',
             button: 'Browse Eco Partners',
-            onTap: () => context.push(ShellRoutes.ecoPartners),
+            onTap: _openEcoPartners,
           ),
           _DashboardCard(
             icon: Icons.folder_copy_outlined,
@@ -171,54 +180,82 @@ class _TravelAssistantDashboardScreenState
 class _TravelAssistantHeroCard extends StatelessWidget {
   const _TravelAssistantHeroCard({
     required this.controller,
-    required this.onChooseDestination,
+    required this.onPackingTap,
+    required this.onEcoPartnersTap,
+    required this.onVaultTap,
   });
 
   final TravelAssistantDashboardController controller;
-  final VoidCallback onChooseDestination;
+  final VoidCallback onPackingTap;
+  final VoidCallback onEcoPartnersTap;
+  final VoidCallback onVaultTap;
 
   @override
   Widget build(BuildContext context) {
     final cover = controller.coverImage;
     final selectedLocation = controller.selectedLocation;
+    final checklist = controller.checklist;
+    final packingValue = checklist.isLoading
+        ? 'Loading'
+        : !controller.hasSelectedLocation
+        ? 'Choose trip'
+        : '${checklist.packedItems}/${checklist.totalItems} packed';
+    final ecoPartnerValue = controller.isLoadingEcoPartners
+        ? 'Loading'
+        : controller.ecoPartnerError != null
+        ? 'Unavailable'
+        : '${controller.ecoPartnerCount ?? 0} saved';
+    final vaultValue = controller.isLoadingDocuments
+        ? 'Loading'
+        : controller.documentError != null
+        ? 'Unavailable'
+        : '${controller.documentCount ?? 0} '
+              '${controller.documentCount == 1 ? 'file' : 'files'}';
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
-      child: SizedBox(
-        height: 255,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 255),
         child: Stack(
-          fit: StackFit.expand,
           children: [
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF315E48), Color(0xFF0D3528)],
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF315E48), Color(0xFF0D3528)],
+                  ),
                 ),
               ),
             ),
             if (cover != null)
-              Image.network(
-                cover.imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              Positioned.fill(
+                child: Image.network(
+                  cover.imageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
               )
             else
-              Align(
-                alignment: const Alignment(0.72, -0.15),
-                child: Icon(
-                  _heroFallbackIcon(selectedLocation),
-                  size: 108,
-                  color: Colors.white.withValues(alpha: 0.10),
+              Positioned.fill(
+                child: Align(
+                  alignment: const Alignment(0.72, -0.15),
+                  child: Icon(
+                    _heroFallbackIcon(selectedLocation),
+                    size: 108,
+                    color: Colors.white.withValues(alpha: 0.10),
+                  ),
                 ),
               ),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0x55001810), Color(0xE600241A)],
-                  stops: [0, 1],
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0x55001810), Color(0xE600241A)],
+                    stops: [0, 1],
+                  ),
                 ),
               ),
             ),
@@ -251,7 +288,7 @@ class _TravelAssistantHeroCard extends StatelessWidget {
                         Flexible(child: _CoverAttribution(image: cover)),
                     ],
                   ),
-                  const Spacer(),
+                  const SizedBox(height: 38),
                   Text(
                     controller.heroTitle,
                     maxLines: 2,
@@ -271,42 +308,36 @@ class _TravelAssistantHeroCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: Colors.white70),
                   ),
-                  if (!controller.hasSelectedLocation) ...[
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: onChooseDestination,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.white70),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      icon: const Icon(Icons.add_location_alt_outlined),
-                      label: const Text('Choose in checklist'),
-                    ),
-                  ],
-                  const Spacer(),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
-                      const Text(
-                        'Readiness Score',
-                        style: TextStyle(color: Colors.white70),
+                      Expanded(
+                        child: _HeroFeatureSummary(
+                          icon: Icons.assignment_turned_in_outlined,
+                          label: 'Packing',
+                          value: packingValue,
+                          onTap: onPackingTap,
+                        ),
                       ),
-                      const Spacer(),
-                      Text(
-                        controller.checklist.isLoading
-                            ? 'Loading…'
-                            : '${controller.readinessScore}% Ready',
-                        style: const TextStyle(color: Color(0xFFFFE5A5)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _HeroFeatureSummary(
+                          icon: Icons.eco_outlined,
+                          label: 'Eco Partners',
+                          value: ecoPartnerValue,
+                          onTap: onEcoPartnersTap,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _HeroFeatureSummary(
+                          icon: Icons.folder_copy_outlined,
+                          label: 'Vault',
+                          value: vaultValue,
+                          onTap: onVaultTap,
+                        ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 7),
-                  LinearProgressIndicator(
-                    value: controller.checklist.isLoading
-                        ? null
-                        : controller.checklistProgress,
-                    color: const Color(0xFFFFD98B),
-                    backgroundColor: Colors.white24,
                   ),
                 ],
               ),
@@ -316,6 +347,67 @@ class _TravelAssistantHeroCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _HeroFeatureSummary extends StatelessWidget {
+  const _HeroFeatureSummary({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: '$label: $value',
+    child: Material(
+      color: Colors.white.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: const Color(0xFFFFE5A5)),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class _CoverAttribution extends StatelessWidget {
@@ -422,8 +514,15 @@ class _DashboardCard extends StatelessWidget {
               Row(
                 children: [
                   const Text('Progress'),
-                  const Spacer(),
-                  Text(progressLabel ?? '${(progress! * 100).round()}%'),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      progressLabel ?? '${(progress! * 100).round()}%',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 6),
@@ -668,7 +767,7 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
                               child: _ReadinessMetric(
                                 Icons.wb_sunny_outlined,
                                 'Weather',
-                                '${_controller.weatherScore}%',
+                                _metricScoreLabel(_controller.weatherScore),
                                 _controller.weatherDetail,
                               ),
                             ),
@@ -676,7 +775,7 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
                               child: _ReadinessMetric(
                                 Icons.medical_services_outlined,
                                 'Health',
-                                '${_controller.healthScore}%',
+                                _metricScoreLabel(_controller.healthScore),
                                 _controller.healthDetail,
                               ),
                             ),
@@ -684,7 +783,7 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
                               child: _ReadinessMetric(
                                 Icons.directions_bus_outlined,
                                 'Transit',
-                                '${_controller.transitScore}%',
+                                _metricScoreLabel(_controller.transitScore),
                                 _controller.transitDetail,
                               ),
                             ),
@@ -1012,6 +1111,8 @@ class _PackingChecklistEmptyState extends StatelessWidget {
   );
 }
 
+String _metricScoreLabel(int? score) => score == null ? 'N/A' : '$score%';
+
 class _ReadinessMetric extends StatelessWidget {
   const _ReadinessMetric(this.icon, this.label, this.value, this.detail);
   final IconData icon;
@@ -1061,8 +1162,11 @@ class _ChecklistCard extends StatelessWidget {
     'Cultural Visits' => Icons.account_balance_outlined,
     'Health & Personal Care' => Icons.health_and_safety_outlined,
     'Weather Essentials' => Icons.wb_sunny_outlined,
-    'Hotel Stay' => Icons.hotel_outlined,
+    'Hotel Check-in' => Icons.hotel_outlined,
+    'Overnight Essentials' => Icons.bed_outlined,
     'Dining Essentials' => Icons.restaurant_outlined,
+    'Getting There' => Icons.directions_transit_outlined,
+    'Personal Comfort' => Icons.self_improvement_outlined,
     _ => Icons.backpack_outlined,
   };
 

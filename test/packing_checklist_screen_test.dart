@@ -125,6 +125,8 @@ void main() {
     expect(find.text('Trip dates'), findsNothing);
     expect(find.text('Trip dates not set'), findsNothing);
     expect(find.text('Set dates'), findsNothing);
+    expect(find.text('N/A'), findsOneWidget);
+    expect(find.text('0/0 ready'), findsNothing);
   });
 }
 
@@ -156,7 +158,7 @@ class _ItineraryLocationSource implements PackingLocationSource {
       subtitle: 'Saved itinerary',
       latitude: 3.139,
       longitude: 101.687,
-      categories: {DestinationCategory.attraction},
+      categories: {DestinationCategory.craft},
     ),
   ];
 }
