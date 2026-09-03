@@ -23,6 +23,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
   final _scrollController = ScrollController();
+  bool _showingHomeSectionResults = false;
 
   @override
   void initState() {
@@ -82,9 +83,10 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
     final shown = _controller.visiblePartners;
     final showSectionedHome = _controller.showSectionedHome;
     return Scaffold(
-      appBar: const AppHeader.pushed(
+      appBar: AppHeader.pushed(
         title: 'Eco Partners',
         fallbackPath: ShellRoutes.travelAssistant,
+        onBack: _showingHomeSectionResults ? _returnToSectionedHome : null,
       ),
       body: ListView(
         key: const ValueKey('eco_partner_main_scroll'),
@@ -363,7 +365,14 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
   );
 
   void _showAllForHomeSection(EcoPartnerHomeSection section) {
+    setState(() => _showingHomeSectionResults = true);
     _controller.showAllForHomeSection(section);
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
+  }
+
+  void _returnToSectionedHome() {
+    setState(() => _showingHomeSectionResults = false);
+    _controller.selectFilter('All');
     if (_scrollController.hasClients) _scrollController.jumpTo(0);
   }
 

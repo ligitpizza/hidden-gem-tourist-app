@@ -14,19 +14,23 @@ import '../../config/theme.dart';
 class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   const AppHeader.tabRoot({super.key, required this.title, this.actions})
     : showBackButton = false,
-      fallbackPath = null;
+      fallbackPath = null,
+      onBack = null;
 
   const AppHeader.pushed({
     super.key,
     required this.title,
     this.actions,
     this.fallbackPath,
+    this.onBack,
   }) : showBackButton = true;
 
   final String title;
   final bool showBackButton;
   final List<Widget>? actions;
   final String? fallbackPath;
+  /// Handles a screen-specific back state before route navigation is used.
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +64,10 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                   shape: const CircleBorder(),
                 ),
                 onPressed: () {
+                  if (onBack != null) {
+                    onBack!();
+                    return;
+                  }
                   final navigator = Navigator.maybeOf(context);
                   if (navigator?.canPop() == true) {
                     navigator!.pop();

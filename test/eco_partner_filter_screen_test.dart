@@ -214,6 +214,36 @@ void main() {
     expect(repository.coordinateSearches, 1);
   });
 
+  testWidgets('Up from category More returns to the Eco Partners home view', (
+    tester,
+  ) async {
+    final controller = _InitialScreenController(_CatalogScreenRepository([
+      _categoryPartner(
+        'Hotel One',
+        1,
+        category: EcoPartnerCategory.stay,
+        subtype: 'Hotel',
+      ),
+    ]));
+
+    await tester.pumpWidget(
+      MaterialApp(home: EcoPartnersScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    final more = find.byKey(const ValueKey('eco_partner_more_hotel'));
+    await tester.ensureVisible(more);
+    await tester.tap(more);
+    await tester.pumpAndSettle();
+    expect(controller.filter, 'Stay');
+
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
+    await tester.pumpAndSettle();
+
+    expect(controller.filter, 'All');
+    expect(find.byKey(const ValueKey('eco_partner_more_hotel')), findsOneWidget);
+  });
+
   testWidgets('partner-name suggestions can be selected', (tester) async {
     final somerset = _screenPartner('Somerset Kuala Lumpur', 2);
     final repository = _CatalogScreenRepository([
