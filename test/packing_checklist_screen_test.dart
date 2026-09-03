@@ -91,8 +91,8 @@ void main() {
 
     await tester.tap(find.text('Set dates'));
     await tester.pumpAndSettle();
-    expect(find.text('Select trip dates'), findsOneWidget);
-    Navigator.of(tester.element(find.text('Select trip dates'))).pop();
+    expect(find.text('Select hotel stay dates'), findsOneWidget);
+    Navigator.of(tester.element(find.text('Select hotel stay dates'))).pop();
     await tester.pumpAndSettle();
     expect(find.text('Trip dates not set'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -127,6 +127,70 @@ void main() {
     expect(find.text('Set dates'), findsNothing);
     expect(find.text('N/A'), findsOneWidget);
     expect(find.text('0/0 ready'), findsNothing);
+  });
+
+  testWidgets('dining uses a single visit-date picker', (tester) async {
+    final controller = PackingChecklistController(
+      locationSource: const _DiningLocationSource(),
+      weatherService: _WeatherService(),
+      persistence: _ChecklistRepository(),
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: ReadyToWanderScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dining date not set'), findsOneWidget);
+    expect(find.text('Set date'), findsOneWidget);
+    await tester.tap(find.text('Set date'));
+    await tester.pumpAndSettle();
+    expect(find.text('Select dining visit date'), findsOneWidget);
+    Navigator.of(tester.element(find.text('Select dining visit date'))).pop();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('failed forecast can be retried without removing trip dates', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final dates = PackingTripDateRange(
+      start: today.add(const Duration(days: 1)),
+      end: today.add(const Duration(days: 2)),
+    );
+    final repository = _ChecklistRepository()..dates['test-trip'] = dates;
+    final weatherService = _RetryWeatherService();
+    final controller = PackingChecklistController(
+      locationSource: const _LocationSource(),
+      weatherService: weatherService,
+      persistence: repository,
+      now: () => today,
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: ReadyToWanderScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Forecast temporarily unavailable'), findsWidgets);
+    expect(find.text('Retry forecast'), findsOneWidget);
+    await tester.tap(find.text('Retry forecast'));
+    await tester.pumpAndSettle();
+
+    expect(weatherService.calls, 2);
+    expect(controller.tripDates, same(dates));
+    expect(find.text('Retry forecast'), findsNothing);
+    expect(find.text('65% rain'), findsWidgets);
+    expect(
+      controller.sections.any(
+        (section) => section.name == 'Weather Essentials',
+      ),
+      isTrue,
+    );
   });
 }
 
@@ -163,12 +227,55 @@ class _ItineraryLocationSource implements PackingLocationSource {
   ];
 }
 
+class _DiningLocationSource implements PackingLocationSource {
+  const _DiningLocationSource();
+
+  @override
+  Future<List<PackingLocationOption>> load() async => const [
+    PackingLocationOption(
+      id: 'dining-trip',
+      label: 'Plant Cafe',
+      subtitle: 'Saved Eco Partner',
+      latitude: 3.139,
+      longitude: 101.687,
+      categories: {DestinationCategory.restaurant},
+      ecoPartnerCategory: EcoPartnerCategory.dining,
+    ),
+  ];
+}
+
 class _WeatherService extends PackingWeatherService {
   @override
-  Future<PackingWeatherSummary?> getForecast({
+  Future<PackingForecastResult> getForecast({
     required double latitude,
     required double longitude,
-  }) async => null;
+    required PackingTripDateRange dates,
+  }) async => const PackingForecastResult.failed();
+}
+
+class _RetryWeatherService extends PackingWeatherService {
+  int calls = 0;
+
+  @override
+  Future<PackingForecastResult> getForecast({
+    required double latitude,
+    required double longitude,
+    required PackingTripDateRange dates,
+  }) async {
+    calls++;
+    if (calls == 1) return const PackingForecastResult.failed();
+    return PackingForecastResult(
+      status: PackingForecastStatus.available,
+      summary: const PackingWeatherSummary(
+        maximumTemperature: 32,
+        minimumTemperature: 24,
+        rainProbability: 65,
+        uvIndex: 7,
+      ),
+      coverageStart: dates.start,
+      coverageEnd: dates.end,
+    );
+  }
 }
 
 class _ChecklistRepository implements PackingChecklistRepositoryContract {

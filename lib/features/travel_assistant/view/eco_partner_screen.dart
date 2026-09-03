@@ -22,6 +22,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
   late final bool _ownsController;
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
+  final _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -55,6 +56,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
     _search.removeListener(_onSearchTextChanged);
     _search.dispose();
     _searchFocus.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -85,6 +87,8 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
         fallbackPath: ShellRoutes.travelAssistant,
       ),
       body: ListView(
+        key: const ValueKey('eco_partner_main_scroll'),
+        controller: _scrollController,
         padding: const EdgeInsets.all(16),
         children: [
           Text(
@@ -345,14 +349,23 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
     children: [
       for (final section in EcoPartnerHomeSection.values)
         _HomePartnerSection(
+          section: section,
           title: _homeSectionTitle(section),
           icon: _homeSectionIcon(section),
           partners: _controller.partnersForHomeSection(section),
           showDistance: _controller.showsUserDistance,
           onTap: _details,
+          onMore: section == EcoPartnerHomeSection.recommended
+              ? null
+              : () => _showAllForHomeSection(section),
         ),
     ],
   );
+
+  void _showAllForHomeSection(EcoPartnerHomeSection section) {
+    _controller.showAllForHomeSection(section);
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
+  }
 
   Widget _resultsView(List<EcoPartner> partners) {
     if (_controller.layout == EcoPartnerLayout.list) {
@@ -631,6 +644,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
       builder: (_) => EcoPartnerDetailScreen(
         partner: partner,
         destinationLabel: _controller.result?.destination.label ?? '',
+        fallbackPath: ShellRoutes.ecoPartners,
         showDistance: _controller.showsUserDistance,
         outsideRadiusKm: _controller.isOutsideBrowseRadius(partner)
             ? _controller.activeNearbyRadius
@@ -642,18 +656,22 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
 
 class _HomePartnerSection extends StatelessWidget {
   const _HomePartnerSection({
+    required this.section,
     required this.title,
     required this.icon,
     required this.partners,
     required this.showDistance,
     required this.onTap,
+    required this.onMore,
   });
 
+  final EcoPartnerHomeSection section;
   final String title;
   final IconData icon;
   final List<EcoPartner> partners;
   final bool showDistance;
   final ValueChanged<EcoPartner> onTap;
+  final VoidCallback? onMore;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -691,10 +709,19 @@ class _HomePartnerSection extends StatelessWidget {
           SizedBox(
             height: 222,
             child: ListView.separated(
+              key: ValueKey('eco_partner_home_list_${section.name}'),
               scrollDirection: Axis.horizontal,
-              itemCount: partners.length,
+              itemCount: partners.length + (onMore == null ? 0 : 1),
               separatorBuilder: (_, _) => const SizedBox(width: 10),
               itemBuilder: (context, index) {
+                if (index == partners.length) {
+                  return _HomeMoreCard(
+                    section: section,
+                    title: title,
+                    icon: icon,
+                    onTap: onMore!,
+                  );
+                }
                 final partner = partners[index];
                 return _HomePartnerCard(
                   partner: partner,
@@ -705,6 +732,74 @@ class _HomePartnerSection extends StatelessWidget {
             ),
           ),
       ],
+    ),
+  );
+}
+
+class _HomeMoreCard extends StatelessWidget {
+  const _HomeMoreCard({
+    required this.section,
+    required this.title,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final EcoPartnerHomeSection section;
+  final String title;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    key: ValueKey('eco_partner_more_${section.name}'),
+    width: 205,
+    child: Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      color: const Color(0xFFF1F5F2),
+      child: InkWell(
+        onTap: onTap,
+        child: Semantics(
+          button: true,
+          label: 'View all $title Eco Partners',
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: const Color(0xFFDDEBE4),
+                  child: Icon(icon, color: const Color(0xFF07513C), size: 28),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'More',
+                  style: TextStyle(
+                    color: Color(0xFF164C3B),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 10),
+                const Icon(
+                  Icons.arrow_forward,
+                  color: Color(0xFF07513C),
+                  size: 21,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     ),
   );
 }

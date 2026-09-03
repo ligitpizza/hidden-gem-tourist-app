@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:collab/features/travel_assistant/model/eco_partner.dart';
 import 'package:collab/features/travel_assistant/model/eco_partner_repository.dart';
+import 'package:dio/dio.dart';
 
 void main() {
   group('eco recommendation mapping', () {
@@ -57,9 +58,9 @@ void main() {
         'lon': 101.69,
         'tags': {
           'amenity': 'charging_station',
-          if (name != null) 'name': name,
-          if (operatorName != null) 'operator': operatorName,
-          if (street != null) 'addr:street': street,
+          'name': ?name,
+          'operator': ?operatorName,
+          'addr:street': ?street,
         },
       }, nearbyLabel: nearbyLabel);
 
@@ -77,6 +78,53 @@ void main() {
         'EV charger near Kuala Lumpur',
       );
       expect(charger(name: ' ')?.name, 'EV charging station');
+    });
+
+    test('keeps successful OSM categories when another query fails', () async {
+      final dio = Dio();
+      var requests = 0;
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            requests++;
+            if (options.queryParameters['q'] == 'charging station') {
+              handler.resolve(
+                Response<List<Map<String, dynamic>>>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: [
+                    {
+                      'osm_type': 'node',
+                      'osm_id': 42,
+                      'lat': '3.14',
+                      'lon': '101.69',
+                      'category': 'amenity',
+                      'type': 'charging_station',
+                      'name': 'Nearby charger',
+                      'display_name': 'Nearby charger, Kuala Lumpur',
+                    },
+                  ],
+                ),
+              );
+              return;
+            }
+            handler.reject(
+              DioException(
+                requestOptions: options,
+                message: 'Category unavailable',
+              ),
+            );
+          },
+        ),
+      );
+
+      final partners = await OverpassEcoSource(dio: dio).search(
+        const EcoDestination('Current location', 3.139, 101.687),
+        scope: const EcoPartnerSearchScope.nearby(10),
+      );
+
+      expect(requests, 3);
+      expect(partners.map((partner) => partner.name), ['Nearby charger']);
     });
   });
 }

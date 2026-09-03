@@ -447,10 +447,11 @@ class _DelayedLocationSource implements PackingLocationSource {
 
 class _NoWeatherService extends PackingWeatherService {
   @override
-  Future<PackingWeatherSummary?> getForecast({
+  Future<PackingForecastResult> getForecast({
     required double latitude,
     required double longitude,
-  }) async => null;
+    required PackingTripDateRange dates,
+  }) async => const PackingForecastResult.failed();
 }
 
 class _MemoryChecklistRepository implements PackingChecklistRepositoryContract {

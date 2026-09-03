@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:collab/features/travel_assistant/controller/packing_checklist_controller.dart';
 import 'package:collab/features/travel_assistant/model/eco_partner.dart';
 import 'package:collab/features/travel_assistant/model/packing_checklist.dart';
@@ -144,7 +146,7 @@ void main() {
     expect(controller.canEditTripDates, isFalse);
     expect(controller.tripDates, isNull);
     expect(controller.weatherScore, isNull);
-    expect(controller.weatherDetail, 'Forecast unavailable');
+    expect(controller.weatherDetail, 'Forecast temporarily unavailable');
 
     await controller.setTripDates(
       PackingTripDateRange(
@@ -155,6 +157,174 @@ void main() {
     expect(controller.tripDates, isNull);
     controller.dispose();
   });
+
+  test(
+    'Eco Partner weather waits for dates and refreshes on changes',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final weatherService = _RecordingWeatherService();
+      final controller = PackingChecklistController(
+        locationSource: _FakePackingLocationSource(),
+        weatherService: weatherService,
+        now: () => DateTime(2026, 9, 3),
+      );
+
+      await controller.load();
+      expect(weatherService.requestedDates, isEmpty);
+      expect(controller.forecastStatus, PackingForecastStatus.needsDates);
+      expect(controller.weatherScore, isNull);
+      expect(controller.weatherDetail, 'Set trip dates for forecast');
+
+      final dates = PackingTripDateRange(
+        start: DateTime(2026, 9, 5),
+        end: DateTime(2026, 9, 7),
+      );
+      await controller.setTripDates(dates);
+
+      expect(weatherService.requestedDates, [same(dates)]);
+      expect(controller.forecastStatus, PackingForecastStatus.available);
+      expect(controller.weatherScore, 0);
+      expect(
+        controller.sections
+            .where((section) => section.name == 'Weather Essentials')
+            .expand((section) => section.items)
+            .map((item) => item.id),
+        containsAll(['umbrella', 'rain_jacket', 'breathable_clothes']),
+      );
+
+      await controller.clearTripDates();
+      expect(weatherService.requestedDates, hasLength(1));
+      expect(controller.forecastStatus, PackingForecastStatus.needsDates);
+      expect(controller.weatherScore, isNull);
+      expect(
+        controller.sections.any(
+          (section) => section.name == 'Weather Essentials',
+        ),
+        isFalse,
+      );
+      controller.dispose();
+    },
+  );
+
+  test(
+    'controller validates past, distant, and multi-day dining dates',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final controller = PackingChecklistController(
+        locationSource: _FakePackingLocationSource(),
+        weatherService: _NoWeatherService(),
+        now: () => DateTime(2026, 9, 3),
+      );
+      await controller.load();
+
+      expect(
+        () => controller.setTripDates(
+          PackingTripDateRange(
+            start: DateTime(2026, 9, 2),
+            end: DateTime(2026, 9, 3),
+          ),
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => controller.setTripDates(
+          PackingTripDateRange(
+            start: DateTime(2031, 9, 3),
+            end: DateTime(2031, 9, 4),
+          ),
+        ),
+        throwsArgumentError,
+      );
+
+      await controller.selectLocation('eco:2');
+      expect(
+        () => controller.setTripDates(
+          PackingTripDateRange(
+            start: DateTime(2026, 9, 5),
+            end: DateTime(2026, 9, 6),
+          ),
+        ),
+        throwsArgumentError,
+      );
+      await controller.setTripDates(
+        PackingTripDateRange(
+          start: DateTime(2026, 9, 5),
+          end: DateTime(2026, 9, 5),
+        ),
+      );
+      expect(controller.tripDates?.isSingleDay, isTrue);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'a stale forecast cannot overwrite a newer location selection',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final repository = PackingChecklistRepository(userId: 'race-user');
+      final dates = PackingTripDateRange(
+        start: DateTime(2026, 9, 5),
+        end: DateTime(2026, 9, 5),
+      );
+      await repository.saveTripDates('eco:1', dates);
+      await repository.saveTripDates('eco:2', dates);
+      final weatherService = _DelayedWeatherService();
+      final controller = PackingChecklistController(
+        locationSource: _FakePackingLocationSource(),
+        weatherService: weatherService,
+        persistence: repository,
+        now: () => DateTime(2026, 9, 3),
+      );
+
+      final initialLoad = controller.load();
+      await weatherService.hotelStarted.future;
+      final switchLocation = controller.selectLocation('eco:2');
+      await weatherService.diningStarted.future;
+      weatherService.dining.complete(
+        _availableForecast(dates, maximumTemperature: 29),
+      );
+      await switchLocation;
+      weatherService.hotel.complete(
+        _availableForecast(dates, maximumTemperature: 38),
+      );
+      await initialLoad;
+
+      expect(controller.selectedLocationId, 'eco:2');
+      expect(controller.weather?.maximumTemperature, 29);
+      expect(controller.isLoading, isFalse);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'a saved multi-day dining range is normalized to its visit day',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final repository = PackingChecklistRepository(userId: 'dining-user');
+      await repository.saveSelection('eco:2');
+      await repository.saveTripDates(
+        'eco:2',
+        PackingTripDateRange(
+          start: DateTime(2026, 9, 5),
+          end: DateTime(2026, 9, 7),
+        ),
+      );
+      final controller = PackingChecklistController(
+        locationSource: _FakePackingLocationSource(),
+        weatherService: _NoWeatherService(),
+        persistence: repository,
+        now: () => DateTime(2026, 9, 3),
+      );
+
+      await controller.load();
+
+      expect(controller.selectedLocationId, 'eco:2');
+      expect(controller.tripDates?.start, DateTime(2026, 9, 5));
+      expect(controller.tripDates?.end, DateTime(2026, 9, 5));
+      expect((await repository.loadTripDates('eco:2'))?.isSingleDay, isTrue);
+      controller.dispose();
+    },
+  );
 
   test('packing cache is isolated by authenticated user ID', () async {
     SharedPreferences.setMockInitialValues({});
@@ -214,8 +384,67 @@ class _FakePackingLocationSource implements PackingLocationSource {
 
 class _NoWeatherService extends PackingWeatherService {
   @override
-  Future<PackingWeatherSummary?> getForecast({
+  Future<PackingForecastResult> getForecast({
     required double latitude,
     required double longitude,
-  }) async => null;
+    required PackingTripDateRange dates,
+  }) async => const PackingForecastResult.failed();
 }
+
+class _RecordingWeatherService extends PackingWeatherService {
+  final List<PackingTripDateRange> requestedDates = [];
+
+  @override
+  Future<PackingForecastResult> getForecast({
+    required double latitude,
+    required double longitude,
+    required PackingTripDateRange dates,
+  }) async {
+    requestedDates.add(dates);
+    return PackingForecastResult(
+      status: PackingForecastStatus.available,
+      summary: const PackingWeatherSummary(
+        maximumTemperature: 33,
+        minimumTemperature: 24,
+        rainProbability: 70,
+        uvIndex: 8,
+      ),
+      coverageStart: dates.start,
+      coverageEnd: dates.end,
+    );
+  }
+}
+
+class _DelayedWeatherService extends PackingWeatherService {
+  final hotel = Completer<PackingForecastResult>();
+  final dining = Completer<PackingForecastResult>();
+  final hotelStarted = Completer<void>();
+  final diningStarted = Completer<void>();
+
+  @override
+  Future<PackingForecastResult> getForecast({
+    required double latitude,
+    required double longitude,
+    required PackingTripDateRange dates,
+  }) {
+    if (latitude == 5.98) {
+      hotelStarted.complete();
+      return hotel.future;
+    }
+    diningStarted.complete();
+    return dining.future;
+  }
+}
+
+PackingForecastResult _availableForecast(
+  PackingTripDateRange dates, {
+  required double maximumTemperature,
+}) => PackingForecastResult(
+  status: PackingForecastStatus.available,
+  summary: PackingWeatherSummary(
+    maximumTemperature: maximumTemperature,
+    minimumTemperature: 24,
+  ),
+  coverageStart: dates.start,
+  coverageEnd: dates.end,
+);

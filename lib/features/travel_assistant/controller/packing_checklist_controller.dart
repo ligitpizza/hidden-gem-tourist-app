@@ -12,13 +12,16 @@ class PackingChecklistController extends ChangeNotifier {
     PackingLocationSource? locationSource,
     PackingWeatherService? weatherService,
     PackingChecklistRepositoryContract? persistence,
+    DateTime Function()? now,
   }) : _locationSource = locationSource ?? SavedPackingLocationSource(),
        _weatherService = weatherService ?? PackingWeatherService(),
-       _persistence = persistence ?? PackingChecklistRepository();
+       _persistence = persistence ?? PackingChecklistRepository(),
+       _now = now ?? DateTime.now;
 
   final PackingLocationSource _locationSource;
   final PackingWeatherService _weatherService;
   final PackingChecklistRepositoryContract _persistence;
+  final DateTime Function() _now;
   final Set<String> packedIds = {};
   List<PackingChecklistSection> sections = const [];
   List<PackingChecklistItem> customItems = const [];
@@ -28,8 +31,11 @@ class PackingChecklistController extends ChangeNotifier {
   Set<DestinationCategory> destinationCategories = const {};
   EcoPartnerCategory? ecoPartnerCategory;
   bool isLoading = true;
+  bool isWeatherLoading = false;
   PackingWeatherSummary? weather;
+  PackingForecastResult forecast = const PackingForecastResult.needsDates();
   PackingTripDateRange? tripDates;
+  int _requestId = 0;
 
   static const _weatherIds = {
     'umbrella',
@@ -55,15 +61,36 @@ class PackingChecklistController extends ChangeNotifier {
     'transport_payment',
   };
 
-  int? get weatherScore => _metricScore(_weatherIds);
+  int? get weatherScore {
+    final applicable = sections
+        .where((section) => section.name == 'Weather Essentials')
+        .expand((section) => section.items)
+        .toList();
+    if (applicable.isEmpty) return null;
+    final packed = applicable
+        .where((item) => packedIds.contains(item.id))
+        .length;
+    return (packed * 100 / applicable.length).round();
+  }
+
   int? get healthScore => _metricScore(_healthIds);
   int? get transitScore => _metricScore(_transitIds);
-  String get weatherDetail {
-    if (weatherScore == null) {
-      return weather == null ? 'Forecast unavailable' : 'No weather items';
-    }
-    return weather?.shortDescription ?? 'Forecast unavailable';
-  }
+  PackingForecastStatus get forecastStatus => forecast.status;
+  bool get hasDateMatchedForecast => canEditTripDates && forecast.hasForecast;
+  bool get canRetryForecast =>
+      tripDates != null && forecast.status == PackingForecastStatus.failed;
+  String get weatherDetail => switch (forecast.status) {
+    PackingForecastStatus.needsDates => 'Set trip dates for forecast',
+    PackingForecastStatus.loading => 'Updating forecast…',
+    PackingForecastStatus.notYetAvailable =>
+      'Forecast expected from ${_formatDate(forecast.availableFrom)}',
+    PackingForecastStatus.expired => 'Trip dates have passed',
+    PackingForecastStatus.failed => 'Forecast temporarily unavailable',
+    PackingForecastStatus.partial =>
+      '${weather?.shortDescription ?? 'Forecast'} · Partial ${_formatCoverage()}',
+    PackingForecastStatus.available =>
+      weather?.shortDescription ?? 'Forecast available',
+  };
 
   List<String> get categoryLabels => switch (ecoPartnerCategory) {
     EcoPartnerCategory.stay => const ['Hotel'],
@@ -94,17 +121,22 @@ class PackingChecklistController extends ChangeNotifier {
   };
 
   Future<void> load() async {
+    final requestId = ++_requestId;
     isLoading = true;
     notifyListeners();
-    locationOptions = await _locationSource.load();
+    final loadedLocations = await _locationSource.load();
+    if (requestId != _requestId) return;
+    locationOptions = loadedLocations;
     final savedSelection = await _persistence.loadSelection();
+    if (requestId != _requestId) return;
     selectedLocationId =
         locationOptions.any((option) => option.id == savedSelection)
         ? savedSelection
         : locationOptions.firstOrNull?.id;
-    await _rebuildForSelectedLocation();
     await _loadCustomItems();
-    await _loadLocationState();
+    if (requestId != _requestId) return;
+    await _loadSelectedLocation(requestId);
+    if (requestId != _requestId) return;
     isLoading = false;
     notifyListeners();
   }
@@ -114,36 +146,26 @@ class PackingChecklistController extends ChangeNotifier {
         !locationOptions.any((option) => option.id == id)) {
       return;
     }
+    final requestId = ++_requestId;
     isLoading = true;
     notifyListeners();
     selectedLocationId = id;
     await _persistence.saveSelection(id);
-    await _rebuildForSelectedLocation();
-    await _loadLocationState();
+    if (requestId != _requestId) return;
+    await _loadSelectedLocation(requestId);
+    if (requestId != _requestId) return;
     isLoading = false;
     notifyListeners();
   }
 
-  Future<void> _rebuildForSelectedLocation() async {
-    final selected = locationOptions
-        .where((option) => option.id == selectedLocationId)
-        .firstOrNull;
+  Future<void> _loadSelectedLocation(int requestId) async {
+    final selected = selectedLocation;
     tripLabel = selected?.label ?? 'Travel essentials';
     destinationCategories = selected?.categories ?? const {};
     ecoPartnerCategory = selected?.ecoPartnerCategory;
-    weather = selected == null
-        ? null
-        : await _weatherService.getForecast(
-            latitude: selected.latitude,
-            longitude: selected.longitude,
-          );
-    sections = selected == null
-        ? const []
-        : _buildSections(
-            destinationCategories,
-            weather,
-            ecoPartnerCategory: selected.ecoPartnerCategory,
-          );
+    final loaded = await _loadLocationState(selected, requestId);
+    if (!loaded) return;
+    await _refreshForecastAndSections(selected, requestId: requestId);
   }
 
   int? _metricScore(Set<String> ids) {
@@ -198,40 +220,196 @@ class PackingChecklistController extends ChangeNotifier {
 
   Future<void> setTripDates(PackingTripDateRange value) async {
     if (!canEditTripDates) return;
+    final today = _dateOnly(_now());
+    final lastAllowedDate = DateTime(today.year + 5, today.month, today.day);
+    if (value.start.isBefore(today)) {
+      throw ArgumentError.value(value.start, 'start', 'must be today or later');
+    }
+    if (value.end.isAfter(lastAllowedDate)) {
+      throw ArgumentError.value(value.end, 'end', 'must be within five years');
+    }
+    if (ecoPartnerCategory == EcoPartnerCategory.dining && !value.isSingleDay) {
+      throw ArgumentError.value(
+        value.end,
+        'end',
+        'dining visits must use a single date',
+      );
+    }
+
+    final requestId = ++_requestId;
     tripDates = value;
     notifyListeners();
     await _persistence.saveTripDates(selectedLocationId ?? 'essentials', value);
+    if (requestId != _requestId) return;
+    await _refreshForecastAndSections(
+      selectedLocation,
+      requestId: requestId,
+      announceLoading: true,
+    );
   }
 
   Future<void> clearTripDates() async {
     if (!canEditTripDates) return;
+    final requestId = ++_requestId;
     tripDates = null;
     notifyListeners();
     await _persistence.clearTripDates(selectedLocationId ?? 'essentials');
+    if (requestId != _requestId) return;
+    await _refreshForecastAndSections(
+      selectedLocation,
+      requestId: requestId,
+      announceLoading: true,
+    );
   }
 
-  Future<void> _loadLocationState() async {
-    final locationId = selectedLocationId ?? 'essentials';
-    final selected = selectedLocation;
+  Future<void> retryForecast() async {
+    if (!canRetryForecast) return;
+    final requestId = ++_requestId;
+    await _refreshForecastAndSections(
+      selectedLocation,
+      requestId: requestId,
+      announceLoading: true,
+    );
+  }
+
+  Future<bool> _loadLocationState(
+    PackingLocationOption? selected,
+    int requestId,
+  ) async {
+    final locationId = selected?.id ?? 'essentials';
     final values = await Future.wait<Object?>([
       _persistence.loadPackedIds(locationId),
       if (selected?.datesEditable == true)
         _persistence.loadTripDates(locationId),
     ]);
+    if (requestId != _requestId || selected?.id != selectedLocationId) {
+      return false;
+    }
+    var loadedDates = selected?.datesEditable == true
+        ? values[1] as PackingTripDateRange?
+        : null;
+    if (selected?.ecoPartnerCategory == EcoPartnerCategory.dining &&
+        loadedDates != null &&
+        !loadedDates.isSingleDay) {
+      loadedDates = PackingTripDateRange(
+        start: loadedDates.start,
+        end: loadedDates.start,
+      );
+      await _persistence.saveTripDates(locationId, loadedDates);
+      if (requestId != _requestId || selected?.id != selectedLocationId) {
+        return false;
+      }
+    }
     packedIds
       ..clear()
       ..addAll(values[0] as Set<String>);
-    tripDates = selected?.datesEditable == true
-        ? values[1] as PackingTripDateRange?
-        : null;
+    tripDates = loadedDates;
+    return true;
+  }
+
+  Future<void> _refreshForecastAndSections(
+    PackingLocationOption? selected, {
+    required int requestId,
+    bool announceLoading = false,
+  }) async {
+    if (selected == null) {
+      weather = null;
+      forecast = const PackingForecastResult.needsDates();
+      sections = const [];
+      isWeatherLoading = false;
+      return;
+    }
+
+    final selectedDates = selected.datesEditable
+        ? tripDates
+        : _upcomingItineraryDates();
+    if (selectedDates == null) {
+      weather = null;
+      forecast = const PackingForecastResult.needsDates();
+      isWeatherLoading = false;
+      _rebuildSections(selected);
+      _sanitizePackedIds();
+      if (announceLoading) notifyListeners();
+      return;
+    }
+
+    isWeatherLoading = true;
+    forecast = const PackingForecastResult.loading();
+    weather = null;
+    _rebuildSections(selected);
+    if (announceLoading) notifyListeners();
+
+    final result = await _weatherService.getForecast(
+      latitude: selected.latitude,
+      longitude: selected.longitude,
+      dates: selectedDates,
+    );
+    if (requestId != _requestId || selected.id != selectedLocationId) return;
+
+    forecast = result;
+    weather = result.summary;
+    isWeatherLoading = false;
+    _rebuildSections(selected);
+    _sanitizePackedIds();
+    if (announceLoading) notifyListeners();
+  }
+
+  void _rebuildSections(PackingLocationOption selected) {
+    sections = _buildSections(
+      destinationCategories,
+      weather,
+      ecoPartnerCategory: selected.ecoPartnerCategory,
+    );
+  }
+
+  void _sanitizePackedIds() {
     final validIds =
         sections
             .expand((section) => section.items)
             .map((item) => item.id)
             .toSet()
-          ..addAll(customItems.map((item) => item.id));
+          ..addAll(customItems.map((item) => item.id))
+          ..addAll(_weatherIds);
     packedIds.removeWhere((id) => !validIds.contains(id));
   }
+
+  PackingTripDateRange _upcomingItineraryDates() {
+    final today = _dateOnly(_now());
+    return PackingTripDateRange(
+      start: today,
+      end: today.add(const Duration(days: 6)),
+    );
+  }
+
+  String _formatCoverage() {
+    final start = forecast.coverageStart;
+    final end = forecast.coverageEnd;
+    if (start == null || end == null) return 'coverage';
+    if (start == end) return _formatDate(start);
+    return '${_formatDate(start)}–${_formatDate(end)}';
+  }
+
+  static String _formatDate(DateTime? value) {
+    if (value == null) return 'closer to the trip';
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[value.month - 1]} ${value.day}, ${value.year}';
+  }
+
+  static DateTime _dateOnly(DateTime value) =>
+      DateTime(value.year, value.month, value.day);
 
   Future<void> _loadCustomItems() async {
     customItems = await _persistence.loadCustomItems();
@@ -332,12 +510,13 @@ class PackingChecklistController extends ChangeNotifier {
         'Light indoor layer',
         'Useful in strongly air-conditioned dining spaces',
       );
-      if (weather != null && weather.rainProbability >= 40) {
+      final rainProbability = weather?.rainProbability;
+      if (rainProbability != null && rainProbability >= 40) {
         add(
           'Weather Essentials',
           'umbrella',
           'Compact umbrella',
-          'Rain probability reaches ${weather.rainProbability.round()}%',
+          'Rain probability reaches ${rainProbability.round()}%',
         );
       }
       return build();
@@ -434,12 +613,13 @@ class PackingChecklistController extends ChangeNotifier {
         'Reusable laundry bag',
         'Keep worn clothing separate without disposable plastic bags',
       );
-      if (weather != null && weather.rainProbability >= 40) {
+      final rainProbability = weather?.rainProbability;
+      if (rainProbability != null && rainProbability >= 40) {
         add(
           'Weather Essentials',
           'umbrella',
           'Compact umbrella',
-          'Rain probability reaches ${weather.rainProbability.round()}%',
+          'Rain probability reaches ${rainProbability.round()}%',
         );
         add(
           'Weather Essentials',
@@ -523,12 +703,13 @@ class PackingChecklistController extends ChangeNotifier {
     );
 
     if (weather != null) {
-      if (weather.rainProbability >= 40) {
+      final rainProbability = weather.rainProbability;
+      if (rainProbability != null && rainProbability >= 40) {
         add(
           'Weather Essentials',
           'umbrella',
           'Compact umbrella',
-          'Rain probability reaches ${weather.rainProbability.round()}%',
+          'Rain probability reaches ${rainProbability.round()}%',
         );
         add(
           'Weather Essentials',
@@ -537,12 +718,13 @@ class PackingChecklistController extends ChangeNotifier {
           'Recommended for the destination forecast',
         );
       }
-      if (weather.uvIndex >= 6) {
+      final uvIndex = weather.uvIndex;
+      if (uvIndex != null && uvIndex >= 6) {
         add(
           'Weather Essentials',
           'sunscreen',
           'Sunscreen',
-          'UV index may reach ${weather.uvIndex.toStringAsFixed(1)}',
+          'UV index may reach ${uvIndex.toStringAsFixed(1)}',
         );
         add(
           'Weather Essentials',

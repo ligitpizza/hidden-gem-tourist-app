@@ -9,8 +9,14 @@ import '../controller/emergency_contact_controller.dart';
 import '../model/emergency_contact.dart';
 
 class EmergencyContactsScreen extends StatefulWidget {
-  const EmergencyContactsScreen({super.key, this.initiallyUnlocked = false});
+  const EmergencyContactsScreen({
+    super.key,
+    this.initiallyUnlocked = false,
+    this.fallbackPath = ShellRoutes.travelAssistant,
+  });
+
   final bool initiallyUnlocked;
+  final String fallbackPath;
   @override
   State<EmergencyContactsScreen> createState() =>
       _EmergencyContactsScreenState();
@@ -53,7 +59,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
     return Scaffold(
       appBar: AppHeader.pushed(
         title: 'Emergency Contacts',
-        fallbackPath: ShellRoutes.travelAssistant,
+        fallbackPath: widget.fallbackPath,
         actions: [
           if (_controller.isUnlocked)
             IconButton(

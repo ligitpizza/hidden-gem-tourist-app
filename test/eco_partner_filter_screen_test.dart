@@ -23,11 +23,195 @@ void main() {
     expect(find.text('Eco Lodge'), findsNWidgets(2));
     expect(find.text('across Malaysia'), findsOneWidget);
     expect(find.text('Recommended for You'), findsOneWidget);
-    expect(find.text('Hotels'), findsOneWidget);
+    expect(find.text('Hotels'), findsNWidgets(2));
     expect(find.text('Dining'), findsOneWidget);
     expect(find.text('Transport (MRT, LRT, etc.)'), findsOneWidget);
     expect(find.text('EV Charging'), findsOneWidget);
     expect(find.byTooltip('Change results layout'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('eco_partner_more_recommended')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('eco_partner_more_hotel')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('eco_partner_more_dining')), findsNothing);
+  });
+
+  testWidgets('home rows keep eight previews and append category More cards', (
+    tester,
+  ) async {
+    final repository = _CatalogScreenRepository([
+      for (var index = 0; index < 9; index++)
+        _categoryPartner(
+          'Hotel $index',
+          index,
+          category: EcoPartnerCategory.stay,
+          subtype: 'Hotel',
+        ),
+      _categoryPartner(
+        'Dining One',
+        20,
+        category: EcoPartnerCategory.dining,
+        subtype: 'Restaurant',
+      ),
+      _categoryPartner(
+        'Bus One',
+        21,
+        category: EcoPartnerCategory.transport,
+        subtype: 'Bus',
+      ),
+      _categoryPartner(
+        'EV One',
+        22,
+        category: EcoPartnerCategory.transport,
+        subtype: 'EV charging',
+      ),
+    ]);
+    final controller = _InitialScreenController(repository);
+
+    await tester.pumpWidget(
+      MaterialApp(home: EcoPartnersScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    int itemCount(EcoPartnerHomeSection section) {
+      final childCount = tester
+          .widget<ListView>(
+            find.byKey(ValueKey('eco_partner_home_list_${section.name}')),
+          )
+          .childrenDelegate
+          .estimatedChildCount!;
+      // ListView.separated includes separators in its estimated child count.
+      return (childCount + 1) ~/ 2;
+    }
+
+    expect(itemCount(EcoPartnerHomeSection.recommended), 8);
+    expect(itemCount(EcoPartnerHomeSection.hotel), 9);
+    expect(itemCount(EcoPartnerHomeSection.dining), 2);
+    expect(itemCount(EcoPartnerHomeSection.transport), 2);
+    expect(itemCount(EcoPartnerHomeSection.ev), 2);
+    expect(
+      find.byKey(const ValueKey('eco_partner_more_recommended')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('each category More card opens its full filtered results', (
+    tester,
+  ) async {
+    const cases = {
+      EcoPartnerHomeSection.hotel: (
+        filter: 'Stay',
+        category: EcoPartnerCategory.stay,
+        subtype: 'Hotel',
+      ),
+      EcoPartnerHomeSection.dining: (
+        filter: 'Dining',
+        category: EcoPartnerCategory.dining,
+        subtype: 'Restaurant',
+      ),
+      EcoPartnerHomeSection.transport: (
+        filter: 'Public Transport',
+        category: EcoPartnerCategory.transport,
+        subtype: 'Bus',
+      ),
+      EcoPartnerHomeSection.ev: (
+        filter: 'EV Charging',
+        category: EcoPartnerCategory.transport,
+        subtype: 'EV charging',
+      ),
+    };
+
+    for (final entry in cases.entries) {
+      final section = entry.key;
+      final value = entry.value;
+      final repository = _CatalogScreenRepository([
+        _categoryPartner(
+          '${section.name} partner',
+          section.index,
+          category: value.category,
+          subtype: value.subtype,
+        ),
+      ]);
+      final controller = _InitialScreenController(repository);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EcoPartnersScreen(
+            key: ValueKey('more_case_${section.name}'),
+            controller: controller,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final more = find.byKey(ValueKey('eco_partner_more_${section.name}'));
+      await tester.ensureVisible(more);
+      await tester.pumpAndSettle();
+      await tester.tap(more);
+      await tester.pumpAndSettle();
+
+      expect(controller.filter, value.filter);
+      expect(controller.currentPage, 0);
+      expect(repository.coordinateSearches, 1);
+      expect(find.byTooltip('Change results layout'), findsOneWidget);
+      for (final candidate in EcoPartnerHomeSection.values) {
+        expect(
+          find.byKey(ValueKey('eco_partner_more_${candidate.name}')),
+          findsNothing,
+        );
+      }
+    }
+  });
+
+  testWidgets('More preserves browse settings and resets the main scroll', (
+    tester,
+  ) async {
+    final repository = _CatalogScreenRepository([_partner]);
+    final controller = _InitialScreenController(repository);
+    await tester.pumpWidget(
+      MaterialApp(home: EcoPartnersScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    controller
+      ..sort = EcoPartnerSort.nameDescending
+      ..layout = EcoPartnerLayout.grid2
+      ..areaMode = EcoPartnerAreaMode.statewide
+      ..stateFilter = 'Sabah'
+      ..currentPage = 4;
+    final mainScroll = find.byKey(const ValueKey('eco_partner_main_scroll'));
+    final mainScrollable = find
+        .descendant(
+          of: mainScroll,
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Scrollable &&
+                widget.axisDirection == AxisDirection.down,
+          ),
+        )
+        .first;
+    final more = find.byKey(const ValueKey('eco_partner_more_hotel'));
+    await tester.ensureVisible(more);
+    await tester.pumpAndSettle();
+    final before = tester
+        .state<ScrollableState>(mainScrollable)
+        .position
+        .pixels;
+    expect(before, greaterThan(0));
+
+    await tester.tap(more);
+    await tester.pumpAndSettle();
+
+    expect(tester.state<ScrollableState>(mainScrollable).position.pixels, 0);
+    expect(controller.filter, 'Stay');
+    expect(controller.currentPage, 0);
+    expect(controller.sort, EcoPartnerSort.nameDescending);
+    expect(controller.layout, EcoPartnerLayout.grid2);
+    expect(controller.areaMode, EcoPartnerAreaMode.statewide);
+    expect(controller.stateFilter, 'Sabah');
+    expect(repository.coordinateSearches, 1);
   });
 
   testWidgets('partner-name suggestions can be selected', (tester) async {
@@ -58,6 +242,7 @@ void main() {
     ]);
     expect(find.text('Recommended for You'), findsNothing);
     expect(find.byTooltip('Change results layout'), findsOneWidget);
+    expect(find.byKey(const ValueKey('eco_partner_more_hotel')), findsNothing);
   });
 
   testWidgets('compact grid renders four columns and eight cards', (
@@ -384,6 +569,26 @@ EcoPartner _screenPartner(String name, int index) => EcoPartner(
   longitude: 101.69 + index / 100,
   address: 'Kuala Lumpur',
   sustainabilityLabel: 'GSTC verified',
+  evidence: 'Verified evidence',
+  sourceName: 'Test source',
+  sourceUrl: 'https://example.com',
+  lastUpdated: DateTime(2026),
+);
+
+EcoPartner _categoryPartner(
+  String name,
+  int index, {
+  required EcoPartnerCategory category,
+  required String subtype,
+}) => EcoPartner(
+  id: 'category:$index:$name',
+  name: name,
+  category: category,
+  subtype: subtype,
+  latitude: 3.14 + index / 100,
+  longitude: 101.69 + index / 100,
+  address: 'Kuala Lumpur',
+  sustainabilityLabel: 'Verified sustainable partner',
   evidence: 'Verified evidence',
   sourceName: 'Test source',
   sourceUrl: 'https://example.com',

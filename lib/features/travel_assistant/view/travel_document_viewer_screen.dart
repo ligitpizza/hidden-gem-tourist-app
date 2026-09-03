@@ -8,16 +8,21 @@ import '../../../shared/widgets/app_header.dart';
 import '../model/travel_document.dart';
 
 class TravelDocumentViewerScreen extends StatelessWidget {
-  const TravelDocumentViewerScreen({super.key, required this.document});
+  const TravelDocumentViewerScreen({
+    super.key,
+    required this.document,
+    this.fallbackPath = ShellRoutes.travelAssistant,
+  });
 
   final TravelDocument document;
+  final String fallbackPath;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppHeader.pushed(
         title: document.displayName,
-        fallbackPath: ShellRoutes.travelAssistant,
+        fallbackPath: fallbackPath,
       ),
       body: document.isPdf
           ? PdfViewer.file(document.storedPath)

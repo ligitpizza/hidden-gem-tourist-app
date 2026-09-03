@@ -208,17 +208,17 @@ class EcoPartnerRepository implements EcoPartnerRepositoryContract {
       protect(
         'GSTC hotel data',
         _hotels.search(destination, scope: resolvedScope),
-        timeout: const Duration(seconds: 7),
+        timeout: const Duration(seconds: 15),
       ),
       protect(
         'OpenStreetMap dining and EV data',
         _map.search(destination, scope: resolvedScope),
-        timeout: const Duration(seconds: 7),
+        timeout: const Duration(seconds: 15),
       ),
       protect(
         'Public transport data',
         _transit.search(destination, scope: resolvedScope),
-        timeout: const Duration(seconds: 7),
+        timeout: const Duration(seconds: 15),
       ),
     ]);
     final partners =
@@ -589,7 +589,7 @@ class SupabaseEcoHotelSource implements EcoHotelSource {
             .from('eco_hotels')
             .select()
             .limit(500)
-            .timeout(const Duration(seconds: 6));
+            .timeout(const Duration(seconds: 12));
       } else {
         final bounds = _boundsFor(d, scope);
         rows = await _client
@@ -599,7 +599,7 @@ class SupabaseEcoHotelSource implements EcoHotelSource {
             .lte('latitude', bounds.north)
             .gte('longitude', bounds.west)
             .lte('longitude', bounds.east)
-            .timeout(const Duration(seconds: 6));
+            .timeout(const Duration(seconds: 12));
       }
     } on PostgrestException catch (error) {
       if (error.code == '42P01' || error.code == 'PGRST205') {
@@ -673,7 +673,7 @@ class SupabaseGtfsSource implements EcoTransitSource {
             .from('gtfs_stops')
             .select('*, gtfs_stop_routes(gtfs_routes(*))')
             .limit(500)
-            .timeout(const Duration(seconds: 6));
+            .timeout(const Duration(seconds: 12));
       } else {
         final bounds = _boundsFor(d, scope);
         rows = await _client
@@ -684,7 +684,7 @@ class SupabaseGtfsSource implements EcoTransitSource {
             .gte('longitude', bounds.west)
             .lte('longitude', bounds.east)
             .limit(scope.type == EcoPartnerSearchScopeType.state ? 500 : 200)
-            .timeout(const Duration(seconds: 6));
+            .timeout(const Duration(seconds: 12));
       }
     } on PostgrestException catch (error) {
       if (error.code == '42P01' || error.code == 'PGRST205') {
@@ -812,32 +812,45 @@ nwr$queryScope["amenity"="charging_station"];
       'vegan restaurant',
       'vegetarian restaurant',
     ];
+    var successfulRequests = 0;
     for (var index = 0; index < queries.length; index++) {
       final query = queries[index];
-      final response = await _dio.get<dynamic>(
-        'https://nominatim.openstreetmap.org/search',
-        queryParameters: {
-          'q': scope.type == EcoPartnerSearchScopeType.state
-              ? '$query, ${scope.state}, Malaysia'
-              : query,
-          'format': 'jsonv2',
-          'countrycodes': 'my',
-          'bounded': 1,
-          'viewbox': viewbox,
-          'extratags': 1,
-          'addressdetails': 1,
-          'limit': 30,
-        },
-      );
-      final rows = response.data is List ? response.data as List : const [];
-      for (final raw in rows.whereType<Map<String, dynamic>>()) {
-        final partner = _mapNominatim(raw, nearbyLabel: d.label);
-        if (partner != null) results.add(partner);
+      final spacing = Stopwatch()..start();
+      try {
+        final response = await _dio.get<dynamic>(
+          'https://nominatim.openstreetmap.org/search',
+          queryParameters: {
+            'q': scope.type == EcoPartnerSearchScopeType.state
+                ? '$query, ${scope.state}, Malaysia'
+                : query,
+            'format': 'jsonv2',
+            'countrycodes': 'my',
+            'bounded': 1,
+            'viewbox': viewbox,
+            'extratags': 1,
+            'addressdetails': 1,
+            'limit': 30,
+          },
+        );
+        successfulRequests++;
+        final rows = response.data is List ? response.data as List : const [];
+        for (final raw in rows.whereType<Map<String, dynamic>>()) {
+          final partner = _mapNominatim(raw, nearbyLabel: d.label);
+          if (partner != null) results.add(partner);
+        }
+      } catch (_) {
+        // Retain any successful category response instead of discarding the
+        // whole nearby result because one Nominatim query failed.
       }
-      // Nominatim's public usage policy requires requests to be spaced out.
       if (index < queries.length - 1) {
-        await Future<void>.delayed(const Duration(seconds: 1));
+        // Nominatim's public usage policy allows at most one request/second.
+        const minimumSpacing = Duration(seconds: 1);
+        final remaining = minimumSpacing - spacing.elapsed;
+        if (remaining > Duration.zero) await Future<void>.delayed(remaining);
       }
+    }
+    if (successfulRequests == 0) {
+      throw const EcoProviderException('OpenStreetMap request failed.');
     }
     return <String, EcoPartner>{
       for (final partner in results) partner.id: partner,

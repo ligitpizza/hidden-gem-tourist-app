@@ -13,6 +13,7 @@ import '../../../shared/models/destination.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../controller/packing_checklist_controller.dart';
 import '../controller/travel_assistant_dashboard_controller.dart';
+import '../model/eco_partner.dart';
 import '../model/packing_checklist.dart';
 import '../model/packing_location_source.dart';
 import '../model/travel_document.dart';
@@ -167,7 +168,9 @@ class _TravelAssistantDashboardScreenState
             secondaryButton: 'Emergency Contacts',
             onSecondaryTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (_) => const EmergencyContactsScreen(),
+                builder: (_) => const EmergencyContactsScreen(
+                  fallbackPath: ShellRoutes.travelAssistant,
+                ),
               ),
             ),
           ),
@@ -675,8 +678,15 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
                   _PackingTripDatesCard(
                     dates: _controller.tripDates,
                     isEditable: true,
+                    isDining:
+                        _controller.ecoPartnerCategory ==
+                        EcoPartnerCategory.dining,
+                    forecastDetail: _controller.weatherDetail,
+                    isWeatherLoading: _controller.isWeatherLoading,
+                    canRetryForecast: _controller.canRetryForecast,
                     onSetDates: _selectTripDates,
                     onClearDates: _controller.clearTripDates,
+                    onRetryForecast: _controller.retryForecast,
                   ),
                   const SizedBox(height: 10),
                 ],
@@ -882,21 +892,42 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final current = _controller.tripDates;
-    final standardLastDate = DateTime(today.year + 5, today.month, today.day);
-    final firstDate = current != null && current.start.isBefore(today)
-        ? current.start
-        : today;
-    final lastDate = current != null && current.end.isAfter(standardLastDate)
-        ? current.end
-        : standardLastDate;
+    final lastDate = DateTime(today.year + 5, today.month, today.day);
+
+    if (_controller.ecoPartnerCategory == EcoPartnerCategory.dining) {
+      final initialDate =
+          current != null &&
+              !current.start.isBefore(today) &&
+              !current.start.isAfter(lastDate)
+          ? current.start
+          : today;
+      final selected = await showDatePicker(
+        context: context,
+        firstDate: today,
+        lastDate: lastDate,
+        initialDate: initialDate,
+        helpText: 'Select dining visit date',
+        confirmText: 'Save date',
+      );
+      if (selected == null || !mounted) return;
+      await _controller.setTripDates(
+        PackingTripDateRange(start: selected, end: selected),
+      );
+      return;
+    }
+
+    final initialRange =
+        current != null &&
+            !current.start.isBefore(today) &&
+            !current.end.isAfter(lastDate)
+        ? DateTimeRange(start: current.start, end: current.end)
+        : null;
     final selected = await showDateRangePicker(
       context: context,
-      firstDate: firstDate,
+      firstDate: today,
       lastDate: lastDate,
-      initialDateRange: current == null
-          ? null
-          : DateTimeRange(start: current.start, end: current.end),
-      helpText: 'Select trip dates',
+      initialDateRange: initialRange,
+      helpText: 'Select hotel stay dates',
       saveText: 'Save dates',
     );
     if (selected == null || !mounted) return;
@@ -910,14 +941,24 @@ class _PackingTripDatesCard extends StatelessWidget {
   const _PackingTripDatesCard({
     required this.dates,
     required this.isEditable,
+    required this.isDining,
+    required this.forecastDetail,
+    required this.isWeatherLoading,
+    required this.canRetryForecast,
     required this.onSetDates,
     required this.onClearDates,
+    required this.onRetryForecast,
   });
 
   final PackingTripDateRange? dates;
   final bool isEditable;
+  final bool isDining;
+  final String forecastDetail;
+  final bool isWeatherLoading;
+  final bool canRetryForecast;
   final VoidCallback onSetDates;
   final VoidCallback onClearDates;
+  final VoidCallback onRetryForecast;
 
   @override
   Widget build(BuildContext context) {
@@ -925,7 +966,9 @@ class _PackingTripDatesCard extends StatelessWidget {
     final localizations = MaterialLocalizations.of(context);
     final value = dates == null
         ? isEditable
-              ? 'Add dates so this checklist matches your visit.'
+              ? isDining
+                    ? 'Add a visit date so this checklist matches your meal.'
+                    : 'Add dates so this checklist matches your stay.'
               : 'Dates unavailable. Edit and regenerate this itinerary to set them.'
         : dates!.isSingleDay
         ? localizations.formatShortDate(dates!.start)
@@ -952,11 +995,38 @@ class _PackingTripDatesCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    dates == null ? 'Trip dates not set' : 'Trip dates',
+                    dates == null
+                        ? isDining
+                              ? 'Dining date not set'
+                              : 'Trip dates not set'
+                        : isDining
+                        ? 'Dining visit date'
+                        : 'Trip dates',
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 3),
                   Text(value),
+                  const SizedBox(height: 5),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      if (isWeatherLoading) ...[
+                        const SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Expanded(
+                        child: Text(
+                          forecastDetail,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                    ],
+                  ),
                   if (!isEditable && dates != null) ...[
                     const SizedBox(height: 4),
                     Text(
@@ -974,12 +1044,24 @@ class _PackingTripDatesCard extends StatelessWidget {
                       children: [
                         TextButton(
                           onPressed: onSetDates,
-                          child: Text(dates == null ? 'Set dates' : 'Edit'),
+                          child: Text(
+                            dates == null
+                                ? isDining
+                                      ? 'Set date'
+                                      : 'Set dates'
+                                : 'Edit',
+                          ),
                         ),
                         if (dates != null)
                           TextButton(
                             onPressed: onClearDates,
                             child: const Text('Clear'),
+                          ),
+                        if (canRetryForecast)
+                          TextButton.icon(
+                            onPressed: onRetryForecast,
+                            icon: const Icon(Icons.refresh, size: 18),
+                            label: const Text('Retry forecast'),
                           ),
                       ],
                     ),
@@ -2147,6 +2229,7 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
                       MaterialPageRoute<void>(
                         builder: (_) => const EmergencyContactsScreen(
                           initiallyUnlocked: true,
+                          fallbackPath: ShellRoutes.documentVault,
                         ),
                       ),
                     ),
@@ -2411,7 +2494,10 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
       if (!mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => TravelDocumentViewerScreen(document: localDocument),
+          builder: (_) => TravelDocumentViewerScreen(
+            document: localDocument,
+            fallbackPath: ShellRoutes.documentVault,
+          ),
         ),
       );
       return;

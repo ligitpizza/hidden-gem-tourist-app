@@ -334,6 +334,43 @@ void main() {
     expect(controller.showSectionedHome, isFalse);
   });
 
+  test(
+    'home section More actions map to filters and reset only pagination',
+    () {
+      final repository = _CatalogRepository([]);
+      final controller = EcoPartnerController(repository: repository)
+        ..areaMode = EcoPartnerAreaMode.statewide
+        ..stateFilter = 'Sabah'
+        ..sort = EcoPartnerSort.nameDescending
+        ..layout = EcoPartnerLayout.grid2;
+      const expectedFilters = {
+        EcoPartnerHomeSection.hotel: 'Stay',
+        EcoPartnerHomeSection.dining: 'Dining',
+        EcoPartnerHomeSection.transport: 'Public Transport',
+        EcoPartnerHomeSection.ev: 'EV Charging',
+      };
+
+      for (final entry in expectedFilters.entries) {
+        controller.filter = 'All';
+        controller.currentPage = 3;
+        controller.showAllForHomeSection(entry.key);
+        expect(controller.filter, entry.value);
+        expect(controller.currentPage, 0);
+      }
+
+      controller.filter = 'All';
+      controller.currentPage = 2;
+      controller.showAllForHomeSection(EcoPartnerHomeSection.recommended);
+      expect(controller.filter, 'All');
+      expect(controller.currentPage, 2);
+      expect(controller.areaMode, EcoPartnerAreaMode.statewide);
+      expect(controller.stateFilter, 'Sabah');
+      expect(controller.sort, EcoPartnerSort.nameDescending);
+      expect(controller.layout, EcoPartnerLayout.grid2);
+      expect(repository.coordinateSearches, 0);
+    },
+  );
+
   test('denied current location restores the previous search area', () async {
     final controller = _DeniedLocationController(_CatalogRepository(_catalog))
       ..areaMode = EcoPartnerAreaMode.statewide

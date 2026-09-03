@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -168,6 +170,17 @@ class EcoPartnerController extends ChangeNotifier {
     }).toList();
     _sortBySelection(partners);
     return partners.take(homeSectionLimit).toList();
+  }
+
+  void showAllForHomeSection(EcoPartnerHomeSection section) {
+    final targetFilter = switch (section) {
+      EcoPartnerHomeSection.hotel => 'Stay',
+      EcoPartnerHomeSection.dining => 'Dining',
+      EcoPartnerHomeSection.transport => 'Public Transport',
+      EcoPartnerHomeSection.ev => 'EV Charging',
+      EcoPartnerHomeSection.recommended => null,
+    };
+    if (targetFilter != null) selectFilter(targetFilter);
   }
 
   List<EcoPartner> _diversifiedRecommendations(List<EcoPartner> ranked) {
@@ -660,9 +673,21 @@ class EcoPartnerController extends ChangeNotifier {
         permission == LocationPermission.deniedForever) {
       throw const EcoSearchException('Location permission is required.');
     }
-    final position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(timeLimit: Duration(seconds: 3)),
-    );
+    Position? position;
+    try {
+      position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+    } on TimeoutException {
+      position = await Geolocator.getLastKnownPosition();
+    }
+    if (position == null) {
+      throw const EcoSearchException(
+        'Could not determine your current location. Please try again.',
+      );
+    }
     return EcoDestination(
       'Current location',
       position.latitude,

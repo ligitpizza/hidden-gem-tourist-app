@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../model/packing_location_source.dart';
+import '../model/packing_weather_service.dart';
 import '../model/saved_eco_partners_store.dart';
 import '../model/travel_document.dart';
 import '../model/travel_document_repository.dart';
@@ -64,6 +65,29 @@ class TravelAssistantDashboardController extends ChangeNotifier {
     final location = selectedLocation;
     if (location == null) {
       return 'Choose a destination to build a checklist around its forecast and activities.';
+    }
+    if (location.datesEditable) {
+      if (checklist.tripDates == null) {
+        return 'Tailored to ${location.heroTitle}. Set trip dates to add its forecast.';
+      }
+      if (checklist.forecastStatus == PackingForecastStatus.available) {
+        return 'Tailored to ${location.heroTitle} using the forecast for your trip dates.';
+      }
+      if (checklist.forecastStatus == PackingForecastStatus.partial) {
+        return 'Tailored to ${location.heroTitle} using the currently available forecast days.';
+      }
+      if (checklist.forecastStatus == PackingForecastStatus.notYetAvailable) {
+        return 'Tailored to ${location.heroTitle}. Its forecast will be added closer to your trip.';
+      }
+      if (checklist.forecastStatus == PackingForecastStatus.expired) {
+        return 'Tailored to ${location.heroTitle}. Update the past trip dates for a new forecast.';
+      }
+      if (checklist.forecastStatus == PackingForecastStatus.failed) {
+        return 'Tailored to ${location.heroTitle}. Its trip-date forecast is temporarily unavailable.';
+      }
+      if (checklist.forecastStatus == PackingForecastStatus.loading) {
+        return 'Tailored to ${location.heroTitle}. Updating its trip-date forecast…';
+      }
     }
     return 'Tailored to ${location.heroTitle}, its forecast, and planned activities.';
   }

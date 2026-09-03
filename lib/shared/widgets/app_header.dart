@@ -59,9 +59,18 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                   overlayColor: AppColors.of(context).onSurface,
                   shape: const CircleBorder(),
                 ),
-                onPressed: () async {
-                  final popped = await Navigator.of(context).maybePop();
-                  if (!popped && context.mounted && fallbackPath != null) {
+                onPressed: () {
+                  final navigator = Navigator.maybeOf(context);
+                  if (navigator?.canPop() == true) {
+                    navigator!.pop();
+                    return;
+                  }
+                  final router = GoRouter.of(context);
+                  if (router.canPop()) {
+                    router.pop();
+                    return;
+                  }
+                  if (context.mounted && fallbackPath != null) {
                     context.go(fallbackPath!);
                   }
                 },

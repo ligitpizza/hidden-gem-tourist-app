@@ -18,18 +18,20 @@ class EcoPartnerDetailScreen extends StatelessWidget {
     required this.destinationLabel,
     this.showDistance = false,
     this.outsideRadiusKm,
+    this.fallbackPath = ShellRoutes.travelAssistant,
   });
 
   final EcoPartner partner;
   final String destinationLabel;
   final bool showDistance;
   final double? outsideRadiusKm;
+  final String fallbackPath;
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: const AppHeader.pushed(
+    appBar: AppHeader.pushed(
       title: 'Partner Details',
-      fallbackPath: ShellRoutes.travelAssistant,
+      fallbackPath: fallbackPath,
     ),
     body: ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
