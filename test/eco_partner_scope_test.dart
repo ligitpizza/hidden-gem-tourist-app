@@ -92,6 +92,73 @@ void main() {
         expect(scope?.bounds?.east, 119.3);
       }
     });
+
+    test(
+      'Kedah state scope excludes an explicitly Penang hotel in its bounds',
+      () async {
+        final repository = EcoPartnerRepository(
+          hotels: _StaticHotelSource([
+            _hotel(
+              id: 'kedah',
+              name: 'Kedah Eco Stay',
+              address: 'Alor Setar, Kedah, Malaysia',
+              latitude: 6.1248,
+              longitude: 100.3678,
+            ),
+            _hotel(
+              id: 'penang',
+              name: 'Georgetown Eco Stay',
+              address: 'George Town, Pulau Pinang, Malaysia',
+              latitude: 5.4141,
+              longitude: 100.3288,
+            ),
+          ]),
+          map: _RecordingMapSource(),
+          transit: _RecordingTransitSource(),
+          images: _PassthroughImages(),
+          stateBoundsResolver: _KedahBoundsResolver(),
+        );
+
+        final result = await repository.searchCoordinates(
+          const EcoDestination('Origin', 6.1248, 100.3678),
+          scope: const EcoPartnerSearchScope.state('Kedah'),
+          includeImages: false,
+        );
+
+        expect(result.partners.map((partner) => partner.id), ['kedah']);
+      },
+    );
+
+    test(
+      'state scope keeps a bounded result with an incomplete address',
+      () async {
+        final repository = EcoPartnerRepository(
+          hotels: _StaticHotelSource([
+            _hotel(
+              id: 'unknown-address',
+              name: 'Local Eco Stay',
+              address: 'Jalan Persiaran Utama',
+              latitude: 6.1248,
+              longitude: 100.3678,
+            ),
+          ]),
+          map: _RecordingMapSource(),
+          transit: _RecordingTransitSource(),
+          images: _PassthroughImages(),
+          stateBoundsResolver: _KedahBoundsResolver(),
+        );
+
+        final result = await repository.searchCoordinates(
+          const EcoDestination('Origin', 6.1248, 100.3678),
+          scope: const EcoPartnerSearchScope.state('Kedah'),
+          includeImages: false,
+        );
+
+        expect(result.partners.map((partner) => partner.id), [
+          'unknown-address',
+        ]);
+      },
+    );
   });
 
   group('EcoTransitRouteInfo', () {
@@ -163,6 +230,18 @@ class _RecordingHotelSource implements EcoHotelSource {
   }
 }
 
+class _StaticHotelSource implements EcoHotelSource {
+  _StaticHotelSource(this.partners);
+
+  final List<EcoPartner> partners;
+
+  @override
+  Future<List<EcoPartner>> search(
+    EcoDestination destination, {
+    required EcoPartnerSearchScope scope,
+  }) async => partners;
+}
+
 class _RecordingMapSource implements EcoMapSource {
   EcoPartnerSearchScope? scope;
 
@@ -199,3 +278,31 @@ class _BoundsResolver implements EcoStateBoundsResolver {
   Future<EcoGeoBounds?> resolve(String state) async =>
       const EcoGeoBounds(south: 4.0, north: 7.5, west: 115.0, east: 119.3);
 }
+
+class _KedahBoundsResolver implements EcoStateBoundsResolver {
+  @override
+  Future<EcoGeoBounds?> resolve(String state) async =>
+      const EcoGeoBounds(south: 5.0, north: 6.7, west: 99.5, east: 101.2);
+}
+
+EcoPartner _hotel({
+  required String id,
+  required String name,
+  required String address,
+  required double latitude,
+  required double longitude,
+}) => EcoPartner(
+  id: id,
+  name: name,
+  category: EcoPartnerCategory.stay,
+  subtype: 'Hotel',
+  latitude: latitude,
+  longitude: longitude,
+  address: address,
+  sustainabilityLabel: 'GSTC verified',
+  evidence: 'Test evidence',
+  sourceName: 'Test source',
+  sourceUrl: 'https://example.com',
+  lastUpdated: DateTime(2026),
+  gstcVerified: true,
+);

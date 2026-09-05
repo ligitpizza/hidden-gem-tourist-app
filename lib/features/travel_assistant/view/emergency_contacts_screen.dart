@@ -7,16 +7,19 @@ import '../../../core/router/shell_routes.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../controller/emergency_contact_controller.dart';
 import '../model/emergency_contact.dart';
+import '../model/vault_pin_service.dart';
 
 class EmergencyContactsScreen extends StatefulWidget {
   const EmergencyContactsScreen({
     super.key,
     this.initiallyUnlocked = false,
     this.fallbackPath = ShellRoutes.travelAssistant,
+    this.pinService,
   });
 
   final bool initiallyUnlocked;
   final String fallbackPath;
+  final VaultPinServiceContract? pinService;
   @override
   State<EmergencyContactsScreen> createState() =>
       _EmergencyContactsScreenState();
@@ -32,6 +35,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
     super.initState();
     _controller = EmergencyContactController(
       initiallyUnlocked: widget.initiallyUnlocked,
+      pinService: widget.pinService,
     )..addListener(_refresh);
     _controller.load();
   }
@@ -143,7 +147,33 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
   }
 
   Widget _lockedHeader() {
-    if (!_controller.hasPin)
+    if (_controller.pinStatusUnavailable) {
+      return Column(
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.cloud_off_outlined),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Connect to check your existing vault PIN. A new PIN cannot be created while status is unavailable.',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _controller.load,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ),
+        ],
+      );
+    }
+    if (!_controller.hasPin) {
       return const Row(
         children: [
           Icon(Icons.info_outline),
@@ -155,6 +185,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
           ),
         ],
       );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -174,7 +205,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
           controller: _pin,
           obscureText: true,
           keyboardType: TextInputType.number,
-          maxLength: 6,
+          maxLength: _controller.pinLength ?? 6,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           onSubmitted: (_) => _unlock(),
           decoration: InputDecoration(

@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('transit route identifiers are actionable', (tester) async {
+  testWidgets('transit route identifiers check live in-app journeys', (
+    tester,
+  ) async {
     final partner = EcoPartner(
       id: 'stop:1',
       name: 'Kota Kinabalu transit stop',
@@ -43,7 +45,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
 
-    expect(find.text('Transit routes serving this stop'), findsOneWidget);
+    expect(find.text('Scheduled routes serving this stop'), findsOneWidget);
     expect(find.text('Bus route T1'), findsOneWidget);
     expect(
       tester
@@ -53,6 +55,8 @@ void main() {
           .onPressed,
       isNotNull,
     );
+    expect(find.textContaining('matching live in-app journey'), findsOneWidget);
+    expect(find.textContaining('Maps'), findsNothing);
   });
 
   testWidgets('distance is hidden without a user-location reference', (

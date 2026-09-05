@@ -1,7 +1,10 @@
+import 'package:collab/features/travel_assistant/controller/emergency_contact_controller.dart';
 import 'package:collab/features/travel_assistant/model/emergency_contact.dart';
 import 'package:collab/features/travel_assistant/model/emergency_contact_repository.dart';
+import 'package:collab/features/travel_assistant/model/vault_pin_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
   const contact = EmergencyContact(
@@ -114,6 +117,34 @@ void main() {
     expect((await first.load()).single.toJson(), contact.toJson());
     expect(await second.load(), isEmpty);
   });
+
+  test('emergency contacts use cloud PIN status and verification', () async {
+    final pinService = _FakePinService();
+    final controller = EmergencyContactController(
+      repository: EmergencyContactRepository(userId: 'user-a'),
+      pinService: pinService,
+    );
+
+    await controller.load();
+    expect(controller.hasPin, isTrue);
+    expect(controller.pinLength, 4);
+    expect(await controller.unlock('9999'), isFalse);
+    expect(controller.pinError, contains('4 attempts remaining'));
+    expect(await controller.unlock('1234'), isTrue);
+    expect(controller.isUnlocked, isTrue);
+  });
+
+  test('emergency contacts distinguish unavailable PIN status', () async {
+    final controller = EmergencyContactController(
+      repository: EmergencyContactRepository(userId: 'user-a'),
+      pinService: _FakePinService(unavailable: true),
+    );
+
+    await controller.load();
+
+    expect(controller.hasPin, isFalse);
+    expect(controller.pinStatusUnavailable, isTrue);
+  });
 }
 
 String _json(EmergencyContact value) =>
@@ -150,4 +181,37 @@ class _FakeEmergencyContactRemote implements EmergencyContactRemoteDataSource {
     if (failReplace) throw StateError('offline');
     values[userId] = List.of(contacts);
   }
+}
+
+class _FakePinService implements VaultPinServiceContract {
+  _FakePinService({this.unavailable = false});
+
+  final bool unavailable;
+
+  @override
+  User get currentUser => throw UnimplementedError();
+
+  @override
+  Future<VaultPinStatus> loadStatus() async => unavailable
+      ? const VaultPinStatus.unavailable()
+      : const VaultPinStatus(
+          availability: VaultPinAvailability.configured,
+          pinLength: 4,
+          credentialVersion: 1,
+        );
+
+  @override
+  Future<VaultPinVerification> verifyPin(String pin) async =>
+      VaultPinVerification(
+        status: pin == '1234'
+            ? VaultPinVerificationStatus.verified
+            : VaultPinVerificationStatus.incorrect,
+        attemptsRemaining: pin == '1234' ? null : 4,
+      );
+
+  @override
+  Future<void> verifyCurrentPassword(String password) async {}
+
+  @override
+  Future<void> writePin(String pin) async {}
 }

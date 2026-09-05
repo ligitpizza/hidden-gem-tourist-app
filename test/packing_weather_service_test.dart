@@ -39,7 +39,7 @@ void main() {
           expect(
             daily,
             'temperature_2m_max,temperature_2m_min,'
-            'precipitation_probability_max',
+            'precipitation_probability_max,weather_code',
           );
           expect(options.queryParameters['forecast_days'], 16);
           handler.resolve(
@@ -58,6 +58,7 @@ void main() {
                   'temperature_2m_max': [29, 30, 31, 34, 35],
                   'temperature_2m_min': [25, 24, 22, 23, 21],
                   'precipitation_probability_max': [10, 20, 45, 80, 90],
+                  'weather_code': [0, 1, 2, 3, 61],
                 },
               },
             ),
@@ -83,7 +84,94 @@ void main() {
     expect(result.summary?.minimumTemperature, 22);
     expect(result.summary?.rainProbability, 80);
     expect(result.summary?.uvIndex, 9);
+    expect(result.summary?.condition, PackingWeatherCondition.partlyCloudy);
+    expect(
+      result.summary?.shortDescription,
+      'Partly cloudy · 22–34°C · Rain up to 80% · UV 9.0',
+    );
     expect(requests, 2);
+  });
+
+  test('maps WMO weather codes into display conditions', () {
+    expect(
+      PackingWeatherCondition.fromWmoCode(0),
+      PackingWeatherCondition.clear,
+    );
+    expect(
+      PackingWeatherCondition.fromWmoCode(2),
+      PackingWeatherCondition.partlyCloudy,
+    );
+    expect(
+      PackingWeatherCondition.fromWmoCode(3),
+      PackingWeatherCondition.cloudy,
+    );
+    expect(
+      PackingWeatherCondition.fromWmoCode(45),
+      PackingWeatherCondition.fog,
+    );
+    expect(
+      PackingWeatherCondition.fromWmoCode(51),
+      PackingWeatherCondition.drizzle,
+    );
+    expect(
+      PackingWeatherCondition.fromWmoCode(81),
+      PackingWeatherCondition.rain,
+    );
+    expect(
+      PackingWeatherCondition.fromWmoCode(75),
+      PackingWeatherCondition.snow,
+    );
+    expect(
+      PackingWeatherCondition.fromWmoCode(95),
+      PackingWeatherCondition.thunderstorm,
+    );
+    expect(
+      PackingWeatherCondition.fromWmoCode(999),
+      PackingWeatherCondition.unknown,
+    );
+  });
+
+  test('uses the most frequent trip condition', () async {
+    final result =
+        await PackingWeatherService(
+          dio: _respondingDio(
+            dates: const ['2026-09-05', '2026-09-06', '2026-09-07'],
+            weatherCodes: const [3, 61, 3],
+          ),
+          now: () => today,
+        ).getForecast(
+          latitude: 3.139,
+          longitude: 101.687,
+          dates: PackingTripDateRange(
+            start: DateTime(2026, 9, 5),
+            end: DateTime(2026, 9, 7),
+          ),
+        );
+
+    expect(result.summary?.condition, PackingWeatherCondition.cloudy);
+    expect(result.summary?.shortDescription, contains('Cloudy'));
+  });
+
+  test('unknown weather codes keep the remaining forecast usable', () async {
+    final result =
+        await PackingWeatherService(
+          dio: _respondingDio(
+            dates: const ['2026-09-05'],
+            weatherCodes: const [999],
+          ),
+          now: () => today,
+        ).getForecast(
+          latitude: 3.139,
+          longitude: 101.687,
+          dates: PackingTripDateRange(
+            start: DateTime(2026, 9, 5),
+            end: DateTime(2026, 9, 5),
+          ),
+        );
+
+    expect(result.status, PackingForecastStatus.available);
+    expect(result.summary?.condition, PackingWeatherCondition.unknown);
+    expect(result.summary?.shortDescription, startsWith('24–32°C'));
   });
 
   test('keeps the core forecast when the shorter UV request fails', () async {
@@ -107,6 +195,7 @@ void main() {
                   'temperature_2m_max': [32],
                   'temperature_2m_min': [24],
                   'precipitation_probability_max': [60],
+                  'weather_code': [3],
                 },
               },
             ),
@@ -129,6 +218,7 @@ void main() {
     expect(result.summary?.maximumTemperature, 32);
     expect(result.summary?.rainProbability, 60);
     expect(result.summary?.uvIndex, isNull);
+    expect(result.summary?.condition, PackingWeatherCondition.cloudy);
   });
 
   test(
@@ -191,6 +281,8 @@ void main() {
     expect(result.status, PackingForecastStatus.available);
     expect(result.summary?.rainProbability, isNull);
     expect(result.summary?.uvIndex, isNull);
+    expect(result.summary?.condition, isNull);
+    expect(result.summary?.shortDescription, '24–30°C');
   });
 
   test('future and expired trips do not make an API request', () async {
@@ -274,7 +366,7 @@ void main() {
   );
 }
 
-Dio _respondingDio({required List<String> dates}) {
+Dio _respondingDio({required List<String> dates, List<int>? weatherCodes}) {
   final dio = Dio();
   dio.interceptors.add(
     InterceptorsWrapper(
@@ -288,6 +380,7 @@ Dio _respondingDio({required List<String> dates}) {
               'temperature_2m_max': List.filled(dates.length, 32),
               'temperature_2m_min': List.filled(dates.length, 24),
               'precipitation_probability_max': List.filled(dates.length, 50),
+              'weather_code': weatherCodes ?? List.filled(dates.length, 2),
               'uv_index_max': List.filled(dates.length, 7),
             },
           },

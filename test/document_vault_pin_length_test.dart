@@ -75,6 +75,8 @@ void main() {
         _FakeVaultPinService(storedPin: List.filled(length, '1').join()),
       );
 
+      expect(find.text('Unlock Document Vault'), findsOneWidget);
+      expect(find.text('Create Your Vault PIN'), findsNothing);
       expect(find.text('Choose PIN length'), findsNothing);
       expect(_pinBoxes('Vault PIN'), findsNWidgets(length));
       expect(
@@ -87,6 +89,16 @@ void main() {
       );
     });
   }
+
+  testWidgets('offline device without cache cannot create a conflicting PIN', (
+    tester,
+  ) async {
+    await _pumpVault(tester, _FakeVaultPinService(unavailable: true));
+
+    expect(find.text('Vault PIN unavailable'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.text('Create Your Vault PIN'), findsNothing);
+  });
 }
 
 Future<void> _pumpVault(
@@ -105,15 +117,35 @@ Finder _pinBoxes(String label) => find.byWidgetPredicate((widget) {
 });
 
 class _FakeVaultPinService implements VaultPinServiceContract {
-  _FakeVaultPinService({this.storedPin});
+  _FakeVaultPinService({this.storedPin, this.unavailable = false});
 
   String? storedPin;
+  final bool unavailable;
 
   @override
   User get currentUser => throw UnimplementedError();
 
   @override
-  Future<String?> readPin() async => storedPin;
+  Future<VaultPinStatus> loadStatus() async {
+    if (unavailable) return const VaultPinStatus.unavailable();
+    return storedPin == null
+        ? const VaultPinStatus.notConfigured()
+        : VaultPinStatus(
+            availability: VaultPinAvailability.configured,
+            pinLength: storedPin!.length,
+            credentialVersion: 1,
+            canVerifyOffline: true,
+          );
+  }
+
+  @override
+  Future<VaultPinVerification> verifyPin(String pin) async =>
+      VaultPinVerification(
+        status: pin == storedPin
+            ? VaultPinVerificationStatus.verified
+            : VaultPinVerificationStatus.incorrect,
+        credentialVersion: 1,
+      );
 
   @override
   Future<void> verifyCurrentPassword(String password) async {}

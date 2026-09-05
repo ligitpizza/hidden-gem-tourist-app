@@ -234,11 +234,7 @@ class EcoPartnerRepository implements EcoPartnerRepositoryContract {
                 ),
               ),
             )
-            .where(
-              (partner) =>
-                  resolvedScope.type != EcoPartnerSearchScopeType.nearby ||
-                  partner.distanceKm <= resolvedScope.radiusKm!,
-            )
+            .where((partner) => _isPartnerInsideScope(partner, resolvedScope))
             .toList()
           ..sort(_rank);
     final baseResult = EcoPartnerSearchResult(
@@ -322,6 +318,68 @@ class EcoPartnerRepository implements EcoPartnerRepositoryContract {
         .toSet();
     return tokens.where(normalizedName.contains).length * 10;
   }
+
+  static bool _isPartnerInsideScope(
+    EcoPartner partner,
+    EcoPartnerSearchScope scope,
+  ) {
+    if (scope.type == EcoPartnerSearchScopeType.nearby) {
+      return partner.distanceKm <= scope.radiusKm!;
+    }
+    if (scope.type != EcoPartnerSearchScopeType.state) return true;
+
+    // State providers search a rectangular bounding box. Bordering states can
+    // fall inside that box (notably George Town/Penang inside Kedah's bounds),
+    // so reject a result when its address explicitly identifies another state.
+    // Keep addresses without a recognizable state because OpenStreetMap and
+    // GTFS records are often incomplete, while their coordinates are still in
+    // the selected state's bounding box.
+    final addressState = _stateFromAddress(partner.address);
+    return addressState == null ||
+        addressState == _canonicalState(scope.state!);
+  }
+
+  static String _canonicalState(String value) {
+    final normalized = _normalizeLocation(value);
+    return switch (normalized) {
+      'malacca' => 'melaka',
+      'pulau pinang' => 'penang',
+      'trengganu' => 'terengganu',
+      _ => normalized,
+    };
+  }
+
+  static String? _stateFromAddress(String address) {
+    final normalized = ' ${_normalizeLocation(address)} ';
+    for (final entry in _malaysianStateAddressMarkers.entries) {
+      if (entry.value.any((marker) => normalized.contains(' $marker '))) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
+
+  static String _normalizeLocation(String value) =>
+      value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+
+  static const Map<String, List<String>> _malaysianStateAddressMarkers = {
+    'johor': ['johor'],
+    'kedah': ['kedah'],
+    'kelantan': ['kelantan'],
+    'kuala lumpur': ['kuala lumpur'],
+    'labuan': ['labuan'],
+    'melaka': ['melaka', 'malacca'],
+    'negeri sembilan': ['negeri sembilan'],
+    'pahang': ['pahang'],
+    'penang': ['penang', 'pulau pinang', 'george town', 'georgetown'],
+    'perak': ['perak'],
+    'perlis': ['perlis'],
+    'putrajaya': ['putrajaya'],
+    'sabah': ['sabah'],
+    'sarawak': ['sarawak'],
+    'selangor': ['selangor'],
+    'terengganu': ['terengganu', 'trengganu'],
+  };
 
   static double distanceKm(double lat1, double lon1, double lat2, double lon2) {
     const radius = 6371.0;

@@ -184,13 +184,44 @@ void main() {
     expect(weatherService.calls, 2);
     expect(controller.tripDates, same(dates));
     expect(find.text('Retry forecast'), findsNothing);
-    expect(find.text('65% rain'), findsWidgets);
+    expect(find.text('24–32°C · Rain up to 65% · UV 7.0'), findsWidgets);
     expect(
       controller.sections.any(
         (section) => section.name == 'Weather Essentials',
       ),
       isTrue,
     );
+  });
+
+  testWidgets('cloudy forecast shows its condition label and icon', (
+    tester,
+  ) async {
+    final today = DateTime.now();
+    final date = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).add(const Duration(days: 1));
+    final repository = _ChecklistRepository()
+      ..dates['test-trip'] = PackingTripDateRange(start: date, end: date);
+    final controller = PackingChecklistController(
+      locationSource: const _LocationSource(),
+      weatherService: _CloudyWeatherService(),
+      persistence: repository,
+      now: () => today,
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: ReadyToWanderScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Cloudy · 24–29°C · Rain up to 20% · UV 4.0'),
+      findsWidgets,
+    );
+    expect(find.byIcon(Icons.cloud_outlined), findsNWidgets(2));
   });
 }
 
@@ -276,6 +307,26 @@ class _RetryWeatherService extends PackingWeatherService {
       coverageEnd: dates.end,
     );
   }
+}
+
+class _CloudyWeatherService extends PackingWeatherService {
+  @override
+  Future<PackingForecastResult> getForecast({
+    required double latitude,
+    required double longitude,
+    required PackingTripDateRange dates,
+  }) async => PackingForecastResult(
+    status: PackingForecastStatus.available,
+    summary: const PackingWeatherSummary(
+      maximumTemperature: 29,
+      minimumTemperature: 24,
+      condition: PackingWeatherCondition.cloudy,
+      rainProbability: 20,
+      uvIndex: 4,
+    ),
+    coverageStart: dates.start,
+    coverageEnd: dates.end,
+  );
 }
 
 class _ChecklistRepository implements PackingChecklistRepositoryContract {

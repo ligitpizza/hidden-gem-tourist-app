@@ -12,25 +12,76 @@ enum PackingForecastStatus {
   failed,
 }
 
+enum PackingWeatherCondition {
+  clear,
+  partlyCloudy,
+  cloudy,
+  fog,
+  drizzle,
+  rain,
+  snow,
+  thunderstorm,
+  unknown;
+
+  static PackingWeatherCondition fromWmoCode(int code) => switch (code) {
+    0 || 1 => PackingWeatherCondition.clear,
+    2 => PackingWeatherCondition.partlyCloudy,
+    3 => PackingWeatherCondition.cloudy,
+    45 || 48 => PackingWeatherCondition.fog,
+    51 || 53 || 55 || 56 || 57 => PackingWeatherCondition.drizzle,
+    61 ||
+    63 ||
+    65 ||
+    66 ||
+    67 ||
+    80 ||
+    81 ||
+    82 => PackingWeatherCondition.rain,
+    71 || 73 || 75 || 77 || 85 || 86 => PackingWeatherCondition.snow,
+    95 || 96 || 99 => PackingWeatherCondition.thunderstorm,
+    _ => PackingWeatherCondition.unknown,
+  };
+
+  String? get label => switch (this) {
+    PackingWeatherCondition.clear => 'Clear',
+    PackingWeatherCondition.partlyCloudy => 'Partly cloudy',
+    PackingWeatherCondition.cloudy => 'Cloudy',
+    PackingWeatherCondition.fog => 'Foggy',
+    PackingWeatherCondition.drizzle => 'Drizzle',
+    PackingWeatherCondition.rain => 'Rain',
+    PackingWeatherCondition.snow => 'Snow',
+    PackingWeatherCondition.thunderstorm => 'Thunderstorms',
+    PackingWeatherCondition.unknown => null,
+  };
+}
+
 class PackingWeatherSummary {
   const PackingWeatherSummary({
     required this.maximumTemperature,
     required this.minimumTemperature,
+    this.condition,
     this.rainProbability,
     this.uvIndex,
   });
 
   final double maximumTemperature;
   final double minimumTemperature;
+  final PackingWeatherCondition? condition;
   final double? rainProbability;
   final double? uvIndex;
 
   String get shortDescription {
-    final rain = rainProbability;
-    if (rain != null && rain >= 40) return '${rain.round()}% rain';
-    final uv = uvIndex;
-    if (uv != null && uv >= 6) return 'High UV ${uv.toStringAsFixed(1)}';
-    return '${maximumTemperature.round()}°C forecast';
+    final minimum = minimumTemperature.round();
+    final maximum = maximumTemperature.round();
+    final parts = <String>[];
+    final conditionLabel = condition?.label;
+    if (conditionLabel != null) parts.add(conditionLabel);
+    parts.add(minimum == maximum ? '$maximum°C' : '$minimum–$maximum°C');
+    if (rainProbability case final rain?) {
+      parts.add('Rain up to ${rain.round()}%');
+    }
+    if (uvIndex case final uv?) parts.add('UV ${uv.toStringAsFixed(1)}');
+    return parts.join(' · ');
   }
 }
 
@@ -118,7 +169,8 @@ class PackingWeatherService {
             'latitude': latitude,
             'longitude': longitude,
             'daily':
-                'temperature_2m_max,temperature_2m_min,precipitation_probability_max',
+                'temperature_2m_max,temperature_2m_min,'
+                'precipitation_probability_max,weather_code',
             'timezone': 'auto',
             'forecast_days': forecastDays,
           },
@@ -138,6 +190,7 @@ class PackingWeatherService {
       final minima = <double>[];
       final rain = <double>[];
       final uv = <double>[];
+      final conditions = <PackingWeatherCondition>[];
 
       for (var index = 0; index < times.length; index++) {
         final parsed = DateTime.tryParse('${times[index]}');
@@ -161,8 +214,12 @@ class PackingWeatherService {
           index,
         );
         final uvValue = uvByDate[day];
+        final weatherCode = _numberAt(daily['weather_code'], index)?.round();
         if (rainValue != null) rain.add(rainValue);
         if (uvValue != null) uv.add(uvValue);
+        if (weatherCode != null) {
+          conditions.add(PackingWeatherCondition.fromWmoCode(weatherCode));
+        }
       }
 
       if (coveredDates.isEmpty) {
@@ -185,6 +242,7 @@ class PackingWeatherService {
         summary: PackingWeatherSummary(
           maximumTemperature: _maximum(maxima),
           minimumTemperature: _minimum(minima),
+          condition: _representativeCondition(conditions),
           rainProbability: rain.isEmpty ? null : _maximum(rain),
           uvIndex: uv.isEmpty ? null : _maximum(uv),
         ),
@@ -240,6 +298,33 @@ class PackingWeatherService {
 
   static double _minimum(List<double> values) =>
       values.reduce((a, b) => a < b ? a : b);
+
+  static PackingWeatherCondition? _representativeCondition(
+    List<PackingWeatherCondition> conditions,
+  ) {
+    final known = conditions
+        .where((condition) => condition != PackingWeatherCondition.unknown)
+        .toList();
+    if (known.isEmpty) {
+      return conditions.isEmpty ? null : PackingWeatherCondition.unknown;
+    }
+
+    final counts = <PackingWeatherCondition, int>{};
+    for (final condition in known) {
+      counts.update(condition, (count) => count + 1, ifAbsent: () => 1);
+    }
+
+    var selected = known.first;
+    var selectedCount = counts[selected]!;
+    for (final condition in known.skip(1)) {
+      final count = counts[condition]!;
+      if (count > selectedCount) {
+        selected = condition;
+        selectedCount = count;
+      }
+    }
+    return selected;
+  }
 
   static DateTime _dateOnly(DateTime value) =>
       DateTime(value.year, value.month, value.day);

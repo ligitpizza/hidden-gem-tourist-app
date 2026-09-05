@@ -8,19 +8,21 @@ import '../model/vault_pin_service.dart';
 class EmergencyContactController extends ChangeNotifier {
   EmergencyContactController({
     EmergencyContactRepository? repository,
-    VaultPinService? pinService,
+    VaultPinServiceContract? pinService,
     bool initiallyUnlocked = false,
   }) : _repository = repository ?? EmergencyContactRepository(),
        _pinService = pinService ?? VaultPinService(),
        isUnlocked = initiallyUnlocked;
 
   final EmergencyContactRepository _repository;
-  final VaultPinService _pinService;
+  final VaultPinServiceContract _pinService;
 
   List<EmergencyContact> contacts = const [];
   bool isLoading = true;
   bool isUnlocked;
   bool hasPin = false;
+  bool pinStatusUnavailable = false;
+  int? pinLength;
   String? pinError;
   String searchQuery = '';
 
@@ -38,24 +40,48 @@ class EmergencyContactController extends ChangeNotifier {
     notifyListeners();
     final values = await Future.wait([
       _repository.load(),
-      _pinService.readPin(),
+      _pinService.loadStatus(),
     ]);
     contacts = values[0] as List<EmergencyContact>;
-    hasPin = values[1] != null;
+    final status = values[1] as VaultPinStatus;
+    hasPin = status.hasPin;
+    pinLength = status.pinLength;
+    pinStatusUnavailable =
+        status.availability == VaultPinAvailability.unavailable;
     isLoading = false;
     notifyListeners();
   }
 
   Future<bool> unlock(String pin) async {
-    if (pin != await _pinService.readPin()) {
-      pinError = 'Incorrect vault PIN.';
-      notifyListeners();
-      return false;
+    final result = await _pinService.verifyPin(pin);
+    switch (result.status) {
+      case VaultPinVerificationStatus.verified:
+        isUnlocked = true;
+        pinError = null;
+        notifyListeners();
+        return true;
+      case VaultPinVerificationStatus.incorrect:
+        final attempts = result.attemptsRemaining;
+        pinError = attempts == null
+            ? 'Incorrect vault PIN.'
+            : 'Incorrect vault PIN. $attempts attempts remaining.';
+        break;
+      case VaultPinVerificationStatus.locked:
+        final retry = result.retryAfter;
+        final minutes = retry == null ? null : (retry.inSeconds / 60).ceil();
+        pinError = retry == null
+            ? 'Too many attempts. Try again later.'
+            : 'Too many attempts. Try again in $minutes minutes.';
+        break;
+      case VaultPinVerificationStatus.unavailable:
+        pinError = 'PIN verification is unavailable. Check your connection.';
+        break;
+      case VaultPinVerificationStatus.notConfigured:
+        pinError = 'Create a Document Vault PIN first.';
+        break;
     }
-    isUnlocked = true;
-    pinError = null;
     notifyListeners();
-    return true;
+    return false;
   }
 
   void lock() {

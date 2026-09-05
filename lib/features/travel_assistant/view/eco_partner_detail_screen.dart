@@ -351,6 +351,7 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
   LatLng? _origin;
   EcoPartnerRoute? _route;
   TransitRoute? _transitRoute;
+  EcoTransitRouteInfo? _requestedTransitRoute;
   String? _error;
   bool _loading = false;
 
@@ -384,6 +385,8 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
         ),
       );
       final origin = LatLng(position.latitude, position.longitude);
+      if (!mounted) return;
+      setState(() => _origin = origin);
       final destination = LatLng(
         widget.partner.latitude,
         widget.partner.longitude,
@@ -399,12 +402,18 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
           route = await _routingService.drivingRoute(waypoints);
           break;
         case _RouteMode.publicTransit:
-          transitRoute = await _transitService.plan(origin, destination);
-          if (transitRoute == null) {
-            throw const EcoPartnerRouteException(
-              'No public-transit itinerary is available for this journey.',
-            );
-          }
+          final requestedRoute = _requestedTransitRoute;
+          transitRoute = await _transitService.planOrThrow(
+            origin,
+            destination,
+            preferredRouteNames: [
+              if (requestedRoute?.shortName?.trim().isNotEmpty == true)
+                requestedRoute!.shortName!,
+              if (requestedRoute?.longName?.trim().isNotEmpty == true)
+                requestedRoute!.longName!,
+            ],
+            preferredRouteLabel: requestedRoute?.displayLabel,
+          );
           break;
       }
 
@@ -417,6 +426,9 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
     } on EcoPartnerRouteException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
+    } on TransitRouteException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.message);
     } catch (_) {
       if (!mounted) return;
       setState(() => _error = 'Could not calculate a route. Please retry.');
@@ -427,14 +439,20 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
 
   Future<void> _changeMode(_RouteMode mode) async {
     if (_mode == mode) return;
-    setState(() => _mode = mode);
+    setState(() {
+      _mode = mode;
+      if (mode != _RouteMode.publicTransit) _requestedTransitRoute = null;
+    });
     if (_route != null || _transitRoute != null || _error != null) {
       await _loadRoute();
     }
   }
 
-  Future<void> _planTransitRoute() async {
-    setState(() => _mode = _RouteMode.publicTransit);
+  Future<void> _planWithTransitRoute(EcoTransitRouteInfo route) async {
+    setState(() {
+      _mode = _RouteMode.publicTransit;
+      _requestedTransitRoute = route;
+    });
     await _loadRoute();
   }
 
@@ -483,14 +501,14 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
         if (widget.partner.transitRoutes.isNotEmpty) ...[
           const SizedBox(height: 12),
           Text(
-            'Transit routes serving this stop',
+            'Scheduled routes serving this stop',
             style: Theme.of(
               context,
             ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(
-            'Tap a route to plan a public-transit journey here.',
+            'Tap a route to check for a matching live in-app journey. Availability depends on Transitous coverage.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
@@ -502,8 +520,11 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
                   (route) => ActionChip(
                     avatar: const Icon(Icons.directions_bus_outlined, size: 17),
                     label: Text(route.displayLabel),
-                    tooltip: 'Plan a journey to this stop',
-                    onPressed: _loading ? null : _planTransitRoute,
+                    tooltip:
+                        'Check live in-app journey using ${route.displayLabel}',
+                    onPressed: _loading
+                        ? null
+                        : () => _planWithTransitRoute(route),
                   ),
                 )
                 .toList(),
@@ -610,7 +631,7 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
         const SizedBox(height: 4),
         Text(
           _mode == _RouteMode.publicTransit
-              ? 'Transit itinerary from Transitous and Malaysian GTFS feeds.'
+              ? 'Stop services from Malaysian GTFS. Live journey planning by Transitous.'
               : 'Map and route data from OpenStreetMap and OSRM.',
           style: Theme.of(context).textTheme.bodySmall,
         ),

@@ -50,7 +50,8 @@ class TravelDocumentRepository {
           .from('travel_documents')
           .select()
           .eq('user_id', userId)
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .timeout(const Duration(seconds: 10));
       final remote = (rows as List)
           .map((row) => _fromRemote((row as Map).cast<String, dynamic>()))
           .toList();

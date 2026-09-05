@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -16,6 +17,7 @@ import '../controller/travel_assistant_dashboard_controller.dart';
 import '../model/eco_partner.dart';
 import '../model/packing_checklist.dart';
 import '../model/packing_location_source.dart';
+import '../model/packing_weather_service.dart';
 import '../model/travel_document.dart';
 import '../model/travel_document_repository.dart';
 import '../model/travel_assistant_cover_image.dart';
@@ -682,6 +684,7 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
                         _controller.ecoPartnerCategory ==
                         EcoPartnerCategory.dining,
                     forecastDetail: _controller.weatherDetail,
+                    weatherCondition: _controller.weather?.condition,
                     isWeatherLoading: _controller.isWeatherLoading,
                     canRetryForecast: _controller.canRetryForecast,
                     onSetDates: _selectTripDates,
@@ -775,7 +778,9 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
                           children: [
                             Expanded(
                               child: _ReadinessMetric(
-                                Icons.wb_sunny_outlined,
+                                _weatherConditionIcon(
+                                  _controller.weather?.condition,
+                                ),
                                 'Weather',
                                 _metricScoreLabel(_controller.weatherScore),
                                 _controller.weatherDetail,
@@ -943,6 +948,7 @@ class _PackingTripDatesCard extends StatelessWidget {
     required this.isEditable,
     required this.isDining,
     required this.forecastDetail,
+    required this.weatherCondition,
     required this.isWeatherLoading,
     required this.canRetryForecast,
     required this.onSetDates,
@@ -954,6 +960,7 @@ class _PackingTripDatesCard extends StatelessWidget {
   final bool isEditable;
   final bool isDining;
   final String forecastDetail;
+  final PackingWeatherCondition? weatherCondition;
   final bool isWeatherLoading;
   final bool canRetryForecast;
   final VoidCallback onSetDates;
@@ -985,7 +992,9 @@ class _PackingTripDatesCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 3),
               child: Icon(
-                Icons.calendar_month_outlined,
+                dates == null
+                    ? Icons.calendar_month_outlined
+                    : _weatherConditionIcon(weatherCondition),
                 color: colorScheme.primary,
               ),
             ),
@@ -1194,6 +1203,20 @@ class _PackingChecklistEmptyState extends StatelessWidget {
 }
 
 String _metricScoreLabel(int? score) => score == null ? 'N/A' : '$score%';
+
+IconData _weatherConditionIcon(PackingWeatherCondition? condition) =>
+    switch (condition) {
+      PackingWeatherCondition.clear => Icons.wb_sunny_outlined,
+      PackingWeatherCondition.partlyCloudy => Icons.wb_cloudy_outlined,
+      PackingWeatherCondition.cloudy => Icons.cloud_outlined,
+      PackingWeatherCondition.fog => Icons.foggy,
+      PackingWeatherCondition.drizzle => Icons.grain_outlined,
+      PackingWeatherCondition.rain => Icons.umbrella_outlined,
+      PackingWeatherCondition.snow => Icons.ac_unit,
+      PackingWeatherCondition.thunderstorm => Icons.thunderstorm_outlined,
+      PackingWeatherCondition.unknown ||
+      null => Icons.device_thermostat_outlined,
+    };
 
 class _ReadinessMetric extends StatelessWidget {
   const _ReadinessMetric(this.icon, this.label, this.value, this.detail);
@@ -1562,9 +1585,10 @@ class _EcoPartnerCard extends StatelessWidget {
 }
 
 class DocumentVaultScreen extends StatefulWidget {
-  const DocumentVaultScreen({super.key, this.pinService});
+  const DocumentVaultScreen({super.key, this.pinService, this.repository});
 
   final VaultPinServiceContract? pinService;
+  final TravelDocumentRepository? repository;
 
   @override
   State<DocumentVaultScreen> createState() => _DocumentVaultScreenState();
@@ -1579,7 +1603,11 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
   bool _unlocked = false;
   bool _hidePin = true;
   bool _resettingPin = false;
+  bool _submittingPin = false;
+  bool _pinStatusUnavailable = false;
   int? _selectedPinLength;
+  DateTime? _lockedUntil;
+  Timer? _lockoutTimer;
   String? _error;
 
   @override
@@ -1590,12 +1618,50 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
   }
 
   Future<void> _loadPinState() async {
-    final savedPin = await _pinService.readPin();
-    if (!mounted) return;
     setState(() {
-      _hasPin = savedPin != null;
-      _selectedPinLength = savedPin?.length;
+      _loading = true;
+      _error = null;
+    });
+    VaultPinStatus status;
+    try {
+      status = await _pinService.loadStatus().timeout(
+        const Duration(seconds: 12),
+      );
+    } catch (_) {
+      status = const VaultPinStatus.unavailable();
+    }
+    if (!mounted) return;
+    final retry = status.lockedUntil?.difference(DateTime.now());
+    setState(() {
+      _pinStatusUnavailable =
+          status.availability == VaultPinAvailability.unavailable;
+      _hasPin = status.hasPin;
+      _selectedPinLength = status.pinLength;
+      _lockedUntil = status.lockedUntil;
+      _error = retry != null && retry > Duration.zero
+          ? 'Too many attempts. Try again in ${_formatRetry(retry)}.'
+          : null;
       _loading = false;
+    });
+    _scheduleUnlock(status.lockedUntil);
+  }
+
+  bool get _isLocked {
+    final lockedUntil = _lockedUntil;
+    return lockedUntil?.isAfter(DateTime.now()) ?? false;
+  }
+
+  void _scheduleUnlock(DateTime? lockedUntil) {
+    _lockoutTimer?.cancel();
+    if (lockedUntil == null) return;
+    final delay = lockedUntil.difference(DateTime.now());
+    if (delay <= Duration.zero) return;
+    _lockoutTimer = Timer(delay, () {
+      if (!mounted) return;
+      setState(() {
+        _lockedUntil = null;
+        _error = null;
+      });
     });
   }
 
@@ -1622,32 +1688,98 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
       return;
     }
 
-    if (_hasPin) {
-      final savedPin = await _pinService.readPin();
-      if (!mounted) return;
-      if (pin != savedPin) {
-        setState(() {
-          _error = 'Incorrect PIN. Please try again.';
-          _pinController.clear();
-        });
-        return;
-      }
-    } else {
+    if (_isLocked) {
+      setState(() => _error = 'Too many attempts. Try again shortly.');
+      return;
+    }
+
+    if (!_hasPin) {
       if (pin != _confirmPinController.text) {
         setState(() => _error = 'The PINs do not match.');
         return;
       }
-      await _pinService.writePin(pin);
-      if (!mounted) return;
     }
 
     setState(() {
-      _hasPin = true;
-      _unlocked = true;
+      _submittingPin = true;
       _error = null;
-      _pinController.clear();
-      _confirmPinController.clear();
     });
+    try {
+      if (_hasPin) {
+        final result = await _pinService.verifyPin(pin);
+        if (!mounted) return;
+        switch (result.status) {
+          case VaultPinVerificationStatus.verified:
+            setState(() {
+              _unlocked = true;
+              _submittingPin = false;
+              _error = null;
+              _pinController.clear();
+            });
+            return;
+          case VaultPinVerificationStatus.incorrect:
+            final attempts = result.attemptsRemaining;
+            setState(() {
+              _submittingPin = false;
+              _error = attempts == null
+                  ? 'Incorrect PIN. Please try again.'
+                  : 'Incorrect PIN. $attempts attempts remaining.';
+              _pinController.clear();
+            });
+            return;
+          case VaultPinVerificationStatus.locked:
+            final retry = result.retryAfter ?? const Duration(minutes: 5);
+            final lockedUntil = DateTime.now().add(retry);
+            setState(() {
+              _submittingPin = false;
+              _lockedUntil = lockedUntil;
+              _error =
+                  'Too many attempts. Try again in ${_formatRetry(retry)}.';
+              _pinController.clear();
+            });
+            _scheduleUnlock(lockedUntil);
+            return;
+          case VaultPinVerificationStatus.unavailable:
+            setState(() {
+              _submittingPin = false;
+              _error =
+                  'PIN verification is unavailable. Check your connection and retry.';
+            });
+            return;
+          case VaultPinVerificationStatus.notConfigured:
+            setState(() {
+              _submittingPin = false;
+              _error = 'Vault PIN status changed. Refresh and try again.';
+            });
+            return;
+        }
+      }
+
+      await _pinService.writePin(pin);
+      if (!mounted) return;
+      setState(() {
+        _hasPin = true;
+        _unlocked = true;
+        _submittingPin = false;
+        _error = null;
+        _pinController.clear();
+        _confirmPinController.clear();
+      });
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        _submittingPin = false;
+        _error = _hasPin
+            ? 'PIN verification is unavailable. Check your connection and retry.'
+            : 'A connection is required to create your PIN. Please retry.';
+      });
+    }
+  }
+
+  String _formatRetry(Duration duration) {
+    final minutes = duration.inMinutes;
+    if (minutes >= 1) return '$minutes minute${minutes == 1 ? '' : 's'}';
+    return '${duration.inSeconds} seconds';
   }
 
   void _lockVault() {
@@ -1674,9 +1806,9 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
       _pinController.clear();
     });
     if (reset == true) {
-      final savedPin = await _pinService.readPin();
+      final status = await _pinService.loadStatus();
       if (!mounted) return;
-      setState(() => _selectedPinLength = savedPin?.length);
+      setState(() => _selectedPinLength = status.pinLength);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Your vault PIN has been reset.')),
       );
@@ -1685,6 +1817,7 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
 
   @override
   void dispose() {
+    _lockoutTimer?.cancel();
     _pinController.dispose();
     _confirmPinController.dispose();
     super.dispose();
@@ -1698,10 +1831,66 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
           title: 'Document Vault',
           fallbackPath: ShellRoutes.travelAssistant,
         ),
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 14),
+              Text('Checking your vault…'),
+            ],
+          ),
+        ),
       );
     }
-    if (_unlocked) return _UnlockedDocumentVault(onLock: _lockVault);
+    if (_unlocked) {
+      return _UnlockedDocumentVault(
+        onLock: _lockVault,
+        repository: widget.repository ?? TravelDocumentRepository(),
+        pinService: _pinService,
+      );
+    }
+
+    if (_pinStatusUnavailable) {
+      return Scaffold(
+        appBar: const AppHeader.pushed(
+          title: 'Document Vault',
+          fallbackPath: ShellRoutes.travelAssistant,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.cloud_off_outlined, size: 54),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Vault PIN unavailable',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Connect to the internet to check your existing vault PIN. A new PIN cannot be created while status is unavailable.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 18),
+                  FilledButton.icon(
+                    onPressed: _loadPinState,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: const AppHeader.pushed(
@@ -1764,7 +1953,9 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
                       autofocus: true,
                       obscureText: _hidePin,
                       errorText: _error,
-                      onSubmitted: _hasPin ? _submitPin : null,
+                      onSubmitted: _hasPin && !_submittingPin && !_isLocked
+                          ? _submitPin
+                          : null,
                     ),
                     Align(
                       alignment: Alignment.centerRight,
@@ -1791,12 +1982,20 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
                     ],
                     const SizedBox(height: 22),
                     ElevatedButton.icon(
-                      onPressed: _resettingPin ? null : _submitPin,
-                      icon: Icon(
-                        _hasPin
-                            ? Icons.lock_open_outlined
-                            : Icons.shield_outlined,
-                      ),
+                      onPressed: _resettingPin || _submittingPin || _isLocked
+                          ? null
+                          : _submitPin,
+                      icon: _submittingPin
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(
+                              _hasPin
+                                  ? Icons.lock_open_outlined
+                                  : Icons.shield_outlined,
+                            ),
                       label: Text(
                         _hasPin ? 'Unlock Vault' : 'Create PIN & Continue',
                       ),
@@ -1824,7 +2023,7 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
                       SizedBox(width: 6),
                       Flexible(
                         child: Text(
-                          'Your PIN is stored securely on this device.',
+                          'Your PIN is cached securely on this device; only a salted verifier is synced.',
                           style: TextStyle(
                             fontSize: 12,
                             color: Color(0xFF557067),
@@ -1925,7 +2124,8 @@ class _PasswordPinResetDialogState extends State<_PasswordPinResetDialog> {
       if (!mounted) return;
       setState(() {
         _saving = false;
-        _error = 'Could not save the new PIN. Please try again.';
+        _error =
+            'Could not save the new PIN to your account. Check your connection and try again.';
       });
     }
   }
@@ -2056,7 +2256,7 @@ class _PasswordPinResetDialogState extends State<_PasswordPinResetDialog> {
         ),
         const SizedBox(height: 8),
         const Text(
-          'Enter this account’s password before resetting the local vault PIN.',
+          'Enter this account’s password before resetting the vault PIN across your devices.',
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 18),
@@ -2106,21 +2306,28 @@ class _PasswordPinResetDialogState extends State<_PasswordPinResetDialog> {
 }
 
 class _UnlockedDocumentVault extends StatefulWidget {
-  const _UnlockedDocumentVault({required this.onLock});
+  const _UnlockedDocumentVault({
+    required this.onLock,
+    required this.repository,
+    required this.pinService,
+  });
   final VoidCallback onLock;
+  final TravelDocumentRepository repository;
+  final VaultPinServiceContract pinService;
 
   @override
   State<_UnlockedDocumentVault> createState() => _UnlockedDocumentVaultState();
 }
 
 class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
-  final _repository = TravelDocumentRepository();
+  late final TravelDocumentRepository _repository = widget.repository;
   final _searchController = TextEditingController();
   bool offlineMode = false;
-  String filter = 'All';
+  final Set<String> _selectedCategories = {};
   bool _loadingDocuments = true;
   bool _busy = false;
   String _query = '';
+  String? _documentLoadError;
   final Set<String> _selectedIds = {};
   List<TravelDocument> documents = [];
 
@@ -2143,12 +2350,29 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
   }
 
   Future<void> _loadDocuments() async {
-    final loaded = await _repository.load();
-    if (!mounted) return;
-    setState(() {
-      documents = loaded;
-      _loadingDocuments = false;
-    });
+    if (mounted) {
+      setState(() {
+        _loadingDocuments = true;
+        _documentLoadError = null;
+      });
+    }
+    try {
+      final loaded = await _repository.load().timeout(
+        const Duration(seconds: 12),
+      );
+      if (!mounted) return;
+      setState(() {
+        documents = loaded;
+        _loadingDocuments = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingDocuments = false;
+        _documentLoadError =
+            'Your documents could not be loaded. Check your connection and retry.';
+      });
+    }
   }
 
   @override
@@ -2159,9 +2383,12 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
 
   @override
   Widget build(BuildContext context) {
+    final documentLoadError = _documentLoadError;
     final normalizedQuery = _query.trim().toLowerCase();
     final shown = documents.where((document) {
-      final matchesCategory = filter == 'All' || document.category == filter;
+      final matchesCategory =
+          _selectedCategories.isEmpty ||
+          _selectedCategories.contains(document.category);
       final matchesSearch =
           normalizedQuery.isEmpty ||
           document.displayName.toLowerCase().contains(normalizedQuery) ||
@@ -2169,13 +2396,14 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
           document.category.toLowerCase().contains(normalizedQuery);
       return matchesCategory && matchesSearch;
     }).toList();
-    final categories = <String>{
-      'All',
-      'Passports',
-      'Bookings',
-      'Insurance',
-      ...documents.map((item) => item.category),
-    };
+    final categoryCounts = <String, int>{};
+    for (final document in documents) {
+      categoryCounts.update(
+        document.category,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
+    }
 
     return Scaffold(
       appBar: AppHeader.pushed(
@@ -2197,18 +2425,39 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
         onUpload: _uploadDocument,
       ),
       body: _loadingDocuments
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 14),
+                  Text('Loading your documents…'),
+                ],
+              ),
+            )
+          : documentLoadError != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.folder_off_outlined, size: 54),
+                    const SizedBox(height: 12),
+                    Text(documentLoadError, textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: _loadDocuments,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            )
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
               children: [
-                Text(
-                  'Document Vault',
-                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF003B2B),
-                  ),
-                ),
-                const SizedBox(height: 6),
                 const Text(
                   'Securely manage and access your essential travel credentials.',
                 ),
@@ -2227,9 +2476,10 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
-                        builder: (_) => const EmergencyContactsScreen(
+                        builder: (_) => EmergencyContactsScreen(
                           initiallyUnlocked: true,
                           fallbackPath: ShellRoutes.documentVault,
+                          pinService: widget.pinService,
                         ),
                       ),
                     ),
@@ -2238,7 +2488,10 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: _searchController,
-                  onChanged: (value) => setState(() => _query = value),
+                  onChanged: (value) => setState(() {
+                    _query = value;
+                    _selectedIds.clear();
+                  }),
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.search),
                     hintText: 'Search documents...',
@@ -2249,10 +2502,71 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
                             icon: const Icon(Icons.close),
                             onPressed: () {
                               _searchController.clear();
-                              setState(() => _query = '');
+                              setState(() {
+                                _query = '';
+                                _selectedIds.clear();
+                              });
                             },
                           ),
                   ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _resultCountLabel(shown.length),
+                        key: const Key('vault-results-count'),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    OutlinedButton(
+                      key: const Key('vault-filter-button'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 44),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                      ),
+                      onPressed: categoryCounts.isEmpty
+                          ? null
+                          : () => _showDocumentFilters(categoryCounts),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.filter_list),
+                          const SizedBox(width: 8),
+                          const Text('Filter'),
+                          if (_selectedCategories.isNotEmpty) ...[
+                            const SizedBox(width: 7),
+                            Container(
+                              constraints: const BoxConstraints(minWidth: 20),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primary,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                '${_selectedCategories.length}',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimary,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 Card(
@@ -2268,29 +2582,12 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: categories
-                        .map(
-                          (item) => Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                              label: Text(item),
-                              selected: filter == item,
-                              onSelected: (_) => setState(() => filter = item),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
                 const SizedBox(height: 14),
                 if (shown.isEmpty)
                   _VaultEmptyState(
                     hasDocuments: documents.isNotEmpty,
-                    hasFilter: _query.isNotEmpty || filter != 'All',
+                    hasFilter:
+                        _query.isNotEmpty || _selectedCategories.isNotEmpty,
                   )
                 else
                   for (final document in shown)
@@ -2307,6 +2604,118 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
               ],
             ),
     );
+  }
+
+  String _resultCountLabel(int shownCount) {
+    final noun = shownCount == 1 ? 'document' : 'documents';
+    if (_query.isEmpty && _selectedCategories.isEmpty) {
+      return '$shownCount $noun';
+    }
+    return '$shownCount of ${documents.length} documents';
+  }
+
+  List<String> _orderedCategories(Iterable<String> values) {
+    const canonical = [
+      'Passports',
+      'Visas',
+      'Tickets',
+      'Bookings',
+      'Insurance',
+      'Identification',
+      'Other',
+    ];
+    final present = values.toSet();
+    final ordered = canonical.where(present.remove).toList();
+    ordered.addAll(present.toList()..sort());
+    return ordered;
+  }
+
+  Future<void> _showDocumentFilters(Map<String, int> counts) async {
+    final draft = Set<String>.from(_selectedCategories);
+    final categories = _orderedCategories(counts.keys);
+    final applied = await showModalBottomSheet<Set<String>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * .78,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                  child: Text(
+                    'Filter documents',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final category in categories)
+                        CheckboxListTile(
+                          key: Key('vault-filter-$category'),
+                          value: draft.contains(category),
+                          onChanged: (selected) => setSheetState(() {
+                            if (selected ?? false) {
+                              draft.add(category);
+                            } else {
+                              draft.remove(category);
+                            }
+                          }),
+                          secondary: Icon(
+                            Icons.folder_outlined,
+                            color: _DocumentCategoryStyle.forCategory(
+                              category,
+                            ).accent,
+                          ),
+                          title: Text(category),
+                          subtitle: Text(
+                            '${counts[category]} ${counts[category] == 1 ? 'document' : 'documents'}',
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                  child: Row(
+                    children: [
+                      TextButton(
+                        key: const Key('vault-filter-reset'),
+                        onPressed: () => setSheetState(() => draft.clear()),
+                        child: const Text('Reset'),
+                      ),
+                      const Spacer(),
+                      FilledButton(
+                        key: const Key('vault-filter-apply'),
+                        onPressed: () => Navigator.pop(context, draft),
+                        child: const Text('Apply'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (applied == null || !mounted) return;
+    setState(() {
+      _selectedCategories
+        ..clear()
+        ..addAll(applied);
+      _selectedIds.clear();
+    });
   }
 
   Future<void> _uploadDocument() async {
@@ -2656,8 +3065,14 @@ class _DocumentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final categoryStyle = _DocumentCategoryStyle.forCategory(document.category);
     return Card(
+      key: Key('vault-document-${document.id}'),
       margin: const EdgeInsets.only(bottom: 14),
+      color: Color.alphaBlend(
+        categoryStyle.accent.withValues(alpha: .08),
+        colorScheme.surface,
+      ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(
@@ -2669,9 +3084,9 @@ class _DocumentCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         onTap: onSelect,
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             border: Border(
-              left: BorderSide(color: Color(0xFF07513C), width: 4),
+              left: BorderSide(color: categoryStyle.accent, width: 4),
             ),
           ),
           padding: const EdgeInsets.all(18),
@@ -2684,12 +3099,15 @@ class _DocumentCard extends StatelessWidget {
                     width: 46,
                     height: 46,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE9EEEB),
+                      color: Color.alphaBlend(
+                        categoryStyle.accent.withValues(alpha: .14),
+                        colorScheme.surface,
+                      ),
                       borderRadius: BorderRadius.circular(9),
                     ),
                     child: Icon(
                       _iconForDocument(document),
-                      color: const Color(0xFF07513C),
+                      color: categoryStyle.accent,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -2701,10 +3119,10 @@ class _DocumentCard extends StatelessWidget {
                           document.displayName,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 19,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF073F30),
+                            color: colorScheme.onSurface,
                           ),
                         ),
                         Text(
@@ -2727,7 +3145,14 @@ class _DocumentCard extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _DocumentBadge(label: document.category),
+                  _DocumentBadge(
+                    label: document.category,
+                    backgroundColor: Color.alphaBlend(
+                      categoryStyle.accent.withValues(alpha: .14),
+                      colorScheme.surface,
+                    ),
+                    foregroundColor: categoryStyle.accent,
+                  ),
                   _DocumentBadge(
                     label: document.extension.isEmpty
                         ? 'FILE'
@@ -2763,22 +3188,53 @@ class _DocumentCard extends StatelessWidget {
 }
 
 class _DocumentBadge extends StatelessWidget {
-  const _DocumentBadge({required this.label});
+  const _DocumentBadge({
+    required this.label,
+    this.backgroundColor,
+    this.foregroundColor,
+  });
   final String label;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFFE6ECE8),
+        color:
+            backgroundColor ??
+            Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
         label,
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: foregroundColor,
+        ),
       ),
     );
+  }
+}
+
+class _DocumentCategoryStyle {
+  const _DocumentCategoryStyle(this.accent);
+
+  final Color accent;
+
+  static _DocumentCategoryStyle forCategory(String category) {
+    final accent = switch (category) {
+      'Passports' => const Color(0xFF1565C0),
+      'Visas' => const Color(0xFF7B1FA2),
+      'Tickets' => const Color(0xFFE65100),
+      'Bookings' => const Color(0xFF00838F),
+      'Insurance' => const Color(0xFF2E7D32),
+      'Identification' => const Color(0xFF5E35B1),
+      _ => const Color(0xFF546E7A),
+    };
+    return _DocumentCategoryStyle(accent);
   }
 }
 
