@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../features/itinerary_planning/view/itinerary_routes.dart';
 import '../../../shared/models/destination.dart';
+import '../../destination_exploration/model/favourite_destination_repository.dart';
+import '../../destination_exploration/model/favourite_destinations_store.dart';
 import '../controller/recommendation_controller.dart';
 import '../model/hidden_gem_feed_item.dart';
 import '../model/interaction_repository.dart';
@@ -240,29 +242,47 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// Dark gradient placeholder used in place of a real photo — the same
-/// convention already used elsewhere in this app (destination/timeline
-/// image placeholders) since places don't have photo assets.
+/// A real photo when this place has one (`places.images`, first entry) —
+/// currently only the ~72 places merged in from the team's shared
+/// `destinations` table. Everything else (the OSM-imported bulk of
+/// `places`) still falls back to the dark gradient placeholder used
+/// elsewhere in this app, since it has no photo data at all yet.
 class _PlaceholderBackdrop extends StatelessWidget {
   final IconData icon;
-  const _PlaceholderBackdrop({required this.icon});
+  final String? imageUrl;
+  const _PlaceholderBackdrop({required this.icon, this.imageUrl});
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final url = imageUrl;
     return Positioned.fill(
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [colorScheme.primary, colorScheme.primaryContainer],
-          ),
+      child: url != null
+          ? Image.network(
+              url,
+              fit: BoxFit.cover,
+              // A broken/expired image URL falls back to the same gradient
+              // placeholder rather than showing Flutter's default error icon.
+              errorBuilder: (context, error, stackTrace) => _gradient(colorScheme, icon),
+              loadingBuilder: (context, child, progress) =>
+                  progress == null ? child : _gradient(colorScheme, icon),
+            )
+          : _gradient(colorScheme, icon),
+    );
+  }
+
+  Widget _gradient(ColorScheme colorScheme, IconData icon) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [colorScheme.primary, colorScheme.primaryContainer],
         ),
-        child: Align(
-          alignment: Alignment.center,
-          child: Icon(icon, size: 64, color: Colors.white.withAlpha(46)),
-        ),
+      ),
+      child: Align(
+        alignment: Alignment.center,
+        child: Icon(icon, size: 64, color: Colors.white.withAlpha(46)),
       ),
     );
   }
@@ -279,28 +299,84 @@ class _TopMatchCard extends StatefulWidget {
 }
 
 class _TopMatchCardState extends State<_TopMatchCard> {
-  // Local, per-card bookmark state. This intentionally starts false on
-  // every fresh load of the feed (not read back from Supabase) — the
-  // interaction log isn't a source of "current saved state" for a place
-  // in general (repeat views/searches don't un-set anything), only this
-  // one card's own toggle tracks it, backed by InteractionRepository.save/
-  // unsave for the actual persisted signal.
+  // Local, per-card bookmark state, initialized from the real persisted
+  // signal in initState below rather than always starting false — now that
+  // FavouriteDestinationRepository backs this with an actual visible Saved
+  // list (destination_favourites), showing the wrong icon after a refresh
+  // would be actively misleading, not just a cosmetic gap.
   bool _saved = false;
   final _interactionRepository = InteractionRepository();
+
+  @override
+  void initState() {
+    super.initState();
+    final store = FavouriteDestinationsStore.instance;
+    if (store.favourites.isNotEmpty || store.isLoading) {
+      // Already loaded (or loading) from some other screen this session --
+      // safe to read synchronously / wait on the same in-flight call
+      // instead of firing a second one.
+      _saved = store.contains(widget.item.id);
+    }
+    store.ensureLoaded().then((_) {
+      if (mounted) setState(() => _saved = store.contains(widget.item.id));
+    });
+  }
+
+  // Also writes to the shared Saved screen's own table (destination_id now
+  // references places -- see favourite_destination_repository.dart's doc
+  // comment for why this is safe post-merge). Kept as a separate call from
+  // InteractionRepository above rather than replacing it: that one feeds
+  // affinity/personalization, this one is purely the user-facing bookmark
+  // list -- different purposes, both should fire on the same tap.
+  final _favouriteRepository = FavouriteDestinationRepository();
 
   void _handleToggleSave() {
     final wasSaved = _saved;
     setState(() => _saved = !wasSaved);
     if (wasSaved) {
       _interactionRepository.unsave(widget.item.id);
+      // Unlike InteractionRepository, this one doesn't swallow its own
+      // errors -- catch here so a failed write (offline, RLS hiccup) stays
+      // a quiet no-op instead of an unhandled Future rejection, matching
+      // this handler's existing fire-and-forget style. debugPrint (not a
+      // silent catch) so a real failure shows up in the run console
+      // instead of vanishing with no trace.
+      //
+      // FavouriteDestinationsStore.refresh() on success: this write goes
+      // straight to the table, bypassing the store the Saved screen (and
+      // this card's own initState) read from -- without this, the store's
+      // in-memory cache never learns the change happened, so both keep
+      // showing the stale pre-toggle state until the app restarts.
+      _syncFavourite(remove: true);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Removed'), duration: Duration(seconds: 2)),
       );
     } else {
       _interactionRepository.logSave(widget.item.id);
+      _syncFavourite(remove: false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Added to your interests'), duration: Duration(seconds: 2)),
       );
+    }
+  }
+
+  /// Writes to `destination_favourites` then, on success, tells
+  /// [FavouriteDestinationsStore] to refetch -- see the call sites in
+  /// [_handleToggleSave] for why this is necessary rather than just a nice
+  /// extra. A local async method rather than a `.then().catchError()`
+  /// chain so the error handler's return type doesn't have to line up
+  /// with the success handler's (a `.then(...).catchError(...)` chain
+  /// requires both to return the same type).
+  Future<void> _syncFavourite({required bool remove}) async {
+    try {
+      if (remove) {
+        await _favouriteRepository.remove(widget.item.id);
+      } else {
+        await _favouriteRepository.add(widget.item.id);
+      }
+      await FavouriteDestinationsStore.instance.refresh();
+    } catch (e) {
+      debugPrint('FavouriteDestinationRepository.${remove ? 'remove' : 'add'} failed: $e');
     }
   }
 
@@ -314,7 +390,7 @@ class _TopMatchCardState extends State<_TopMatchCard> {
         height: 260,
         child: Stack(
           children: [
-            _PlaceholderBackdrop(icon: iconForHiddenGemCategory(item.category)),
+            _PlaceholderBackdrop(icon: iconForHiddenGemCategory(item.category), imageUrl: item.imageUrl),
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -437,7 +513,7 @@ class _TrendingCard extends StatelessWidget {
                 width: double.infinity,
                 child: Stack(
                   children: [
-                    _PlaceholderBackdrop(icon: iconForHiddenGemCategory(item.category)),
+                    _PlaceholderBackdrop(icon: iconForHiddenGemCategory(item.category), imageUrl: item.imageUrl),
                     Positioned(
                       left: 8,
                       top: 8,

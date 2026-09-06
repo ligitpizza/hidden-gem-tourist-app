@@ -10,33 +10,33 @@ import 'destination_exploration_repository.dart';
 /// saved_itinerary_repository.dart).
 ///
 /// The table only stores the (user_id, destination_id) relationship, not a
-/// copy of the destination's fields — [fetchAll] resolves the full
-/// [ComparisonDestination] rows via the existing [DestinationExplorationRepository.fetchForComparison]
-/// rather than duplicating that mapping here.
+/// copy of the destination's fields.
 ///
-/// NOTE for Module 1 (Hidden Gem Recommendations): a `save` interaction
-/// hook used to live in [add] here, logging every favourite as a
-/// preference-learning signal. It was removed — `destination_id` here
-/// references `public.destinations` (this module's own dataset), which is
-/// a separate table from `public.places` (Module 1's Penang dataset that
-/// `user_interactions.place_id` has a foreign key to), so every insert was
-/// silently failing on a foreign-key violation. Reinstating that signal
-/// needs the two datasets reconciled first (a shared id, or migrating one
-/// dataset onto the other) — not something to patch around here.
+/// UPDATE (20260902140000_favourite_destinations_on_places.sql):
+/// `destination_id` now references `public.places`, not
+/// `public.destinations` — Module 1's Hidden Gem bookmark writes here too,
+/// so [fetchAll] resolves rows from the `place_hidden_gem_candidates` view
+/// (reusing [DestinationExplorationRepository.mapComparisonRow], which
+/// already maps every column this needs by name) rather than
+/// [DestinationExplorationRepository.fetchForComparison], which only ever
+/// queries `destinations` and would silently drop any Module 1 favourite
+/// from this list. This is safe because every `destinations` row was
+/// copied into `places` with the same id
+/// (20260902120000_merge_destinations_and_add_photos.sql) — `places.id` is
+/// a superset of `destinations.id`, so every existing favourite still
+/// resolves correctly under the new query. The view, not the raw `places`
+/// table, on purpose: `places` has no `avg_rating` column at all (it's
+/// only ever computed here from real `reviews` rows) — querying the table
+/// directly silently showed 0.0 stars for every favourite regardless of
+/// its real rating (20260902150000_favourite_view_full_columns.sql).
 class FavouriteDestinationRepository {
-  FavouriteDestinationRepository({
-    SupabaseClient? client,
-    DestinationExplorationRepository? destinationRepository,
-  })  : _clientOverride = client,
-        _destinationRepository = destinationRepository ?? DestinationExplorationRepository();
+  FavouriteDestinationRepository({SupabaseClient? client}) : _clientOverride = client;
 
   // Resolved lazily (not in the initializer list) so a subclass that
   // overrides every method that touches it — e.g. a test fake — never
   // forces Supabase.instance to be initialized just by being constructed.
   final SupabaseClient? _clientOverride;
   SupabaseClient get _client => _clientOverride ?? Supabase.instance.client;
-
-  final DestinationExplorationRepository _destinationRepository;
 
   String get _userId {
     final user = _client.auth.currentUser;
@@ -54,11 +54,21 @@ class FavouriteDestinationRepository {
     final ids = (rows as List).map((row) => (row as Map)['destination_id'] as String).toList();
     if (ids.isEmpty) return const [];
 
-    // fetchForComparison doesn't preserve input order, and a destination
-    // deleted since being favourited simply won't come back — order the
-    // resolved destinations to match the favourited (most-recent-first)
-    // order rather than whatever fetchForComparison happens to return.
-    final destinations = await _destinationRepository.fetchForComparison(ids);
+    // Query the view, not the raw `places` table -- `places` has no
+    // avg_rating column at all (it's only ever computed here, from real
+    // `reviews` rows), so querying the table directly silently showed
+    // 0.0 stars for every favourite regardless of its real rating. This
+    // view now carries every other column mapComparisonRow needs too
+    // (crowd_level, entrance_cost, etc. -- added in
+    // 20260902150000_favourite_view_full_columns.sql).
+    final placeRows = await _client.from('place_hidden_gem_candidates').select().inFilter('id', ids);
+    final destinations =
+        (placeRows as List).map((row) => DestinationExplorationRepository.mapComparisonRow(row as Map<String, dynamic>)).toList();
+
+    // Row order isn't preserved by inFilter, and a place deleted since
+    // being favourited simply won't come back -- order to match the
+    // favourited (most-recent-first) order from destination_favourites
+    // instead of whatever order came back above.
     final byId = {for (final d in destinations) d.id: d};
     return [for (final id in ids) if (byId[id] != null) byId[id]!];
   }

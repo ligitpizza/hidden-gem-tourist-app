@@ -15,6 +15,11 @@ class HiddenGemFeedItem {
   final String location;
   final DestinationCategory category;
 
+  /// First photo from `places.images`, if this place has any — null for
+  /// most OSM-imported places (they were never photographed), in which
+  /// case the UI falls back to its usual gradient/icon placeholder.
+  final String? imageUrl;
+
   /// 0–1 composite Hidden Gem Score, as computed and stored by
   /// `recompute_hidden_gem_scores()`.
   final double matchScore;
@@ -45,6 +50,7 @@ class HiddenGemFeedItem {
     required this.description,
     required this.location,
     required this.category,
+    this.imageUrl,
     required this.matchScore,
     required this.personalizedScore,
     required this.isHiddenGem,

@@ -173,6 +173,13 @@ class HiddenGemRecommendationRepository {
         );
     final personalizedScore = (row['personalized_score'] as num?)?.toDouble() ?? matchScore;
 
+    // `images` isn't selected by every RPC/view this repository reads from
+    // (e.g. get_personalized_recommendations doesn't expose it yet), so
+    // this stays null rather than error for those rows — same
+    // "missing means no photo yet" fallback as an OSM place with no images.
+    final images = row['images'] as List<dynamic>?;
+    final imageUrl = (images != null && images.isNotEmpty) ? images.first as String? : null;
+
     return HiddenGemFeedItem(
       id: row['id'] as String,
       name: row['name'] as String,
@@ -183,6 +190,7 @@ class HiddenGemRecommendationRepository {
           ? row['city'] as String
           : (row['state'] as String? ?? ''),
       category: destinationCategoryFromDb(row['category'] as String),
+      imageUrl: imageUrl,
       matchScore: matchScore,
       personalizedScore: personalizedScore,
       isHiddenGem: matchScore >= HiddenGemScoring.qualifyingThreshold,

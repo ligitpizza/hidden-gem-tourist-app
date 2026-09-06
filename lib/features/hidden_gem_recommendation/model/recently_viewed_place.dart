@@ -11,15 +11,21 @@ class RecentlyViewedPlace {
   final String location;
   final DateTime viewedAt;
 
+  /// First photo from `places.images`, if this place has any — see the
+  /// same field on [HiddenGemFeedItem] for why it's usually null.
+  final String? imageUrl;
+
   const RecentlyViewedPlace({
     required this.id,
     required this.name,
     required this.category,
     required this.location,
     required this.viewedAt,
+    this.imageUrl,
   });
 
   factory RecentlyViewedPlace.fromRow(Map<String, dynamic> row) {
+    final images = row['images'] as List<dynamic>?;
     return RecentlyViewedPlace(
       id: row['place_id'] as String,
       name: row['name'] as String,
@@ -28,6 +34,7 @@ class RecentlyViewedPlace {
           ? row['city'] as String
           : (row['state'] as String? ?? ''),
       viewedAt: DateTime.parse(row['viewed_at'] as String),
+      imageUrl: (images != null && images.isNotEmpty) ? images.first as String? : null,
     );
   }
 

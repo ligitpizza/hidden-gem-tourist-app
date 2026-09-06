@@ -56,9 +56,36 @@ class _ScoreDetailScreenState extends ConsumerState<ScoreDetailScreen> {
                 ),
                 child: Stack(
                   children: [
-                    Center(
-                      child: Icon(Icons.landscape, size: 72, color: Colors.white.withAlpha(60)),
-                    ),
+                    // Real photo when this place has one (see
+                    // HiddenGemFeedItem.imageUrl); the gradient behind it
+                    // stays as-is either way, so a broken/missing image
+                    // never leaves a blank header.
+                    if (item.imageUrl != null) ...[
+                      Positioned.fill(
+                        child: Image.network(
+                          item.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                        ),
+                      ),
+                      // A real photo can be light enough to wash out the
+                      // white title text below — darken the lower half the
+                      // same way _TopMatchCard does for its own photos.
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Colors.black.withAlpha(0), Colors.black.withAlpha(150)],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ] else
+                      Center(
+                        child: Icon(Icons.landscape, size: 72, color: Colors.white.withAlpha(60)),
+                      ),
                     Positioned(
                       left: 16,
                       right: 16,
