@@ -15,16 +15,20 @@ import 'destination_exploration_repository.dart';
 /// UPDATE (20260902140000_favourite_destinations_on_places.sql):
 /// `destination_id` now references `public.places`, not
 /// `public.destinations` — Module 1's Hidden Gem bookmark writes here too,
-/// so [fetchAll] resolves rows from `places` directly (reusing
-/// [DestinationExplorationRepository.mapComparisonRow], which already maps
-/// every column this needs by name) rather than
+/// so [fetchAll] resolves rows from the `place_hidden_gem_candidates` view
+/// (reusing [DestinationExplorationRepository.mapComparisonRow], which
+/// already maps every column this needs by name) rather than
 /// [DestinationExplorationRepository.fetchForComparison], which only ever
 /// queries `destinations` and would silently drop any Module 1 favourite
 /// from this list. This is safe because every `destinations` row was
 /// copied into `places` with the same id
 /// (20260902120000_merge_destinations_and_add_photos.sql) — `places.id` is
 /// a superset of `destinations.id`, so every existing favourite still
-/// resolves correctly under the new query.
+/// resolves correctly under the new query. The view, not the raw `places`
+/// table, on purpose: `places` has no `avg_rating` column at all (it's
+/// only ever computed here from real `reviews` rows) — querying the table
+/// directly silently showed 0.0 stars for every favourite regardless of
+/// its real rating (20260902150000_favourite_view_full_columns.sql).
 class FavouriteDestinationRepository {
   FavouriteDestinationRepository({SupabaseClient? client}) : _clientOverride = client;
 
@@ -50,13 +54,14 @@ class FavouriteDestinationRepository {
     final ids = (rows as List).map((row) => (row as Map)['destination_id'] as String).toList();
     if (ids.isEmpty) return const [];
 
-    // Query `places` directly (not `_destinationRepository`, which only
-    // ever queries `destinations`) -- see the class doc comment for why.
-    // mapComparisonRow works unmodified here because places carries every
-    // column it looks up by the same name (images, uniqueness_score,
-    // accessibility_score, crowd_level, etc. -- all added alongside the
-    // destinations merge).
-    final placeRows = await _client.from('places').select().inFilter('id', ids);
+    // Query the view, not the raw `places` table -- `places` has no
+    // avg_rating column at all (it's only ever computed here, from real
+    // `reviews` rows), so querying the table directly silently showed
+    // 0.0 stars for every favourite regardless of its real rating. This
+    // view now carries every other column mapComparisonRow needs too
+    // (crowd_level, entrance_cost, etc. -- added in
+    // 20260902150000_favourite_view_full_columns.sql).
+    final placeRows = await _client.from('place_hidden_gem_candidates').select().inFilter('id', ids);
     final destinations =
         (placeRows as List).map((row) => DestinationExplorationRepository.mapComparisonRow(row as Map<String, dynamic>)).toList();
 
