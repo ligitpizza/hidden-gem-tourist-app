@@ -7,7 +7,9 @@ import '../../../core/router/shell_routes.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../controller/emergency_contact_controller.dart';
 import '../model/emergency_contact.dart';
+import '../model/emergency_contact_repository.dart';
 import '../model/vault_pin_service.dart';
+import 'widgets/vault_pin_input.dart';
 
 class EmergencyContactsScreen extends StatefulWidget {
   const EmergencyContactsScreen({
@@ -15,11 +17,13 @@ class EmergencyContactsScreen extends StatefulWidget {
     this.initiallyUnlocked = false,
     this.fallbackPath = ShellRoutes.travelAssistant,
     this.pinService,
+    this.repository,
   });
 
   final bool initiallyUnlocked;
   final String fallbackPath;
   final VaultPinServiceContract? pinService;
+  final EmergencyContactRepository? repository;
   @override
   State<EmergencyContactsScreen> createState() =>
       _EmergencyContactsScreenState();
@@ -36,6 +40,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
     _controller = EmergencyContactController(
       initiallyUnlocked: widget.initiallyUnlocked,
       pinService: widget.pinService,
+      repository: widget.repository,
     )..addListener(_refresh);
     _controller.load();
   }
@@ -54,6 +59,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
   }
 
   Future<void> _unlock() async {
+    if (_pin.text.length != _controller.pinLength) return;
     if (await _controller.unlock(_pin.text)) _pin.clear();
   }
 
@@ -186,6 +192,20 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
         ],
       );
     }
+    final pinLength = _controller.pinLength;
+    if (pinLength != 4 && pinLength != 6) {
+      return const Row(
+        children: [
+          Icon(Icons.error_outline),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Your vault PIN settings could not be read. Please try again.',
+            ),
+          ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -200,21 +220,23 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 14),
-        TextField(
+        const SizedBox(height: 18),
+        VaultPinInput(
           controller: _pin,
-          obscureText: true,
-          keyboardType: TextInputType.number,
-          maxLength: _controller.pinLength ?? 6,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          onSubmitted: (_) => _unlock(),
-          decoration: InputDecoration(
-            labelText: 'Vault PIN',
-            errorText: _controller.pinError,
-            counterText: '',
-            suffixIcon: IconButton(
-              onPressed: _unlock,
+          label: 'Enter your $pinLength-digit Vault PIN',
+          pinLength: pinLength!,
+          errorText: _controller.pinError,
+          onSubmitted: _unlock,
+        ),
+        const SizedBox(height: 12),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _pin,
+          builder: (context, value, _) => SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: value.text.length == pinLength ? _unlock : null,
               icon: const Icon(Icons.lock_open),
+              label: const Text('Unlock contacts'),
             ),
           ),
         ),

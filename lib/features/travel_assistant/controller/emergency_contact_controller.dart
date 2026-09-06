@@ -53,6 +53,11 @@ class EmergencyContactController extends ChangeNotifier {
   }
 
   Future<bool> unlock(String pin) async {
+    if (pinLength != null && pin.length != pinLength) {
+      pinError = 'Enter your $pinLength-digit vault PIN.';
+      notifyListeners();
+      return false;
+    }
     final result = await _pinService.verifyPin(pin);
     switch (result.status) {
       case VaultPinVerificationStatus.verified:

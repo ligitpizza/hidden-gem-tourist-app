@@ -53,6 +53,39 @@ void main() {
 
     expect(restored.name, 'EV charger near Jalan Tun Razak');
   });
+
+  test('round-trips structured charging details with a legacy summary', () {
+    final value = SavedEcoPartnerCodec.toJson(_evPartner);
+
+    expect(value['chargingDetails'], isA<Map<String, dynamic>>());
+    expect(value['chargerDetails'], contains('capacity: 1'));
+
+    final restored = SavedEcoPartnerCodec.fromJson(value);
+    expect(restored.chargingDetails?.capacityLabel, '1 charging point');
+    expect(restored.chargingDetails?.accessLabel, 'Open to the public');
+    expect(
+      restored.chargingDetails?.connectors.single.summary,
+      '2 × Type 2 · up to 22 kW',
+    );
+  });
+
+  test('upgrades legacy charger detail strings when loading', () {
+    final value = SavedEcoPartnerCodec.toJson(_evPartner)
+      ..remove('chargingDetails')
+      ..['chargerDetails'] =
+          'operator: yes · capacity: 1 · access: customers · '
+          'type2: 2 · type2:output: 22 kW';
+
+    final restored = SavedEcoPartnerCodec.fromJson(value);
+
+    expect(restored.chargingDetails?.capacityLabel, '1 charging point');
+    expect(restored.chargingDetails?.accessLabel, 'Customers only');
+    expect(restored.chargingDetails?.operatorLabel, isNull);
+    expect(
+      restored.chargingDetails?.connectors.single.summary,
+      '2 × Type 2 · up to 22 kW',
+    );
+  });
 }
 
 final _partner = EcoPartner(
@@ -83,6 +116,13 @@ final _evPartner = EcoPartner(
   sourceName: 'OpenStreetMap',
   sourceUrl: 'https://www.openstreetmap.org/node/1',
   lastUpdated: DateTime(2026),
+  chargingDetails: const EcoChargingDetails(
+    capacity: 1,
+    access: 'yes',
+    connectors: [
+      EcoChargingConnector(type: 'type2', count: 2, output: '22 kW'),
+    ],
+  ),
 );
 
 class _MemorySavedEcoPartnerRepository

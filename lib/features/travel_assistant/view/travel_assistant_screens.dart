@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -24,6 +23,7 @@ import '../model/travel_assistant_cover_image.dart';
 import '../model/vault_pin_service.dart';
 import 'travel_document_viewer_screen.dart';
 import 'emergency_contacts_screen.dart';
+import 'widgets/vault_pin_input.dart';
 
 export 'eco_partner_screen.dart';
 
@@ -1946,7 +1946,7 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
                     const SizedBox(height: 24),
                   ],
                   if (_selectedPinLength != null) ...[
-                    _PinCodeField(
+                    VaultPinInput(
                       controller: _pinController,
                       label: _hasPin ? 'Vault PIN' : 'Create PIN',
                       pinLength: _selectedPinLength!,
@@ -1972,7 +1972,7 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
                     ),
                     if (!_hasPin) ...[
                       const SizedBox(height: 6),
-                      _PinCodeField(
+                      VaultPinInput(
                         controller: _confirmPinController,
                         label: 'Confirm PIN',
                         pinLength: _selectedPinLength!,
@@ -2182,7 +2182,7 @@ class _PasswordPinResetDialogState extends State<_PasswordPinResetDialog> {
         ),
         if (_selectedPinLength != null) ...[
           const SizedBox(height: 24),
-          _PinCodeField(
+          VaultPinInput(
             controller: _pinController,
             label: 'New PIN',
             pinLength: _selectedPinLength!,
@@ -2204,7 +2204,7 @@ class _PasswordPinResetDialogState extends State<_PasswordPinResetDialog> {
             ),
           ),
           const SizedBox(height: 6),
-          _PinCodeField(
+          VaultPinInput(
             controller: _confirmController,
             label: 'Confirm new PIN',
             pinLength: _selectedPinLength!,
@@ -3383,151 +3383,4 @@ class _PinLengthSelector extends StatelessWidget {
       ),
     ],
   );
-}
-
-class _PinCodeField extends StatefulWidget {
-  const _PinCodeField({
-    required this.controller,
-    required this.label,
-    required this.pinLength,
-    this.autofocus = false,
-    this.obscureText = true,
-    this.errorText,
-    this.onSubmitted,
-  });
-
-  final TextEditingController controller;
-  final String label;
-  final int pinLength;
-  final bool autofocus;
-  final bool obscureText;
-  final String? errorText;
-  final VoidCallback? onSubmitted;
-
-  @override
-  State<_PinCodeField> createState() => _PinCodeFieldState();
-}
-
-class _PinCodeFieldState extends State<_PinCodeField> {
-  final _focusNode = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    widget.controller.addListener(_refresh);
-    _focusNode.addListener(_refresh);
-  }
-
-  @override
-  void didUpdateWidget(covariant _PinCodeField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_refresh);
-      widget.controller.addListener(_refresh);
-    }
-  }
-
-  void _refresh() {
-    if (mounted) setState(() {});
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_refresh);
-    _focusNode
-      ..removeListener(_refresh)
-      ..dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final value = widget.controller.text;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(widget.label, style: const TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 9),
-        SizedBox(
-          height: 58,
-          child: Stack(
-            children: [
-              ExcludeSemantics(
-                child: Row(
-                  children: List.generate(widget.pinLength, (index) {
-                    final hasValue = index < value.length;
-                    final active =
-                        _focusNode.hasFocus &&
-                        (index == value.length ||
-                            (value.length == widget.pinLength &&
-                                index == widget.pinLength - 1));
-                    return Expanded(
-                      child: Container(
-                        key: ValueKey('${widget.label}-pin-box-$index'),
-                        margin: EdgeInsets.only(
-                          right: index == widget.pinLength - 1 ? 0 : 7,
-                        ),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: colorScheme.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: widget.errorText != null
-                                ? colorScheme.error
-                                : active
-                                ? colorScheme.primary
-                                : colorScheme.outlineVariant,
-                            width: active ? 2 : 1,
-                          ),
-                        ),
-                        child: Text(
-                          hasValue
-                              ? (widget.obscureText ? '●' : value[index])
-                              : '',
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                ),
-              ),
-              Positioned.fill(
-                child: Opacity(
-                  opacity: 0,
-                  child: TextField(
-                    key: ValueKey('${widget.label}-pin-input'),
-                    controller: widget.controller,
-                    focusNode: _focusNode,
-                    autofocus: widget.autofocus,
-                    keyboardType: TextInputType.number,
-                    textInputAction: TextInputAction.done,
-                    maxLength: widget.pinLength,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(widget.pinLength),
-                    ],
-                    enableSuggestions: false,
-                    autocorrect: false,
-                    decoration: const InputDecoration(counterText: ''),
-                    onSubmitted: (_) => widget.onSubmitted?.call(),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (widget.errorText != null) ...[
-          const SizedBox(height: 6),
-          Text(
-            widget.errorText!,
-            style: TextStyle(color: colorScheme.error, fontSize: 12),
-          ),
-        ],
-      ],
-    );
-  }
 }

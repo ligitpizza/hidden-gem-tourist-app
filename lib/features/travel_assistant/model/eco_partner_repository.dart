@@ -953,10 +953,7 @@ nwr$queryScope["amenity"="charging_station"];
         sourceUrl: sourceUrl,
         lastUpdated: DateTime.now(),
         imageUrl: _osmImageUrl(extras),
-        chargerDetails: ['operator', 'capacity', 'access']
-            .where((key) => '${extras[key] ?? ''}'.isNotEmpty)
-            .map((key) => '$key: ${extras[key]}')
-            .join(' · '),
+        chargingDetails: EcoChargingDetails.fromOsmTags(extras),
       );
     }
     final diet = classifyDiet(extras);
@@ -1057,13 +1054,6 @@ nwr$queryScope["amenity"="charging_station"];
     final updated = DateTime.now();
     if (tags['amenity'] == 'charging_station') {
       final address = _osmAddress(tags);
-      final details = ['operator', 'access', 'capacity']
-          .where((k) => '${tags[k] ?? ''}'.isNotEmpty)
-          .map((k) => '$k: ${tags[k]}')
-          .toList();
-      final sockets = tags.entries
-          .where((e) => e.key.startsWith('socket:'))
-          .map((e) => '${e.key.substring(7)}: ${e.value}');
       return EcoPartner(
         id: 'osm:$type:$id',
         name: resolveEvChargerName(
@@ -1083,7 +1073,7 @@ nwr$queryScope["amenity"="charging_station"];
         sourceUrl: 'https://www.openstreetmap.org/$type/$id',
         lastUpdated: updated,
         imageUrl: _osmImageUrl(tags),
-        chargerDetails: [...details, ...sockets].join(' · '),
+        chargingDetails: EcoChargingDetails.fromOsmTags(tags),
       );
     }
     if (tags['highway'] == 'bus_stop' ||

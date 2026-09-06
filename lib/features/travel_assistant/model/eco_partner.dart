@@ -4,6 +4,272 @@ enum EcoPartnerAreaMode { nearby, statewide }
 
 enum EcoPartnerSearchScopeType { nearby, state, nationwide }
 
+class EcoChargingConnector {
+  const EcoChargingConnector({required this.type, this.count, this.output});
+
+  final String type;
+  final int? count;
+  final String? output;
+
+  String get displayName => switch (type.toLowerCase()) {
+    'type1' => 'Type 1',
+    'type1_combo' => 'CCS (Combo 1)',
+    'type2' => 'Type 2',
+    'type2_combo' => 'CCS (Combo 2)',
+    'chademo' => 'CHAdeMO',
+    'tesla_supercharger' => 'Tesla Supercharger',
+    'tesla_destination' => 'Tesla Destination',
+    'schuko' => 'Schuko',
+    'cee_blue' => 'CEE blue',
+    'cee_red_16a' => 'CEE red (16 A)',
+    'cee_red_32a' => 'CEE red (32 A)',
+    'cee_red_63a' => 'CEE red (63 A)',
+    _ => _titleCase(type.replaceAll(RegExp(r'[_-]+'), ' ')),
+  };
+
+  String get summary {
+    final quantity = count == null ? '' : '$count × ';
+    final power = output == null ? '' : ' · up to $output';
+    return '$quantity$displayName$power';
+  }
+
+  Map<String, dynamic> toJson() => {
+    'type': type,
+    'count': count,
+    'output': output,
+  };
+
+  static EcoChargingConnector? fromJson(Map<String, dynamic> json) {
+    final type = _cleanText(json['type']);
+    if (type == null) return null;
+    return EcoChargingConnector(
+      type: type,
+      count: _positiveInt(json['count']),
+      output: _cleanText(json['output']),
+    );
+  }
+}
+
+class EcoChargingDetails {
+  const EcoChargingDetails({
+    this.capacity,
+    this.access,
+    this.operatorName,
+    this.connectors = const [],
+  });
+
+  final int? capacity;
+  final String? access;
+  final String? operatorName;
+  final List<EcoChargingConnector> connectors;
+
+  bool get hasUsefulDetails =>
+      capacity != null ||
+      accessLabel != null ||
+      operatorLabel != null ||
+      connectors.isNotEmpty;
+
+  String? get capacityLabel => capacity == null
+      ? null
+      : '$capacity charging ${capacity == 1 ? 'point' : 'points'}';
+
+  String? get accessLabel {
+    final value = _cleanText(access)?.toLowerCase();
+    if (value == null) return null;
+    return switch (value) {
+      'yes' || 'public' => 'Open to the public',
+      'customers' || 'customer' => 'Customers only',
+      'private' => 'Private access',
+      'no' => 'Not open to the public',
+      'permissive' => 'Public access may have conditions',
+      'destination' => 'Available to destination visitors',
+      'residents' => 'Residents only',
+      _ =>
+        'Access may be restricted: ${_titleCase(value.replaceAll('_', ' '))}',
+    };
+  }
+
+  String? get operatorLabel {
+    final value = _meaningfulOperator(operatorName);
+    return value == null ? null : 'Operated by $value';
+  }
+
+  factory EcoChargingDetails.fromOsmTags(Map<String, dynamic> tags) {
+    final connectors = <String, _MutableChargingConnector>{};
+    for (final entry in tags.entries) {
+      if (!entry.key.startsWith('socket:')) continue;
+      final parts = entry.key.substring('socket:'.length).split(':');
+      if (parts.isEmpty || parts.first.trim().isEmpty) continue;
+      final type = parts.first.trim();
+      final connector = connectors.putIfAbsent(
+        type,
+        () => _MutableChargingConnector(type),
+      );
+      final value = _cleanText(entry.value);
+      if (parts.length == 1) {
+        if (value?.toLowerCase() == 'no') {
+          connector.available = false;
+        } else if (value != null) {
+          connector.available = true;
+          connector.count = _positiveInt(value);
+        }
+      } else if (parts[1].toLowerCase() == 'output' && value != null) {
+        connector.output = value;
+      }
+    }
+
+    return EcoChargingDetails(
+      capacity: _positiveInt(tags['capacity']),
+      access: _cleanText(tags['access']),
+      operatorName: _meaningfulOperator(tags['operator']),
+      connectors: connectors.values
+          .where(
+            (connector) =>
+                connector.available == true || connector.output != null,
+          )
+          .map((connector) => connector.freeze())
+          .toList(),
+    );
+  }
+
+  factory EcoChargingDetails.fromLegacy(String value) {
+    String? operatorName;
+    String? access;
+    int? capacity;
+    final connectors = <String, _MutableChargingConnector>{};
+    final parts = value
+        .replaceAll('Â·', '·')
+        .split('·')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty);
+    for (final part in parts) {
+      final separator = part.indexOf(':');
+      if (separator < 0) continue;
+      final key = part.substring(0, separator).trim();
+      final rawValue = part.substring(separator + 1).trim();
+      switch (key.toLowerCase()) {
+        case 'operator':
+          operatorName = _meaningfulOperator(rawValue);
+        case 'access':
+          access = _cleanText(rawValue);
+        case 'capacity':
+          capacity = _positiveInt(rawValue);
+        default:
+          final connector = connectors.putIfAbsent(
+            key,
+            () => _MutableChargingConnector(key),
+          );
+          if (rawValue.toLowerCase().startsWith('output:')) {
+            connector.output = _cleanText(rawValue.substring('output:'.length));
+          } else if (rawValue.toLowerCase() != 'no') {
+            connector.available = true;
+            connector.count = _positiveInt(rawValue);
+          } else {
+            connector.available = false;
+          }
+      }
+    }
+    return EcoChargingDetails(
+      capacity: capacity,
+      access: access,
+      operatorName: operatorName,
+      connectors: connectors.values
+          .where(
+            (connector) =>
+                connector.available == true || connector.output != null,
+          )
+          .map((connector) => connector.freeze())
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'capacity': capacity,
+    'access': access,
+    'operatorName': operatorName,
+    'connectors': connectors.map((connector) => connector.toJson()).toList(),
+  };
+
+  static EcoChargingDetails? fromJson(Map<String, dynamic> json) {
+    final value = EcoChargingDetails(
+      capacity: _positiveInt(json['capacity']),
+      access: _cleanText(json['access']),
+      operatorName: _meaningfulOperator(json['operatorName']),
+      connectors: (json['connectors'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (connector) => EcoChargingConnector.fromJson(
+              connector.cast<String, dynamic>(),
+            ),
+          )
+          .whereType<EcoChargingConnector>()
+          .toList(),
+    );
+    return value.hasUsefulDetails ? value : null;
+  }
+
+  String toLegacyString() {
+    final values = <String>[
+      if (operatorName != null) 'operator: $operatorName',
+      if (access != null) 'access: $access',
+      if (capacity != null) 'capacity: $capacity',
+      for (final connector in connectors) ...[
+        '${connector.type}: ${connector.count ?? 'yes'}',
+        if (connector.output != null)
+          '${connector.type}:output: ${connector.output}',
+      ],
+    ];
+    return values.join(' · ');
+  }
+}
+
+class _MutableChargingConnector {
+  _MutableChargingConnector(this.type);
+
+  final String type;
+  bool? available;
+  int? count;
+  String? output;
+
+  EcoChargingConnector freeze() =>
+      EcoChargingConnector(type: type, count: count, output: output);
+}
+
+String? _cleanText(Object? value) {
+  final text = '${value ?? ''}'.trim();
+  return text.isEmpty || text.toLowerCase() == 'null' ? null : text;
+}
+
+String? _meaningfulOperator(Object? value) {
+  final text = _cleanText(value);
+  if (text == null ||
+      const {
+        'yes',
+        'no',
+        'true',
+        'false',
+        'unknown',
+        'none',
+      }.contains(text.toLowerCase())) {
+    return null;
+  }
+  return text;
+}
+
+int? _positiveInt(Object? value) {
+  final parsed = int.tryParse('${value ?? ''}'.trim());
+  return parsed != null && parsed > 0 ? parsed : null;
+}
+
+String _titleCase(String value) => value
+    .split(RegExp(r'\s+'))
+    .where((part) => part.isNotEmpty)
+    .map(
+      (part) =>
+          '${part.substring(0, 1).toUpperCase()}${part.substring(1).toLowerCase()}',
+    )
+    .join(' ');
+
 String resolveEvChargerName({
   Object? name,
   Object? operatorName,
@@ -18,7 +284,7 @@ String resolveEvChargerName({
 
   final explicitName = clean(name);
   if (explicitName != null) return explicitName;
-  final operator = clean(operatorName);
+  final operator = _meaningfulOperator(operatorName);
   if (operator != null) return '$operator EV charger';
   final addressLabel = clean(address)?.split(',').first.trim();
   if (addressLabel?.isNotEmpty == true) {
@@ -127,6 +393,7 @@ class EcoPartner {
     this.imageCapturedAt,
     this.transitRoutes = const [],
     this.veganClassification,
+    this.chargingDetails,
     this.chargerDetails,
     this.gstcVerified = false,
   });
@@ -152,8 +419,20 @@ class EcoPartner {
   final DateTime? imageCapturedAt;
   final List<EcoTransitRouteInfo> transitRoutes;
   final String? veganClassification;
+  final EcoChargingDetails? chargingDetails;
+  // Retained while existing saved and hot-reloaded partners still carry the
+  // original flattened OpenStreetMap string.
   final String? chargerDetails;
   final bool gstcVerified;
+
+  EcoChargingDetails? get effectiveChargingDetails {
+    final structured = chargingDetails;
+    if (structured?.hasUsefulDetails == true) return structured;
+    final legacy = chargerDetails;
+    if (legacy == null || legacy.trim().isEmpty) return null;
+    final parsed = EcoChargingDetails.fromLegacy(legacy);
+    return parsed.hasUsefulDetails ? parsed : null;
+  }
 
   EcoPartner withDistance(double value) => EcoPartner(
     id: id,
@@ -177,6 +456,7 @@ class EcoPartner {
     imageCapturedAt: imageCapturedAt,
     transitRoutes: transitRoutes,
     veganClassification: veganClassification,
+    chargingDetails: chargingDetails,
     chargerDetails: chargerDetails,
     gstcVerified: gstcVerified,
   );
@@ -208,6 +488,7 @@ class EcoPartner {
     imageCapturedAt: capturedAt,
     transitRoutes: transitRoutes,
     veganClassification: veganClassification,
+    chargingDetails: chargingDetails,
     chargerDetails: chargerDetails,
     gstcVerified: gstcVerified,
   );

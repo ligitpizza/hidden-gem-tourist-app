@@ -252,7 +252,11 @@ class SavedEcoPartnerCodec {
         )
         .toList(),
     'veganClassification': partner.veganClassification,
-    'chargerDetails': partner.chargerDetails,
+    'chargingDetails': partner.effectiveChargingDetails?.toJson(),
+    // Keep the old string shape so saved data remains readable by older builds.
+    'chargerDetails':
+        partner.chargerDetails ??
+        partner.effectiveChargingDetails?.toLegacyString(),
     'gstcVerified': partner.gstcVerified,
   };
 
@@ -296,8 +300,25 @@ class SavedEcoPartnerCodec {
           )
           .toList(),
       veganClassification: json['veganClassification'] as String?,
-      chargerDetails: json['chargerDetails'] as String?,
+      chargingDetails: _chargingDetails(json),
+      chargerDetails: json['chargerDetails'] is String
+          ? json['chargerDetails'] as String
+          : null,
       gstcVerified: json['gstcVerified'] == true,
     );
+  }
+
+  static EcoChargingDetails? _chargingDetails(Map<String, dynamic> json) {
+    final structured = json['chargingDetails'];
+    if (structured is Map) {
+      final parsed = EcoChargingDetails.fromJson(
+        structured.cast<String, dynamic>(),
+      );
+      if (parsed != null) return parsed;
+    }
+    final legacy = json['chargerDetails'];
+    if (legacy is! String || legacy.trim().isEmpty) return null;
+    final parsed = EcoChargingDetails.fromLegacy(legacy);
+    return parsed.hasUsefulDetails ? parsed : null;
   }
 }

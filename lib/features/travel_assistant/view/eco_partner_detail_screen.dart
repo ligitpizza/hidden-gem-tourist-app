@@ -10,6 +10,7 @@ import '../../../shared/widgets/app_header.dart';
 import '../model/eco_partner.dart';
 import '../model/eco_partner_routing_service.dart';
 import '../model/saved_eco_partners_store.dart';
+import 'widgets/transit_mode_icon.dart';
 
 class EcoPartnerDetailScreen extends StatelessWidget {
   const EcoPartnerDetailScreen({
@@ -123,27 +124,44 @@ class EcoPartnerDetailScreen extends StatelessWidget {
             ],
           ),
         ),
-        if (partner.chargerDetails?.isNotEmpty == true)
+        if (partner.effectiveChargingDetails != null)
           _section(
             context,
             title: 'Charging details',
             icon: Icons.ev_station_outlined,
-            child: Text(partner.chargerDetails!),
+            child: _ChargingDetails(details: partner.effectiveChargingDetails!),
           ),
         _section(
           context,
-          title: 'Data information',
+          title: 'Source & freshness',
           icon: Icons.fact_check_outlined,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Provider: ${partner.sourceName}'),
-              const SizedBox(height: 4),
-              Text('Last updated: ${_date(partner.lastUpdated)}'),
+              _InformationRow(
+                icon: Icons.storage_outlined,
+                text: 'Place information from $_sourceName',
+                tooltip: _isWebUrl(partner.sourceUrl)
+                    ? 'Open place information source'
+                    : null,
+                onTap: _isWebUrl(partner.sourceUrl)
+                    ? () => _open(context, partner.sourceUrl)
+                    : null,
+              ),
+              _InformationRow(
+                icon: Icons.update_outlined,
+                text: 'Last checked ${_date(partner.lastUpdated)}',
+              ),
               if (partner.imageSourceName?.isNotEmpty == true) ...[
-                const SizedBox(height: 4),
-                Text(
-                  'Image: ${partner.imageSourceName}${partner.imageCapturedAt == null ? '' : ' (${partner.imageCapturedAt!.year})'}',
+                _InformationRow(
+                  icon: Icons.photo_outlined,
+                  text: _imageSourceLabel,
+                  tooltip: _isWebUrl(partner.imageSourceUrl)
+                      ? 'Open photo source'
+                      : null,
+                  onTap: _isWebUrl(partner.imageSourceUrl)
+                      ? () => _open(context, partner.imageSourceUrl!)
+                      : null,
                 ),
               ],
             ],
@@ -257,8 +275,137 @@ class EcoPartnerDetailScreen extends StatelessWidget {
     }
   }
 
-  static String _date(DateTime value) =>
-      '${value.day}/${value.month}/${value.year}';
+  String get _sourceName {
+    if (partner.sourceName.toLowerCase().contains('openstreetmap')) {
+      return 'OpenStreetMap contributors';
+    }
+    return partner.sourceName;
+  }
+
+  String get _imageSourceLabel {
+    final source = partner.imageSourceName!.trim();
+    final lower = source.toLowerCase();
+    final label = lower.contains('mapillary')
+        ? 'Street-level photo from Mapillary'
+        : lower.startsWith('photo:')
+        ? 'Photo by ${source.substring('photo:'.length).trim()}'
+        : 'Photo from $source';
+    final captured = partner.imageCapturedAt;
+    return captured == null ? label : '$label · Captured in ${captured.year}';
+  }
+
+  static bool _isWebUrl(String? value) {
+    final uri = Uri.tryParse(value ?? '');
+    return uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty;
+  }
+
+  static String _date(DateTime value) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${value.day} ${months[value.month - 1]} ${value.year}';
+  }
+}
+
+class _ChargingDetails extends StatelessWidget {
+  const _ChargingDetails({required this.details});
+
+  final EcoChargingDetails details;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (details.capacityLabel != null)
+        _InformationRow(
+          icon: Icons.ev_station_outlined,
+          text: details.capacityLabel!,
+        ),
+      if (details.accessLabel != null)
+        _InformationRow(icon: _accessIcon, text: details.accessLabel!),
+      for (final connector in details.connectors)
+        _InformationRow(
+          icon: Icons.electrical_services_outlined,
+          text: connector.summary,
+        ),
+      if (details.operatorLabel != null)
+        _InformationRow(
+          icon: Icons.business_outlined,
+          text: details.operatorLabel!,
+        ),
+    ],
+  );
+
+  IconData get _accessIcon => switch (details.access?.toLowerCase()) {
+    'private' || 'no' => Icons.lock_outline,
+    'customers' ||
+    'customer' ||
+    'residents' ||
+    'destination' => Icons.badge_outlined,
+    _ => Icons.public_outlined,
+  };
+}
+
+class _InformationRow extends StatelessWidget {
+  const _InformationRow({
+    required this.icon,
+    required this.text,
+    this.onTap,
+    this.tooltip,
+  }) : assert(onTap == null || tooltip != null);
+
+  final IconData icon;
+  final String text;
+  final VoidCallback? onTap;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 19, color: const Color(0xFF547064)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text)),
+          if (onTap != null) ...[
+            const SizedBox(width: 8),
+            Tooltip(
+              message: tooltip!,
+              child: const Icon(
+                Icons.open_in_new,
+                size: 17,
+                color: Color(0xFF087653),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+    if (onTap == null) return content;
+    return Semantics(
+      button: true,
+      label: '$text. $tooltip',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: content,
+      ),
+    );
+  }
 }
 
 class _SaveEcoPartnerButton extends StatefulWidget {
@@ -518,7 +665,7 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
             children: widget.partner.transitRoutes
                 .map(
                   (route) => ActionChip(
-                    avatar: const Icon(Icons.directions_bus_outlined, size: 17),
+                    avatar: Icon(transitModeIcon(route.mode), size: 17),
                     label: Text(route.displayLabel),
                     tooltip:
                         'Check live in-app journey using ${route.displayLabel}',
@@ -559,17 +706,17 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
               ),
               if (transitRoute != null)
                 for (final leg in transitRoute.legs.where(
-                  (leg) => leg.mode != 'WALK',
+                  (leg) => !isWalkingTransitMode(leg.mode),
                 )) ...[
                   MapMarkerSpec(
                     point: leg.from,
                     color: const Color(0xFF8A6800),
-                    icon: Icons.directions_transit,
+                    icon: transitModeIcon(leg.mode),
                   ),
                   MapMarkerSpec(
                     point: leg.to,
                     color: const Color(0xFF8A6800),
-                    icon: Icons.directions_transit,
+                    icon: transitModeIcon(leg.mode),
                   ),
                 ],
               MapMarkerSpec(
@@ -612,11 +759,11 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
           if (transitRoute != null)
             for (final leg in transitRoute.legs)
               _JourneyStep(
-                icon: _transitIcon(leg.mode),
-                title: leg.mode == 'WALK'
+                icon: transitModeIcon(leg.mode),
+                title: isWalkingTransitMode(leg.mode)
                     ? 'Walk to ${leg.toName}'
-                    : '${leg.agencyName ?? _modeLabel(leg.mode)}${leg.routeName == null ? '' : ' ${leg.routeName}'}',
-                subtitle: leg.mode == 'WALK'
+                    : '${leg.agencyName ?? transitModeLabel(leg.mode)}${leg.routeName == null ? '' : ' ${leg.routeName}'}',
+                subtitle: isWalkingTransitMode(leg.mode)
                     ? '${leg.durationMinutes} min'
                     : '${leg.fromName} → ${leg.toName}${leg.headsign == null ? '' : '\nTowards ${leg.headsign}'}',
               ),
@@ -645,20 +792,6 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
     final remaining = minutes % 60;
     return remaining == 0 ? '$hours hr' : '$hours hr $remaining min';
   }
-
-  static IconData _transitIcon(String mode) => switch (mode) {
-    'BUS' => Icons.directions_bus_outlined,
-    'RAIL' || 'TRAIN' || 'SUBWAY' || 'TRAM' => Icons.train_outlined,
-    _ => Icons.directions_walk,
-  };
-
-  static String _modeLabel(String mode) => switch (mode) {
-    'BUS' => 'Bus',
-    'RAIL' || 'TRAIN' => 'Rail',
-    'SUBWAY' => 'MRT/LRT',
-    'TRAM' => 'Tram',
-    _ => mode,
-  };
 }
 
 class _JourneyStep extends StatelessWidget {

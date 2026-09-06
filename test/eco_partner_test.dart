@@ -37,12 +37,37 @@ void main() {
         'tags': {
           'amenity': 'charging_station',
           'operator': 'Example',
-          'capacity': '4',
+          'capacity': '1',
+          'access': 'yes',
+          'socket:type2': '2',
+          'socket:type2:output': '22 kW',
         },
       });
       expect(partner?.subtype, 'EV charging');
       expect(partner?.name, 'Example EV charger');
-      expect(partner?.chargerDetails, contains('capacity: 4'));
+      expect(partner?.chargingDetails?.capacityLabel, '1 charging point');
+      expect(partner?.chargingDetails?.accessLabel, 'Open to the public');
+      expect(partner?.chargingDetails?.operatorLabel, 'Operated by Example');
+      expect(
+        partner?.chargingDetails?.connectors.single.summary,
+        '2 × Type 2 · up to 22 kW',
+      );
+    });
+
+    test('translates access values and ignores boolean operator tags', () {
+      final publicDetails = EcoChargingDetails.fromOsmTags({
+        'operator': 'yes',
+        'capacity': '4',
+        'access': 'customers',
+      });
+      final privateDetails = EcoChargingDetails.fromOsmTags({
+        'access': 'private',
+      });
+
+      expect(publicDetails.capacityLabel, '4 charging points');
+      expect(publicDetails.accessLabel, 'Customers only');
+      expect(publicDetails.operatorLabel, isNull);
+      expect(privateDetails.accessLabel, 'Private access');
     });
 
     test('gives unnamed EV chargers useful fallback names', () {
@@ -68,6 +93,10 @@ void main() {
       expect(
         charger(name: ' ', operatorName: 'ChargeCo')?.name,
         'ChargeCo EV charger',
+      );
+      expect(
+        charger(name: ' ', operatorName: 'yes', street: 'Jalan Ampang')?.name,
+        'EV charger near Jalan Ampang',
       );
       expect(
         charger(name: ' ', operatorName: ' ', street: 'Jalan Ampang')?.name,
@@ -102,6 +131,11 @@ void main() {
                       'type': 'charging_station',
                       'name': 'Nearby charger',
                       'display_name': 'Nearby charger, Kuala Lumpur',
+                      'extratags': {
+                        'capacity': '4',
+                        'access': 'yes',
+                        'socket:type2_combo': '1',
+                      },
                     },
                   ],
                 ),
@@ -125,6 +159,14 @@ void main() {
 
       expect(requests, 3);
       expect(partners.map((partner) => partner.name), ['Nearby charger']);
+      expect(
+        partners.single.chargingDetails?.capacityLabel,
+        '4 charging points',
+      );
+      expect(
+        partners.single.chargingDetails?.connectors.single.displayName,
+        'CCS (Combo 2)',
+      );
     });
   });
 }
