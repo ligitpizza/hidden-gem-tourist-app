@@ -2,17 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../features/itinerary_planning/view/itinerary_routes.dart';
 import '../../../shared/models/destination.dart';
+import '../../destination_exploration/model/favourite_destination_repository.dart';
 import '../controller/recommendation_controller.dart';
 import '../model/hidden_gem_feed_item.dart';
 import '../model/interaction_repository.dart';
 import 'hidden_gem_recommendation_routes.dart';
 import 'widgets/hidden_gem_list_tile.dart';
 
-/// The Assistant tab's landing feed — personalized hidden-gem matches and
+/// The Home tab's landing feed — personalized hidden-gem matches and
 /// trending places (Module 1's "View Recommended Destinations" /
 /// "View Trending Destination" use cases), with the itinerary planner
 /// (Module 3) reachable via the "Plan a Trip" action from here.
+///
+/// Owns its own "Plan a Trip" FAB (moved here from the shared shell
+/// scaffold in app_router.dart) rather than the outer shell deciding
+/// whether to show it based on `navigationShell.currentIndex` — that
+/// tracking didn't reliably hide the FAB when navigating to a More-menu
+/// entry nested under a different branch (found during pre-demo testing:
+/// it kept floating over Journal's Badges/Quizzes/etc). A FAB on this
+/// screen's own Scaffold has no such ambiguity: Flutter's IndexedStack
+/// physically doesn't paint a non-selected branch at all, so this FAB is
+/// guaranteed gone the instant Home isn't the visible tab, and covered
+/// like normal whenever something is pushed on top of it within this
+/// branch (Score Detail, Search, etc.) — the same as any other FAB.
 class DiscoveryFeedScreen extends ConsumerWidget {
   const DiscoveryFeedScreen({super.key});
 
@@ -22,6 +36,11 @@ class DiscoveryFeedScreen extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push(ItineraryRoutes.planRoute),
+        icon: const Icon(Icons.add_location_alt_outlined),
+        label: const Text('Plan a Trip'),
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: controller.load,
@@ -222,29 +241,47 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// Dark gradient placeholder used in place of a real photo — the same
-/// convention already used elsewhere in this app (destination/timeline
-/// image placeholders) since places don't have photo assets.
+/// A real photo when this place has one (`places.images`, first entry) —
+/// currently only the ~72 places merged in from the team's shared
+/// `destinations` table. Everything else (the OSM-imported bulk of
+/// `places`) still falls back to the dark gradient placeholder used
+/// elsewhere in this app, since it has no photo data at all yet.
 class _PlaceholderBackdrop extends StatelessWidget {
   final IconData icon;
-  const _PlaceholderBackdrop({required this.icon});
+  final String? imageUrl;
+  const _PlaceholderBackdrop({required this.icon, this.imageUrl});
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final url = imageUrl;
     return Positioned.fill(
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [colorScheme.primary, colorScheme.primaryContainer],
-          ),
+      child: url != null
+          ? Image.network(
+              url,
+              fit: BoxFit.cover,
+              // A broken/expired image URL falls back to the same gradient
+              // placeholder rather than showing Flutter's default error icon.
+              errorBuilder: (context, error, stackTrace) => _gradient(colorScheme, icon),
+              loadingBuilder: (context, child, progress) =>
+                  progress == null ? child : _gradient(colorScheme, icon),
+            )
+          : _gradient(colorScheme, icon),
+    );
+  }
+
+  Widget _gradient(ColorScheme colorScheme, IconData icon) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [colorScheme.primary, colorScheme.primaryContainer],
         ),
-        child: Align(
-          alignment: Alignment.center,
-          child: Icon(icon, size: 64, color: Colors.white.withAlpha(46)),
-        ),
+      ),
+      child: Align(
+        alignment: Alignment.center,
+        child: Icon(icon, size: 64, color: Colors.white.withAlpha(46)),
       ),
     );
   }
@@ -270,16 +307,30 @@ class _TopMatchCardState extends State<_TopMatchCard> {
   bool _saved = false;
   final _interactionRepository = InteractionRepository();
 
+  // Also writes to the shared Saved screen's own table (destination_id now
+  // references places -- see favourite_destination_repository.dart's doc
+  // comment for why this is safe post-merge). Kept as a separate call from
+  // InteractionRepository above rather than replacing it: that one feeds
+  // affinity/personalization, this one is purely the user-facing bookmark
+  // list -- different purposes, both should fire on the same tap.
+  final _favouriteRepository = FavouriteDestinationRepository();
+
   void _handleToggleSave() {
     final wasSaved = _saved;
     setState(() => _saved = !wasSaved);
     if (wasSaved) {
       _interactionRepository.unsave(widget.item.id);
+      // Unlike InteractionRepository, this one doesn't swallow its own
+      // errors -- catch here so a failed write (offline, RLS hiccup) stays
+      // a quiet no-op instead of an unhandled Future rejection, matching
+      // this handler's existing fire-and-forget style.
+      _favouriteRepository.remove(widget.item.id).catchError((_) {});
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Removed'), duration: Duration(seconds: 2)),
       );
     } else {
       _interactionRepository.logSave(widget.item.id);
+      _favouriteRepository.add(widget.item.id).catchError((_) {});
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Added to your interests'), duration: Duration(seconds: 2)),
       );
@@ -296,7 +347,7 @@ class _TopMatchCardState extends State<_TopMatchCard> {
         height: 260,
         child: Stack(
           children: [
-            _PlaceholderBackdrop(icon: iconForHiddenGemCategory(item.category)),
+            _PlaceholderBackdrop(icon: iconForHiddenGemCategory(item.category), imageUrl: item.imageUrl),
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -419,7 +470,7 @@ class _TrendingCard extends StatelessWidget {
                 width: double.infinity,
                 child: Stack(
                   children: [
-                    _PlaceholderBackdrop(icon: iconForHiddenGemCategory(item.category)),
+                    _PlaceholderBackdrop(icon: iconForHiddenGemCategory(item.category), imageUrl: item.imageUrl),
                     Positioned(
                       left: 8,
                       top: 8,

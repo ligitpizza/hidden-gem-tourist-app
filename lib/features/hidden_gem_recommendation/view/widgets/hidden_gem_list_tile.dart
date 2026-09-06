@@ -55,7 +55,10 @@ class HiddenGemListTile extends StatelessWidget {
         onTap: onTap,
         leading: CircleAvatar(
           backgroundColor: colorScheme.primaryContainer,
-          child: Icon(iconForHiddenGemCategory(item.category), color: colorScheme.onPrimaryContainer),
+          backgroundImage: item.imageUrl != null ? NetworkImage(item.imageUrl!) : null,
+          child: item.imageUrl == null
+              ? Icon(iconForHiddenGemCategory(item.category), color: colorScheme.onPrimaryContainer)
+              : null,
         ),
         title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text('${item.category.label} • ${item.location}'),

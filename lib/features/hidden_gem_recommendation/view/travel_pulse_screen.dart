@@ -152,7 +152,10 @@ class _RecentlyViewedTile extends StatelessWidget {
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: colorScheme.surfaceContainerHighest,
-          child: Icon(iconForHiddenGemCategory(place.category), color: colorScheme.onSurfaceVariant),
+          backgroundImage: place.imageUrl != null ? NetworkImage(place.imageUrl!) : null,
+          child: place.imageUrl == null
+              ? Icon(iconForHiddenGemCategory(place.category), color: colorScheme.onSurfaceVariant)
+              : null,
         ),
         title: Text(place.name),
         subtitle: Text('${place.category.label} • ${place.location}'),
