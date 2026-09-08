@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../model/check_in_model.dart';
+import '../model/destination_model.dart';
 import '../model/friend_model.dart';
 import '../model/user_badge_model.dart';
 import '../services/mock/mock_friend_service.dart';
@@ -32,6 +33,74 @@ class FriendRequestEntry {
   FriendRequestEntry({required this.profile, required this.friendshipId});
 }
 
+/// Which stat the Leaderboard tab is currently ranking by.
+enum LeaderboardMetric {
+  checkIns('Check-ins'),
+  badges('Badges'),
+  states('States');
+
+  const LeaderboardMetric(this.label);
+  final String label;
+}
+
+/// One row on the friend leaderboard — the current user plus every
+/// accepted friend, each with the same three counts so any of them can be
+/// used to sort/rank.
+class LeaderboardEntry {
+  final ProfileModel profile;
+  final bool isCurrentUser;
+  final int checkInCount;
+  final int badgeCount;
+  final int statesExplored;
+
+  LeaderboardEntry({
+    required this.profile,
+    required this.isCurrentUser,
+    required this.checkInCount,
+    required this.badgeCount,
+    required this.statesExplored,
+  });
+
+  int valueFor(LeaderboardMetric metric) => switch (metric) {
+    LeaderboardMetric.checkIns => checkInCount,
+    LeaderboardMetric.badges => badgeCount,
+    LeaderboardMetric.states => statesExplored,
+  };
+}
+
+/// One row in the combined Activity tab — a check-in or a badge unlock by
+/// the current user or any of their friends, merged into a single
+/// chronological feed instead of just the single latest-per-friend line
+/// the Friends tab shows.
+class ActivityFeedEntry {
+  final ProfileModel profile;
+  final bool isCurrentUser;
+  final DateTime at;
+
+  /// Only set for a check-in entry — the row id reactions attach to.
+  /// Badge entries have no reaction target yet (see the reactions
+  /// migration's doc comment for why).
+  final String? checkInId;
+  final String? destinationId;
+  final String? badgeId;
+
+  ActivityFeedEntry.checkIn({
+    required this.profile,
+    required this.isCurrentUser,
+    required this.at,
+    required String this.checkInId,
+    required String this.destinationId,
+  }) : badgeId = null;
+
+  ActivityFeedEntry.badge({
+    required this.profile,
+    required this.isCurrentUser,
+    required this.at,
+    required String this.badgeId,
+  }) : checkInId = null,
+       destinationId = null;
+}
+
 class FriendController extends ChangeNotifier {
   FriendController({required this.userId, MockFriendService? service})
     : _service = service ?? MockFriendService();
@@ -44,8 +113,19 @@ class FriendController extends ChangeNotifier {
   List<FriendRequestEntry> incomingRequests = [];
   List<FriendRequestEntry> outgoingRequests = [];
   List<ProfileModel> searchResults = [];
+  List<LeaderboardEntry> leaderboard = [];
+  List<ActivityFeedEntry> activityFeed = [];
+
+  /// Reaction count per check-in id, and which of those the current user
+  /// has personally reacted to — both keyed by checkInId, populated by
+  /// loadReactions() for whatever check-ins are currently on screen.
+  Map<String, int> reactionCounts = {};
+  Set<String> myReactedCheckInIds = {};
+
   bool isLoading = false;
   bool isSearching = false;
+  bool isLoadingLeaderboard = false;
+  bool isLoadingActivityFeed = false;
 
   /// Surfaces the last action's failure (send/accept/decline/remove/
   /// search) so the UI can show it instead of failing silently — set to
@@ -163,6 +243,155 @@ class FriendController extends ChangeNotifier {
         // rest of the list — that row just keeps showing "No activity yet".
         debugPrint('FriendController._loadActivity failed for ${entry.profile.id}: $e');
       }
+    }
+  }
+
+  /// Ranks the current user against their accepted friends. Call after
+  /// loadFriends() so `friends` is up to date. [destinationsById] resolves
+  /// each check-in's state for the "states explored" metric — passed in
+  /// rather than fetched here since CheckInController already loads it.
+  Future<void> loadLeaderboard(Map<String, DestinationModel> destinationsById) async {
+    isLoadingLeaderboard = true;
+    notifyListeners();
+
+    try {
+      final ids = [userId, for (final f in friends) f.profile.id];
+      final results = await Future.wait([
+        _service.fetchProfiles(ids),
+        _service.fetchCheckInsForUsers(ids),
+        _service.fetchBadgesForUsers(ids),
+      ]);
+      final profilesById = {
+        for (final p in results[0] as List<ProfileModel>) p.id: p,
+      };
+      final checkIns = results[1] as List<CheckInModel>;
+      final badges = results[2] as List<UserBadgeModel>;
+
+      leaderboard = [
+        for (final id in ids)
+          if (profilesById[id] case final profile?)
+            LeaderboardEntry(
+              profile: profile,
+              isCurrentUser: id == userId,
+              checkInCount: checkIns.where((c) => c.userId == id).length,
+              badgeCount: badges.where((b) => b.userId == id).length,
+              statesExplored: checkIns
+                  .where((c) => c.userId == id)
+                  .map((c) => destinationsById[c.destinationId]?.state)
+                  .whereType<String>()
+                  .toSet()
+                  .length,
+            ),
+      ];
+    } catch (e) {
+      debugPrint('FriendController.loadLeaderboard failed: $e');
+    }
+
+    isLoadingLeaderboard = false;
+    notifyListeners();
+  }
+
+  /// Merges the current user's and every friend's check-ins and badge
+  /// unlocks into one chronological feed — call after loadFriends() so
+  /// `friends` is up to date. Kept as its own fetch rather than reusing
+  /// loadLeaderboard's data so either tab can refresh independently.
+  Future<void> loadActivityFeed() async {
+    isLoadingActivityFeed = true;
+    notifyListeners();
+
+    try {
+      final ids = [userId, for (final f in friends) f.profile.id];
+      final results = await Future.wait([
+        _service.fetchProfiles(ids),
+        _service.fetchCheckInsForUsers(ids),
+        _service.fetchBadgesForUsers(ids),
+      ]);
+      final profilesById = {
+        for (final p in results[0] as List<ProfileModel>) p.id: p,
+      };
+      final checkIns = results[1] as List<CheckInModel>;
+      final badges = results[2] as List<UserBadgeModel>;
+
+      final entries = <ActivityFeedEntry>[
+        for (final c in checkIns)
+          if (profilesById[c.userId] case final profile?)
+            ActivityFeedEntry.checkIn(
+              profile: profile,
+              isCurrentUser: c.userId == userId,
+              at: c.timestamp,
+              checkInId: c.id,
+              destinationId: c.destinationId,
+            ),
+        for (final b in badges)
+          if (profilesById[b.userId] case final profile?)
+            ActivityFeedEntry.badge(
+              profile: profile,
+              isCurrentUser: b.userId == userId,
+              at: b.earnedAt,
+              badgeId: b.badgeId,
+            ),
+      ]..sort((a, b) => b.at.compareTo(a.at));
+
+      activityFeed = entries.take(50).toList();
+      unawaited(loadReactions(activityFeed.map((e) => e.checkInId).nonNulls.toList()));
+    } catch (e) {
+      debugPrint('FriendController.loadActivityFeed failed: $e');
+    }
+
+    isLoadingActivityFeed = false;
+    notifyListeners();
+  }
+
+  /// Populates reactionCounts/myReactedCheckInIds for [checkInIds] — call
+  /// with whatever check-ins are currently on screen (the activity feed
+  /// does this itself after loading).
+  Future<void> loadReactions(List<String> checkInIds) async {
+    if (checkInIds.isEmpty) return;
+    try {
+      final rows = await _service.fetchReactionsForCheckIns(checkInIds);
+      final counts = <String, int>{};
+      final mine = <String>{};
+      for (final r in rows) {
+        counts[r.checkInId] = (counts[r.checkInId] ?? 0) + 1;
+        if (r.reactorId == userId) mine.add(r.checkInId);
+      }
+      reactionCounts = counts;
+      myReactedCheckInIds = mine;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('FriendController.loadReactions failed: $e');
+    }
+  }
+
+  /// Optimistically flips this check-in's reaction so the tap feels
+  /// instant, then rolls back if the request actually fails.
+  Future<void> toggleReaction(String checkInId) async {
+    final alreadyReacted = myReactedCheckInIds.contains(checkInId);
+    _applyReactionDelta(checkInId, reacted: !alreadyReacted);
+    notifyListeners();
+
+    try {
+      if (alreadyReacted) {
+        await _service.removeReaction(checkInId);
+      } else {
+        await _service.addReaction(checkInId);
+      }
+    } catch (e) {
+      _applyReactionDelta(checkInId, reacted: alreadyReacted);
+      errorMessage = 'Could not update your reaction. Please try again.';
+      notifyListeners();
+      debugPrint('FriendController.toggleReaction failed: $e');
+    }
+  }
+
+  void _applyReactionDelta(String checkInId, {required bool reacted}) {
+    final current = reactionCounts[checkInId] ?? 0;
+    if (reacted) {
+      myReactedCheckInIds.add(checkInId);
+      reactionCounts[checkInId] = current + 1;
+    } else {
+      myReactedCheckInIds.remove(checkInId);
+      reactionCounts[checkInId] = current > 0 ? current - 1 : 0;
     }
   }
 

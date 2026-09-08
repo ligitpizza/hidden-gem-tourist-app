@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../model/check_in_model.dart';
 import '../../model/friend_model.dart';
+import '../../model/reaction_model.dart';
 import '../../model/user_badge_model.dart';
 
 /// Backs the Friends feature against the real `profiles`/`friendships`
@@ -143,6 +144,34 @@ class MockFriendService {
     return rows.map((r) => UserBadgeModel.fromJson(r)).toList();
   }
 
+  /// Every check-in across all of [userIds] at once — used to build the
+  /// friend leaderboard without one query per person. No `is_hidden`
+  /// filter here: "hidden" only means hidden from *other* people, not
+  /// excluded from your own record, so the RLS policies already give the
+  /// right answer per row — the caller's own id comes back in full
+  /// (owner-full-access policy) while each friend's id comes back minus
+  /// whatever they've hidden (friends-view-non-hidden policy), exactly
+  /// matching what a friend can actually verify about them.
+  Future<List<CheckInModel>> fetchCheckInsForUsers(List<String> userIds) async {
+    if (userIds.isEmpty) return [];
+    final rows = await Supabase.instance.client
+        .from('journal_check_ins')
+        .select()
+        .inFilter('user_id', userIds);
+    return rows.map((r) => CheckInModel.fromJson(r)).toList();
+  }
+
+  /// Every unlocked badge across all of [userIds] at once — same
+  /// rationale as fetchCheckInsForUsers above.
+  Future<List<UserBadgeModel>> fetchBadgesForUsers(List<String> userIds) async {
+    if (userIds.isEmpty) return [];
+    final rows = await Supabase.instance.client
+        .from('journal_user_badges')
+        .select()
+        .inFilter('user_id', userIds);
+    return rows.map((r) => UserBadgeModel.fromJson(r)).toList();
+  }
+
   /// The single most recent thing [friendUserId] has done — an unlocked
   /// badge or a check-in, whichever is more recent. Both queries rely on
   /// the "Friends view non-hidden ..." RLS policies, so this naturally
@@ -179,5 +208,32 @@ class MockFriendService {
       destinationId: checkInRows.first['destination_id'] as String,
       at: checkInAt!,
     );
+  }
+
+  /// Every reaction across all of [checkInIds] at once — grouped by the
+  /// caller into counts and "did I react to this" in FriendController,
+  /// same batch-then-aggregate shape as the leaderboard queries above.
+  Future<List<ReactionModel>> fetchReactionsForCheckIns(List<String> checkInIds) async {
+    if (checkInIds.isEmpty) return [];
+    final rows = await Supabase.instance.client
+        .from('journal_reactions')
+        .select()
+        .inFilter('check_in_id', checkInIds);
+    return rows.map((r) => ReactionModel.fromJson(r)).toList();
+  }
+
+  Future<void> addReaction(String checkInId) async {
+    await Supabase.instance.client.from('journal_reactions').insert({
+      'reactor_id': Supabase.instance.client.auth.currentUser!.id,
+      'check_in_id': checkInId,
+    });
+  }
+
+  Future<void> removeReaction(String checkInId) async {
+    await Supabase.instance.client
+        .from('journal_reactions')
+        .delete()
+        .eq('reactor_id', Supabase.instance.client.auth.currentUser!.id)
+        .eq('check_in_id', checkInId);
   }
 }
