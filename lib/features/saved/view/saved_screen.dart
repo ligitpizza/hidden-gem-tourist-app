@@ -268,6 +268,9 @@ class _FavouriteCard extends StatelessWidget {
                 imageUrl: destination.imageUrls.isNotEmpty
                     ? destination.imageUrls.first
                     : 'https://picsum.photos/seed/${destination.id}/900/600',
+                imageUrls: destination.imageUrls.isNotEmpty
+                    ? destination.imageUrls
+                    : ['https://picsum.photos/seed/${destination.id}/900/600'],
               ),
         ),
       ),

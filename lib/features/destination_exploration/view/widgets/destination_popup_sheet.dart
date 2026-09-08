@@ -69,38 +69,19 @@ class DestinationPopupSheet extends StatelessWidget {
       );
     }
 
+    // Just the first photo, stretched to fill the width — this is only a
+    // quick preview before tapping through to the full detail page, which
+    // is where every image actually gets shown (as a swipeable carousel).
     // A single image previously sat in a horizontally-scrolling list sized
     // to its own 160px tile, leaving a large blank gap on the right since
-    // nothing else was there to scroll to — stretch it to fill the width
-    // instead. Multiple images keep the horizontal strip, where that
-    // fixed tile width is what makes scrolling between them make sense.
-    if (destination.imageUrls.length == 1) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.network(
-          destination.imageUrls.first,
-          width: double.infinity,
-          height: 120,
-          fit: BoxFit.cover,
-        ),
-      );
-    }
-
-    return SizedBox(
-      height: 120,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: destination.imageUrls.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, index) => ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Image.network(
-            destination.imageUrls[index],
-            width: 160,
-            height: 120,
-            fit: BoxFit.cover,
-          ),
-        ),
+    // nothing else was there to scroll to — stretching it avoids that.
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.network(
+        destination.imageUrls.first,
+        width: double.infinity,
+        height: 120,
+        fit: BoxFit.cover,
       ),
     );
   }

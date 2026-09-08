@@ -123,7 +123,9 @@ void main() {
     expect(find.byType(Image), findsNothing);
   });
 
-  testWidgets('renders an image per URL when images are present', (tester) async {
+  testWidgets('shows only the first image when several are present', (tester) async {
+    // The preview is just a quick glance before tapping through — every
+    // image is shown on the full detail page's carousel instead.
     const destination = MapDestination(
       id: '2',
       name: 'Gem Spot',
@@ -135,7 +137,8 @@ void main() {
 
     await tester.pumpWidget(_wrap(const DestinationPopupSheet(destination: destination)));
 
-    expect(find.byType(Image), findsNWidgets(2));
+    final image = tester.widget<Image>(find.byType(Image));
+    expect((image.image as NetworkImage).url, 'https://example.com/a.jpg');
     expect(find.byIcon(Icons.image_not_supported_outlined), findsNothing);
   });
 

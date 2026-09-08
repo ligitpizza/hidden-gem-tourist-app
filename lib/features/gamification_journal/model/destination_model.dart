@@ -91,6 +91,15 @@ class DestinationModel {
   final double longitude;
   final String description;
   final String imageUrl;
+  final List<String> _imageUrls;
+
+  /// Every photo for this destination, for the Destination Detail
+  /// screen's carousel. Falls back to just `[imageUrl]` when nothing more
+  /// was given — covers every existing call site (tests included) built
+  /// before the `destinations` table had its `images` array column,
+  /// without needing them all updated.
+  List<String> get imageUrls => _imageUrls.isNotEmpty ? _imageUrls : [imageUrl];
+
   final double checkInRadiusMeters;
 
   DestinationModel({
@@ -102,10 +111,12 @@ class DestinationModel {
     required this.longitude,
     required this.description,
     required this.imageUrl,
+    List<String> imageUrls = const [],
     this.checkInRadiusMeters = 300,
-  });
+  }) : _imageUrls = imageUrls;
 
   factory DestinationModel.fromJson(Map<String, dynamic> json) {
+    final rawImages = json['images'];
     return DestinationModel(
       id: json['id'] as String,
       name: json['name'] as String,
@@ -115,6 +126,7 @@ class DestinationModel {
       longitude: (json['longitude'] as num).toDouble(),
       description: json['description'] as String,
       imageUrl: json['image_url'] as String,
+      imageUrls: rawImages is List ? rawImages.whereType<String>().toList() : const [],
       checkInRadiusMeters:
           (json['check_in_radius_meters'] as num?)?.toDouble() ?? 300,
     );
@@ -139,6 +151,9 @@ class DestinationModel {
       imageUrl: destination.imageUrls.isNotEmpty
           ? destination.imageUrls.first
           : 'https://picsum.photos/seed/${destination.id}/900/600',
+      imageUrls: destination.imageUrls.isNotEmpty
+          ? destination.imageUrls
+          : ['https://picsum.photos/seed/${destination.id}/900/600'],
     );
   }
 }

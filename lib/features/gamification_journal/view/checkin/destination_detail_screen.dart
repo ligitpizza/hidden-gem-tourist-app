@@ -453,21 +453,7 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
               const SizedBox(height: 14),
             ],
 
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppRadius.xl),
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Image.network(
-                  destination.imageUrl,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (context, child, progress) {
-                    if (progress == null) return child;
-                    return const _ImagePlaceholder(loading: true);
-                  },
-                  errorBuilder: (context, error, stackTrace) => const _ImagePlaceholder(loading: false),
-                ),
-              ),
-            ),
+            _ImageCarousel(imageUrls: destination.imageUrls),
             const SizedBox(height: 16),
             Row(
               children: [
@@ -1092,6 +1078,85 @@ class _AnswerOptionRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Swipeable left-to-right gallery of every photo for this destination —
+/// the map preview only ever shows the first one, but the full set is
+/// available once a Tourist taps through to here. Same fixed 16:9 frame
+/// as before, just one page per image instead of always the first.
+class _ImageCarousel extends StatefulWidget {
+  const _ImageCarousel({required this.imageUrls});
+
+  final List<String> imageUrls;
+
+  @override
+  State<_ImageCarousel> createState() => _ImageCarouselState();
+}
+
+class _ImageCarouselState extends State<_ImageCarousel> {
+  final _pageController = PageController();
+  int _page = 0;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final images = widget.imageUrls.isEmpty ? const [''] : widget.imageUrls;
+    final colors = AppColors.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: images.length,
+              onPageChanged: (index) => setState(() => _page = index),
+              itemBuilder: (context, index) {
+                final url = images[index];
+                if (url.isEmpty) return const _ImagePlaceholder(loading: false);
+                return Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, progress) {
+                    if (progress == null) return child;
+                    return const _ImagePlaceholder(loading: true);
+                  },
+                  errorBuilder: (context, error, stackTrace) => const _ImagePlaceholder(loading: false),
+                );
+              },
+            ),
+          ),
+        ),
+        if (images.length > 1) ...[
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < images.length; i++)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: i == _page ? 16 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: i == _page ? colors.primary : colors.outlineVariant,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 }
