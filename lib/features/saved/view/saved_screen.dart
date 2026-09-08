@@ -11,7 +11,6 @@ import '../../gamification_journal/controller/checkin_controller.dart';
 import '../../gamification_journal/model/destination_model.dart';
 import '../../gamification_journal/view/checkin/destination_detail_screen.dart';
 import '../../itinerary_planning/model/saved_itineraries_store.dart';
-import '../../itinerary_planning/view/widgets/route_map_view.dart';
 import '../../itinerary_planning/view/widgets/saved_itinerary_tile.dart';
 
 /// Best-effort mapping from a favourite's [HiddenGemCategory] to this
@@ -241,6 +240,29 @@ class _FavouriteCard extends StatelessWidget {
 
   final ComparisonDestination destination;
 
+  Future<void> _confirmRemove(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove from favourites?'),
+        content: Text('"${destination.name}" will be removed from your favourites.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await FavouriteDestinationsStore.instance.remove(destination.id);
+    }
+  }
+
   void _openDetail(BuildContext context) {
     final checkInController = context.read<CheckInController>();
     if (checkInController.destinations.isEmpty) {
@@ -292,16 +314,27 @@ class _FavouriteCard extends StatelessWidget {
                 child: SizedBox(
                   width: 56,
                   height: 56,
-                  child: RouteMapView(
-                    height: 56,
-                    borderRadius: BorderRadius.zero,
-                    markers: [
-                      MapMarkerSpec(
-                        point: destination.location,
-                        color: categoryColor(destination.category),
-                      ),
-                    ],
-                  ),
+                  child: destination.imageUrls.isEmpty
+                      ? Container(
+                          color: Colors.grey.shade300,
+                          child: const Icon(
+                            Icons.image_not_supported_outlined,
+                            size: 20,
+                            color: Colors.grey,
+                          ),
+                        )
+                      : Image.network(
+                          destination.imageUrls.first,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            color: Colors.grey.shade300,
+                            child: const Icon(
+                              Icons.image_not_supported_outlined,
+                              size: 20,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -321,7 +354,7 @@ class _FavouriteCard extends StatelessWidget {
               IconButton(
                 icon: const Icon(Icons.favorite, color: Colors.red),
                 tooltip: 'Remove from favourites',
-                onPressed: () => FavouriteDestinationsStore.instance.remove(destination.id),
+                onPressed: () => _confirmRemove(context),
               ),
             ],
           ),

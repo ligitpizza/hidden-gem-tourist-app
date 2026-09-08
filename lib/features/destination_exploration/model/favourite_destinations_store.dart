@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
 import 'comparison_destination.dart';
-import 'destination_exploration_repository.dart';
 import 'favourite_destination_repository.dart';
 
 /// Live view over the traveller's favourited destinations, backed by
@@ -12,11 +11,8 @@ import 'favourite_destination_repository.dart';
 /// SavedItinerariesStore's shape (lib/features/itinerary_planning/model/
 /// saved_itineraries_store.dart).
 class FavouriteDestinationsStore extends ChangeNotifier {
-  FavouriteDestinationsStore({
-    FavouriteDestinationRepository? repository,
-    DestinationExplorationRepository? destinationRepository,
-  })  : _repository = repository ?? FavouriteDestinationRepository(),
-        _destinationRepository = destinationRepository ?? DestinationExplorationRepository();
+  FavouriteDestinationsStore({FavouriteDestinationRepository? repository})
+      : _repository = repository ?? FavouriteDestinationRepository();
 
   // Mutable (not `final`) so tests can swap in a fake-repository-backed
   // instance instead of hitting real Supabase through the default —
@@ -25,7 +21,6 @@ class FavouriteDestinationsStore extends ChangeNotifier {
   static FavouriteDestinationsStore instance = FavouriteDestinationsStore();
 
   final FavouriteDestinationRepository _repository;
-  final DestinationExplorationRepository _destinationRepository;
 
   List<ComparisonDestination> _favourites = [];
   bool isLoading = false;
@@ -85,14 +80,14 @@ class FavouriteDestinationsStore extends ChangeNotifier {
   }
 
   /// Resolves [id] to a real [ComparisonDestination] (rating, images, etc.
-  /// all pulled from the actual `destinations` table via
-  /// [DestinationExplorationRepository.fetchForComparison]) and favourites
-  /// it — used by callers (e.g. the Destination Detail screen) that only
-  /// have a bare id/lean model, not the full comparison data [add] expects.
-  /// A no-op if the id can't be resolved.
+  /// all pulled from the `place_hidden_gem_candidates` view via
+  /// [FavouriteDestinationRepository.resolveByIds]) and favourites it —
+  /// used by callers (e.g. the Destination Detail screen) that only have a
+  /// bare id/lean model, not the full comparison data [add] expects. A
+  /// no-op if the id can't be resolved.
   Future<void> addById(String id) async {
     if (contains(id)) return;
-    final resolved = await _destinationRepository.fetchForComparison([id]);
+    final resolved = await _repository.resolveByIds([id]);
     if (resolved.isEmpty) return;
     await add(resolved.first);
   }

@@ -6,7 +6,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:collab/features/destination_exploration/model/comparison_destination.dart';
-import 'package:collab/features/destination_exploration/model/destination_exploration_repository.dart';
 import 'package:collab/features/destination_exploration/model/favourite_destination_repository.dart';
 import 'package:collab/features/destination_exploration/model/favourite_destinations_store.dart';
 import 'package:collab/features/gamification_journal/controller/badge_controller.dart';
@@ -37,11 +36,8 @@ class _FakeFavouriteRepository extends FavouriteDestinationRepository {
   Future<void> remove(String destinationId) async {}
   @override
   Future<List<ComparisonDestination>> fetchAll() async => const [];
-}
-
-class _FakeDestinationExplorationRepository extends DestinationExplorationRepository {
   @override
-  Future<List<ComparisonDestination>> fetchForComparison(List<String> ids) async => [
+  Future<List<ComparisonDestination>> resolveByIds(List<String> ids) async => [
         const ComparisonDestination(
           id: 'd1',
           name: 'Escape Penang',
@@ -64,7 +60,6 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     FavouriteDestinationsStore.instance = FavouriteDestinationsStore(
       repository: _FakeFavouriteRepository(),
-      destinationRepository: _FakeDestinationExplorationRepository(),
     );
   });
 
@@ -111,6 +106,32 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('Saved to Favourites'), findsOneWidget);
+  });
+
+  testWidgets('tapping Save to Favourites a second time removes it and flips the button back', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MultiProvider(
+          providers: _journalProviders(),
+          child: MaterialApp(home: DestinationDetailScreen(destination: _destination)),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    await tester.ensureVisible(find.text('Save to Favourites'));
+    await tester.tap(find.text('Save to Favourites'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.text('Saved to Favourites'), findsOneWidget);
+
+    await tester.tap(find.text('Saved to Favourites'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('Save to Favourites'), findsOneWidget);
+    expect(FavouriteDestinationsStore.instance.contains('d1'), isFalse);
   });
 
   testWidgets('tapping Add to Itinerary Route adds the destination to the itinerary planner', (tester) async {

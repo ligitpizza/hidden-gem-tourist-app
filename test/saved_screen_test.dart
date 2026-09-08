@@ -43,6 +43,7 @@ const _favourite = ComparisonDestination(
   category: HiddenGemCategory.culture,
   location: LatLng(5.4, 100.3),
   avgRating: 4.5,
+  imageUrls: ['https://example.com/kek-lok-si.jpg'],
 );
 
 Widget _wrap() {
@@ -102,5 +103,70 @@ void main() {
 
     expect(find.text('Kek Lok Si Temple'), findsOneWidget);
     expect(find.text('Seng Thor Restaurant'), findsNothing);
+  });
+
+  testWidgets('a favourite with photos shows an image thumbnail instead of a placeholder', (tester) async {
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    // errorBuilder also renders the same placeholder icon since the test
+    // sandbox has no real network to actually load the image from — this
+    // only asserts the Image.network widget itself was built with the
+    // destination's photo URL, not that the network fetch succeeds.
+    expect(find.image(const NetworkImage('https://example.com/kek-lok-si.jpg')), findsOneWidget);
+  });
+
+  testWidgets('a favourite with no photos falls back to the placeholder icon', (tester) async {
+    const photoless = ComparisonDestination(
+      id: 'd3',
+      name: 'Penang Hill',
+      city: 'George Town',
+      category: HiddenGemCategory.nature,
+      location: LatLng(5.42, 100.27),
+    );
+    FavouriteDestinationsStore.instance = FavouriteDestinationsStore(repository: _FakeFavouriteRepository())
+      ..add(photoless);
+
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byIcon(Icons.image_not_supported_outlined), findsOneWidget);
+  });
+
+  testWidgets('tapping the remove icon asks for confirmation before removing the favourite',
+      (tester) async {
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.favorite));
+    await tester.pump();
+
+    expect(find.text('Remove from favourites?'), findsOneWidget);
+    expect(FavouriteDestinationsStore.instance.contains('d1'), isTrue);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pump();
+
+    expect(find.text('Remove from favourites?'), findsNothing);
+    expect(FavouriteDestinationsStore.instance.contains('d1'), isTrue);
+  });
+
+  testWidgets('confirming the remove dialog removes the favourite', (tester) async {
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.favorite));
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(TextButton, 'Remove'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(FavouriteDestinationsStore.instance.contains('d1'), isFalse);
+    expect(find.text('Kek Lok Si Temple'), findsNothing);
   });
 }

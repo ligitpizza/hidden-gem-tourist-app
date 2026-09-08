@@ -1311,16 +1311,18 @@ class _SaveToFavouritesButton extends StatelessWidget {
         return SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: isSaved
-                ? null
-                : () async {
-                    await FavouriteDestinationsStore.instance.addById(destination.id);
-                    if (!context.mounted) return;
-                    final error = FavouriteDestinationsStore.instance.error;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(error ?? '${destination.name} saved to favourites')),
-                    );
-                  },
+            onPressed: () async {
+              final wasSaved = isSaved;
+              await FavouriteDestinationsStore.instance.toggleById(destination.id);
+              if (!context.mounted) return;
+              final error = FavouriteDestinationsStore.instance.error;
+              final message = wasSaved
+                  ? '${destination.name} removed from favourites'
+                  : '${destination.name} saved to favourites';
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(error ?? message)),
+              );
+            },
             icon: Icon(isSaved ? Icons.favorite : Icons.favorite_border),
             label: Text(isSaved ? 'Saved to Favourites' : 'Save to Favourites'),
           ),

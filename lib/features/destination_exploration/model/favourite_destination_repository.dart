@@ -54,16 +54,7 @@ class FavouriteDestinationRepository {
     final ids = (rows as List).map((row) => (row as Map)['destination_id'] as String).toList();
     if (ids.isEmpty) return const [];
 
-    // Query the view, not the raw `places` table -- `places` has no
-    // avg_rating column at all (it's only ever computed here, from real
-    // `reviews` rows), so querying the table directly silently showed
-    // 0.0 stars for every favourite regardless of its real rating. This
-    // view now carries every other column mapComparisonRow needs too
-    // (crowd_level, entrance_cost, etc. -- added in
-    // 20260902150000_favourite_view_full_columns.sql).
-    final placeRows = await _client.from('place_hidden_gem_candidates').select().inFilter('id', ids);
-    final destinations =
-        (placeRows as List).map((row) => DestinationExplorationRepository.mapComparisonRow(row as Map<String, dynamic>)).toList();
+    final destinations = await resolveByIds(ids);
 
     // Row order isn't preserved by inFilter, and a place deleted since
     // being favourited simply won't come back -- order to match the
@@ -71,6 +62,27 @@ class FavouriteDestinationRepository {
     // instead of whatever order came back above.
     final byId = {for (final d in destinations) d.id: d};
     return [for (final id in ids) if (byId[id] != null) byId[id]!];
+  }
+
+  /// Resolves [ids] to full [ComparisonDestination]s via the
+  /// `place_hidden_gem_candidates` view -- not the raw `places` table
+  /// (which has no `avg_rating` column at all -- it's only ever computed
+  /// here, from real `reviews` rows) and not
+  /// [DestinationExplorationRepository.fetchForComparison] (which queries
+  /// `destinations` directly; that repository is Destination Exploration's
+  /// own standalone data source per its class doc, deliberately unrelated
+  /// to Module 1's `places`/reviews system). Querying either of those
+  /// instead of the view silently showed 0.0 stars and missing photos --
+  /// used by both [fetchAll] above and
+  /// [FavouriteDestinationsStore.addById], which resolves a single fresh
+  /// id when favouriting from a screen that only has a bare id, not a
+  /// full [ComparisonDestination].
+  Future<List<ComparisonDestination>> resolveByIds(List<String> ids) async {
+    if (ids.isEmpty) return const [];
+    final placeRows = await _client.from('place_hidden_gem_candidates').select().inFilter('id', ids);
+    return (placeRows as List)
+        .map((row) => DestinationExplorationRepository.mapComparisonRow(row as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> add(String destinationId) async {
