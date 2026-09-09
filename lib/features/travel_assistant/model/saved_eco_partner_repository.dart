@@ -239,10 +239,38 @@ class SavedEcoPartnerCodec {
     'lastUpdated': partner.lastUpdated.toIso8601String(),
     'priceBand': partner.priceBand,
     'website': partner.website,
-    'imageUrl': partner.imageUrl,
-    'imageSourceName': partner.imageSourceName,
-    'imageSourceUrl': partner.imageSourceUrl,
-    'imageCapturedAt': partner.imageCapturedAt?.toIso8601String(),
+    'imageUrl':
+        ecoPartnerImageIsLegacyMapillary(
+          imageUrl: partner.imageUrl,
+          imageSourceName: partner.imageSourceName,
+          imageSourceUrl: partner.imageSourceUrl,
+        )
+        ? null
+        : partner.imageUrl,
+    'imageSourceName':
+        ecoPartnerImageIsLegacyMapillary(
+          imageUrl: partner.imageUrl,
+          imageSourceName: partner.imageSourceName,
+          imageSourceUrl: partner.imageSourceUrl,
+        )
+        ? null
+        : partner.imageSourceName,
+    'imageSourceUrl':
+        ecoPartnerImageIsLegacyMapillary(
+          imageUrl: partner.imageUrl,
+          imageSourceName: partner.imageSourceName,
+          imageSourceUrl: partner.imageSourceUrl,
+        )
+        ? null
+        : partner.imageSourceUrl,
+    'imageCapturedAt':
+        ecoPartnerImageIsLegacyMapillary(
+          imageUrl: partner.imageUrl,
+          imageSourceName: partner.imageSourceName,
+          imageSourceUrl: partner.imageSourceUrl,
+        )
+        ? null
+        : partner.imageCapturedAt?.toIso8601String(),
     'transitRoutes': partner.transitRoutes
         .map(
           (route) => {
@@ -264,6 +292,11 @@ class SavedEcoPartnerCodec {
   static EcoPartner fromJson(Map<String, dynamic> json) {
     final subtype = '${json['subtype'] ?? ''}';
     final address = '${json['address'] ?? ''}';
+    final legacyMapillary = ecoPartnerImageIsLegacyMapillary(
+      imageUrl: json['imageUrl'] as String?,
+      imageSourceName: json['imageSourceName'] as String?,
+      imageSourceUrl: json['imageSourceUrl'] as String?,
+    );
     return EcoPartner(
       id: '${json['id']}',
       name: subtype == 'EV charging'
@@ -287,10 +320,21 @@ class SavedEcoPartnerCodec {
           DateTime.tryParse('${json['lastUpdated'] ?? ''}') ?? DateTime.now(),
       priceBand: json['priceBand'] as String?,
       website: json['website'] as String?,
-      imageUrl: json['imageUrl'] as String?,
-      imageSourceName: json['imageSourceName'] as String?,
-      imageSourceUrl: json['imageSourceUrl'] as String?,
-      imageCapturedAt: DateTime.tryParse('${json['imageCapturedAt'] ?? ''}'),
+      imageUrl: ecoPartnerSafeImageValue(
+        json['imageUrl'] as String?,
+        isLegacyMapillary: legacyMapillary,
+      ),
+      imageSourceName: ecoPartnerSafeImageValue(
+        json['imageSourceName'] as String?,
+        isLegacyMapillary: legacyMapillary,
+      ),
+      imageSourceUrl: ecoPartnerSafeImageValue(
+        json['imageSourceUrl'] as String?,
+        isLegacyMapillary: legacyMapillary,
+      ),
+      imageCapturedAt: legacyMapillary
+          ? null
+          : DateTime.tryParse('${json['imageCapturedAt'] ?? ''}'),
       transitRoutes: (json['transitRoutes'] as List? ?? const [])
           .whereType<Map>()
           .map(

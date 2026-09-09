@@ -382,11 +382,6 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-[functions.mapillary-images]
-enabled = true
-verify_jwt = true
-entrypoint = "./functions/mapillary-images/index.ts"
-
 [functions.sync-eco-partners]
 enabled = true
 verify_jwt = false

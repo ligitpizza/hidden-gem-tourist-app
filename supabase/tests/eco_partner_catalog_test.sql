@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(23);
+select plan(38);
 
 select has_table('public', 'eco_partner_catalog', 'catalogue table exists');
 select has_index(
@@ -11,6 +11,16 @@ select has_index(
   'eco_partner_catalog',
   'eco_partner_catalog_location_idx',
   'catalogue has a spatial index'
+);
+select has_table(
+  'public',
+  'eco_partner_preview_assets',
+  'transport preview mapping table exists'
+);
+select is(
+  (select count(*) from public.eco_partner_preview_assets),
+  9::bigint,
+  'all representative transport previews are registered'
 );
 select has_index(
   'public',
@@ -45,6 +55,71 @@ select is(
   'Negeri Sembilan'::text,
   'single-state GTFS feeds have a safe fallback state'
 );
+select is(
+  public.eco_partner_transport_preview_key(
+    'prasarana-rapid-bus-kl',
+    'Bus'
+  ),
+  'rapid-kl-bus'::text,
+  'an actual Rapid KL bus receives its operator preview'
+);
+select is(
+  public.eco_partner_transport_preview_key(
+    'prasarana-rapid-bus-kl',
+    'LRT'
+  ),
+  'lrt'::text,
+  'an LRT subtype overrides bus-feed branding'
+);
+select is(
+  public.eco_partner_transport_preview_key(
+    'prasarana-rapid-bus-mrtfeeder',
+    'MRT'
+  ),
+  'mrt'::text,
+  'an MRT subtype overrides feeder-bus branding'
+);
+select is(
+  public.eco_partner_transport_preview_key('unknown-feed', 'LRT'),
+  'lrt'::text,
+  'unknown feeds fall back to their transport mode'
+);
+select is(
+  public.eco_partner_transport_preview_key('ktmb', 'Bus'),
+  'ktm'::text,
+  'KTMB feed takes precedence over a stop subtype'
+);
+select is(
+  public.eco_partner_transport_preview_key(
+    'prasarana-rapid-bus-penang',
+    'Bus'
+  ),
+  'rapid-penang-bus'::text,
+  'Rapid Penang receives its operator preview'
+);
+select is(
+  public.eco_partner_transport_preview_key('mybas-johor', 'Bus'),
+  'bas-my-bus'::text,
+  'BAS.MY feeds receive their operator preview'
+);
+select is(
+  (
+    select relrowsecurity
+    from pg_class
+    where oid = 'public.eco_partner_preview_assets'::regclass
+  ),
+  true,
+  'transport preview mapping table has RLS enabled'
+);
+select is(
+  (
+    select public
+    from storage.buckets
+    where id = 'eco-partner-previews'
+  ),
+  true,
+  'transport preview bucket is publicly readable'
+);
 
 delete from public.malaysia_state_boundaries where state = 'Kuala Lumpur';
 insert into public.malaysia_state_boundaries(
@@ -66,6 +141,7 @@ select ok(
   has_table_privilege('authenticated', 'public.eco_partner_catalog', 'select'),
   'authenticated users can read the catalogue'
 );
+
 select ok(
   not has_table_privilege('anon', 'public.eco_partner_catalog', 'select'),
   'anonymous users cannot read the catalogue'
@@ -77,6 +153,95 @@ select ok(
     'execute'
   ),
   'only the backend role receives replacement access'
+);
+
+do $setup$
+begin
+perform public.replace_gtfs_feed(
+  'preview-test-feed',
+  'https://example.com/preview-feed.zip',
+  '[]'::jsonb,
+  '[{
+    "id":"preview-test-feed:stop-1",
+    "feed_id":"preview-test-feed",
+    "stop_id":"stop-1",
+    "name":"Preview test stop",
+    "address":"Kuala Lumpur",
+    "latitude":3.1390,
+    "longitude":101.6869,
+    "source_name":"Official Malaysia GTFS",
+    "source_url":"https://example.com/preview-feed.zip"
+  }]'::jsonb,
+  '[{
+    "id":"preview-test-feed:route-1",
+    "feed_id":"preview-test-feed",
+    "route_id":"route-1",
+    "short_name":"T1",
+    "long_name":"Preview line",
+    "route_type":0,
+    "mode":"LRT"
+  }]'::jsonb,
+  '[{
+    "stop_id":"preview-test-feed:stop-1",
+    "route_id":"preview-test-feed:route-1"
+  }]'::jsonb
+);
+end
+$setup$;
+
+select is(
+  (
+    select image_url
+    from public.eco_partner_catalog
+    where id = 'stop:preview-test-feed:stop-1'
+  ),
+  'storage://eco-partner-previews/transport/lrt.webp'::text,
+  'new GTFS catalogue rows receive their mode preview'
+);
+
+update public.gtfs_stops
+set name = 'Updated preview test stop'
+where id = 'preview-test-feed:stop-1';
+do $setup$
+begin
+  perform public.refresh_gtfs_eco_partner_catalog('preview-test-feed');
+end
+$setup$;
+
+select is(
+  (
+    select image_url
+    from public.eco_partner_catalog
+    where id = 'stop:preview-test-feed:stop-1'
+  ),
+  'storage://eco-partner-previews/transport/lrt.webp'::text,
+  'GTFS refresh preserves and reapplies its curated preview'
+);
+
+select results_eq(
+  $$
+    select id
+    from public.search_eco_partners(
+      null, null, 'transport_lrt', null, null, null,
+      'recommended', 10, 0
+    )
+    where id = 'stop:preview-test-feed:stop-1'
+  $$,
+  $$ values ('stop:preview-test-feed:stop-1'::text) $$,
+  'LRT filter includes a matching GTFS row'
+);
+
+select is(
+  (
+    select count(*)
+    from public.search_eco_partners(
+      null, null, 'transport_bus', null, null, null,
+      'recommended', 10, 0
+    )
+    where id = 'stop:preview-test-feed:stop-1'
+  ),
+  0::bigint,
+  'bus filter excludes an LRT GTFS row'
 );
 
 select is(

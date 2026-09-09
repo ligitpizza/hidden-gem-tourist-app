@@ -86,6 +86,49 @@ void main() {
       '2 × Type 2 · up to 22 kW',
     );
   });
+
+  test('removes legacy Mapillary metadata when reading saved partners', () {
+    final value = SavedEcoPartnerCodec.toJson(_partner)
+      ..['imageUrl'] = 'https://legacy-street-images.invalid/example.jpg'
+      ..['imageSourceName'] = 'Nearby street-level image · Mapillary'
+      ..['imageSourceUrl'] = 'https://legacy-street-images.invalid/photo/1'
+      ..['imageCapturedAt'] = '2020-01-01T00:00:00.000Z';
+
+    final restored = SavedEcoPartnerCodec.fromJson(value);
+
+    expect(restored.imageUrl, isNull);
+    expect(restored.imageSourceName, isNull);
+    expect(restored.imageSourceUrl, isNull);
+    expect(restored.imageCapturedAt, isNull);
+  });
+
+  test('does not persist legacy Mapillary metadata', () {
+    final value = SavedEcoPartnerCodec.toJson(
+      EcoPartner(
+        id: _partner.id,
+        name: _partner.name,
+        category: _partner.category,
+        subtype: _partner.subtype,
+        latitude: _partner.latitude,
+        longitude: _partner.longitude,
+        address: _partner.address,
+        sustainabilityLabel: _partner.sustainabilityLabel,
+        evidence: _partner.evidence,
+        sourceName: _partner.sourceName,
+        sourceUrl: _partner.sourceUrl,
+        lastUpdated: _partner.lastUpdated,
+        imageUrl: 'https://legacy-street-images.invalid/example.jpg',
+        imageSourceName: 'Nearby street-level image · Mapillary',
+        imageSourceUrl: 'https://legacy-street-images.invalid/photo/1',
+        imageCapturedAt: DateTime(2020),
+      ),
+    );
+
+    expect(value['imageUrl'], isNull);
+    expect(value['imageSourceName'], isNull);
+    expect(value['imageSourceUrl'], isNull);
+    expect(value['imageCapturedAt'], isNull);
+  });
 }
 
 final _partner = EcoPartner(

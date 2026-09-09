@@ -498,6 +498,25 @@ class EcoPartner {
   );
 }
 
+bool ecoPartnerImageIsLegacyMapillary({
+  String? imageUrl,
+  String? imageSourceName,
+  String? imageSourceUrl,
+}) => [
+  imageUrl,
+  imageSourceName,
+  imageSourceUrl,
+].whereType<String>().join(' ').toLowerCase().contains('mapillary');
+
+String? ecoPartnerSafeImageValue(
+  String? value, {
+  required bool isLegacyMapillary,
+}) {
+  if (isLegacyMapillary) return null;
+  final clean = value?.trim() ?? '';
+  return clean.isEmpty || clean.toLowerCase() == 'null' ? null : clean;
+}
+
 String ecoPartnerDistanceLabel(double distanceKm, {bool compact = false}) {
   if (distanceKm < 0.1) return compact ? '<100 m' : '<100 m away';
   if (distanceKm < 1) {

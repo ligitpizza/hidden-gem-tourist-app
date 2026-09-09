@@ -460,6 +460,59 @@ void main() {
     },
   );
 
+  test('transport type is sent as a server-side catalogue filter', () async {
+    final repository = _ServerCatalogRepository(_catalog);
+    final controller = _testController(repository);
+    await controller.loadInitialRecommendations();
+
+    final applied = await controller.applyFilters(
+      filter: 'Public Transport',
+      transportType: 'MRT',
+      areaMode: EcoPartnerAreaMode.statewide,
+      radius: 10,
+      state: 'All Malaysia',
+      sort: EcoPartnerSort.recommended,
+    );
+
+    expect(applied, isTrue);
+    expect(controller.transportType, 'MRT');
+    expect(repository.lastCategory, 'transport_mrt');
+  });
+
+  test('local repository fallback filters Light rail together with LRT', () {
+    final controller = EcoPartnerController(repository: _CatalogRepository([]))
+      ..filter = 'Public Transport'
+      ..transportType = 'LRT'
+      ..result = EcoPartnerSearchResult(
+        destination: const EcoDestination('Malaysia', 4.21, 101.97),
+        partners: [
+          _partner(
+            'LRT stop',
+            40,
+            category: EcoPartnerCategory.transport,
+            subtype: 'LRT',
+          ),
+          _partner(
+            'Light rail stop',
+            41,
+            category: EcoPartnerCategory.transport,
+            subtype: 'Light rail',
+          ),
+          _partner(
+            'Bus stop',
+            42,
+            category: EcoPartnerCategory.transport,
+            subtype: 'Bus',
+          ),
+        ],
+      );
+
+    expect(controller.filteredPartners.map((partner) => partner.name), [
+      'LRT stop',
+      'Light rail stop',
+    ]);
+  });
+
   test('denied current location restores the previous search area', () async {
     final controller = _DeniedLocationController(_CatalogRepository(_catalog))
       ..areaMode = EcoPartnerAreaMode.statewide
@@ -587,6 +640,7 @@ class _ServerCatalogRepository extends _CatalogRepository
   _ServerCatalogRepository(super.partners);
 
   String? lastQuery;
+  String? lastCategory;
   int? lastLimit;
   int? lastOffset;
   Completer<EcoPartnerSearchResult>? nextPageCompleter;
@@ -611,6 +665,7 @@ class _ServerCatalogRepository extends _CatalogRepository
     int offset = 0,
   }) async {
     lastQuery = query;
+    lastCategory = category;
     lastLimit = limit;
     lastOffset = offset;
     if (offset > 0 && nextPageCompleter != null) {

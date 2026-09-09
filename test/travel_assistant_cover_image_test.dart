@@ -62,7 +62,7 @@ void main() {
       categories: {DestinationCategory.restaurant},
       trustedImageUrl: 'https://images.example.com/street.jpg',
       trustedImageAttribution: 'Nearby street-level image · Mapillary',
-      trustedImageSourceUrl: 'https://www.mapillary.com/app/?pKey=1',
+      trustedImageSourceUrl: 'https://legacy-street-images.invalid/photo/1',
     );
 
     expect(await source.resolve(mapillaryLocation), isNull);

@@ -40,6 +40,7 @@ class EcoPartnerController extends ChangeNotifier {
 
   EcoPartnerSearchResult? result;
   String filter = 'All';
+  String transportType = 'All transport';
   EcoPartnerAreaMode areaMode = EcoPartnerAreaMode.nearby;
   String stateFilter = 'All Malaysia';
   EcoPartnerSort sort = EcoPartnerSort.recommended;
@@ -65,6 +66,15 @@ class EcoPartnerController extends ChangeNotifier {
   static const homeSectionLimit = 8;
   static const _homeCacheLifetime = Duration(hours: 24);
   static const _homeCacheOriginToleranceKm = 5.0;
+  static const transportTypes = [
+    'All transport',
+    'Bus',
+    'MRT',
+    'LRT',
+    'Monorail',
+    'KTM',
+    'Rail',
+  ];
 
   int get effectivePageSize =>
       layout == EcoPartnerLayout.grid4 ? compactPageSize : standardPageSize;
@@ -205,6 +215,7 @@ class EcoPartnerController extends ChangeNotifier {
     };
     if (targetFilter == null) return;
     filter = targetFilter;
+    if (filter == 'Public Transport') transportType = 'All transport';
     currentPage = 0;
     notifyListeners();
     await _loadCatalogPage();
@@ -266,12 +277,26 @@ class EcoPartnerController extends ChangeNotifier {
     'Dining' => partner.category == EcoPartnerCategory.dining,
     'Public Transport' =>
       partner.category == EcoPartnerCategory.transport &&
-          partner.subtype != 'EV charging',
+          partner.subtype != 'EV charging' &&
+          _matchesTransportType(partner),
     'EV Charging' =>
       partner.category == EcoPartnerCategory.transport &&
           partner.subtype == 'EV charging',
     _ => true,
   };
+
+  bool _matchesTransportType(EcoPartner partner) {
+    final subtype = partner.subtype.trim().toLowerCase();
+    return switch (transportType) {
+      'Bus' => subtype == 'bus',
+      'MRT' => subtype == 'mrt',
+      'LRT' => subtype == 'lrt' || subtype == 'light rail',
+      'Monorail' => subtype == 'monorail',
+      'KTM' => subtype == 'ktm',
+      'Rail' => subtype == 'rail',
+      _ => subtype != 'ev charging',
+    };
+  }
 
   List<EcoPartner> suggestionsFor(String query) {
     final normalizedQuery = _normalize(query);
@@ -579,6 +604,15 @@ class EcoPartnerController extends ChangeNotifier {
   void selectFilter(String value) {
     if (filter == value) return;
     filter = value;
+    if (filter != 'Public Transport') transportType = 'All transport';
+    currentPage = 0;
+    notifyListeners();
+  }
+
+  void selectTransportType(String value) {
+    if (!transportTypes.contains(value) || transportType == value) return;
+    transportType = value;
+    filter = 'Public Transport';
     currentPage = 0;
     notifyListeners();
   }
@@ -672,7 +706,15 @@ class EcoPartnerController extends ChangeNotifier {
   String? get _catalogCategory => switch (filter) {
     'Stay' => 'stay',
     'Dining' => 'dining',
-    'Public Transport' => 'public_transport',
+    'Public Transport' => switch (transportType) {
+      'Bus' => 'transport_bus',
+      'MRT' => 'transport_mrt',
+      'LRT' => 'transport_lrt',
+      'Monorail' => 'transport_monorail',
+      'KTM' => 'transport_ktm',
+      'Rail' => 'transport_rail',
+      _ => 'public_transport',
+    },
     'EV Charging' => 'ev',
     _ => null,
   };
@@ -710,6 +752,7 @@ class EcoPartnerController extends ChangeNotifier {
     final previousPage = currentPage;
     final succeeded = await applyFilters(
       filter: filter,
+      transportType: transportType,
       areaMode: mode,
       radius: radius,
       state: state,
@@ -727,6 +770,7 @@ class EcoPartnerController extends ChangeNotifier {
 
   Future<bool> applyFilters({
     required String filter,
+    String? transportType,
     required EcoPartnerAreaMode areaMode,
     required double radius,
     required String state,
@@ -735,6 +779,9 @@ class EcoPartnerController extends ChangeNotifier {
   }) async {
     if (_isExplicitSearch) await clearSearch();
     this.filter = filter;
+    this.transportType = filter == 'Public Transport'
+        ? transportType ?? this.transportType
+        : 'All transport';
     this.areaMode = areaMode;
     radiusSelection = radius;
     stateFilter = state;
@@ -757,6 +804,7 @@ class EcoPartnerController extends ChangeNotifier {
     _browseSnapshot = _EcoPartnerBrowseSnapshot(
       result: result ?? _latestBrowseResult,
       filter: filter,
+      transportType: transportType,
       areaMode: areaMode,
       stateFilter: stateFilter,
       sort: sort,
@@ -778,6 +826,7 @@ class EcoPartnerController extends ChangeNotifier {
     }
     result = snapshot.result ?? _latestBrowseResult ?? _initialResult;
     filter = snapshot.filter;
+    transportType = snapshot.transportType;
     areaMode = snapshot.areaMode;
     stateFilter = snapshot.stateFilter;
     sort = snapshot.sort;
@@ -958,6 +1007,7 @@ class _EcoPartnerBrowseSnapshot {
   const _EcoPartnerBrowseSnapshot({
     required this.result,
     required this.filter,
+    required this.transportType,
     required this.areaMode,
     required this.stateFilter,
     required this.sort,
@@ -968,6 +1018,7 @@ class _EcoPartnerBrowseSnapshot {
 
   final EcoPartnerSearchResult? result;
   final String filter;
+  final String transportType;
   final EcoPartnerAreaMode areaMode;
   final String stateFilter;
   final EcoPartnerSort sort;

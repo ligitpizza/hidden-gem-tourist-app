@@ -344,6 +344,43 @@ void main() {
     );
   });
 
+  testWidgets('public transport exposes mode-specific filters', (tester) async {
+    final controller = _FilterTestController(_FilterRepository());
+    await tester.pumpWidget(
+      MaterialApp(home: EcoPartnersScreen(controller: controller)),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Filter recommendations'));
+    await tester.pumpAndSettle();
+    expect(find.text('Transport type'), findsNothing);
+
+    await tester.tap(find.text('Public Transport'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Transport type'), findsOneWidget);
+    for (final type in EcoPartnerController.transportTypes) {
+      expect(find.text(type), findsOneWidget);
+    }
+
+    await tester.scrollUntilVisible(
+      find.text('MRT'),
+      160,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('MRT'));
+    await tester.scrollUntilVisible(
+      find.text('Apply filters'),
+      160,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('Apply filters'));
+    await tester.pumpAndSettle();
+
+    expect(controller.filter, 'Public Transport');
+    expect(controller.transportType, 'MRT');
+  });
+
   testWidgets('the whole list card opens Eco Partner details', (tester) async {
     final controller = _FilterTestController(_FilterRepository())
       ..filter = 'Stay'

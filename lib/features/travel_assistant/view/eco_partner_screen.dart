@@ -5,6 +5,7 @@ import '../../../shared/widgets/app_header.dart';
 import '../controller/eco_partner_controller.dart';
 import '../model/eco_partner.dart';
 import 'eco_partner_detail_screen.dart';
+import 'widgets/eco_partner_image.dart';
 
 class EcoPartnersScreen extends StatefulWidget {
   const EcoPartnersScreen({super.key, this.controller});
@@ -448,6 +449,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
 
   Future<void> _showFilters() async {
     var selectedFilter = _controller.filter;
+    var selectedTransportType = _controller.transportType;
     var selectedRadius = _controller.radiusSelection;
     var selectedState = _controller.stateFilter;
     var selectedAreaMode = _controller.areaMode;
@@ -593,12 +595,40 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
                               label: Text(label),
                               selected: selectedFilter == label,
                               visualDensity: VisualDensity.compact,
-                              onSelected: (_) =>
-                                  setSheetState(() => selectedFilter = label),
+                              onSelected: (_) => setSheetState(() {
+                                selectedFilter = label;
+                                if (label != 'Public Transport') {
+                                  selectedTransportType = 'All transport';
+                                }
+                              }),
                             ),
                           )
                           .toList(),
                 ),
+                if (selectedFilter == 'Public Transport') ...[
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Transport type',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: EcoPartnerController.transportTypes
+                        .map(
+                          (type) => ChoiceChip(
+                            label: Text(type),
+                            selected: selectedTransportType == type,
+                            visualDensity: VisualDensity.compact,
+                            onSelected: (_) => setSheetState(
+                              () => selectedTransportType = type,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
                 const SizedBox(height: 14),
                 const Text(
                   'Alphabetical order',
@@ -643,6 +673,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
                       sheetContext,
                       _EcoFilterValue(
                         selectedFilter,
+                        selectedTransportType,
                         selectedAreaMode,
                         selectedRadius,
                         selectedState,
@@ -667,6 +698,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
     }
     await _controller.applyFilters(
       filter: value.filter,
+      transportType: value.transportType,
       areaMode: value.areaMode,
       radius: value.radius,
       state: value.state,
@@ -869,19 +901,11 @@ class _HomePartnerCard extends StatelessWidget {
                 width: double.infinity,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: partner.imageUrl?.isNotEmpty == true
-                      ? Image.network(
-                          partner.imageUrl!,
-                          fit: BoxFit.cover,
-                          cacheWidth: 420,
-                          loadingBuilder: (context, child, progress) =>
-                              progress == null
-                              ? child
-                              : _HomePartnerPlaceholder(partner: partner),
-                          errorBuilder: (_, _, _) =>
-                              _HomePartnerPlaceholder(partner: partner),
-                        )
-                      : _HomePartnerPlaceholder(partner: partner),
+                  child: EcoPartnerImage(
+                    partner: partner,
+                    cacheWidth: 420,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               ),
               const SizedBox(height: 9),
@@ -917,30 +941,6 @@ class _HomePartnerCard extends StatelessWidget {
   );
 }
 
-class _HomePartnerPlaceholder extends StatelessWidget {
-  const _HomePartnerPlaceholder({required this.partner});
-
-  final EcoPartner partner;
-
-  @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFFDDEBE4), Color(0xFF9FC6AF)],
-      ),
-    ),
-    child: Center(
-      child: Icon(
-        _partnerIcon(partner),
-        size: 36,
-        color: const Color(0xFF07513C),
-      ),
-    ),
-  );
-}
-
 class _PartnerCard extends StatelessWidget {
   const _PartnerCard(
     this.partner, {
@@ -963,36 +963,19 @@ class _PartnerCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
+            SizedBox(
               height: 120,
               width: double.infinity,
-              decoration: BoxDecoration(
+              child: EcoPartnerImage(
+                partner: partner,
+                cacheWidth: 720,
                 borderRadius: BorderRadius.circular(14),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFBAD7C4), Color(0xFF315E48)],
-                ),
               ),
-              child: partner.imageUrl?.isNotEmpty == true
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: Image.network(
-                        partner.imageUrl!,
-                        fit: BoxFit.cover,
-                        cacheWidth: 720,
-                        loadingBuilder: (context, child, progress) =>
-                            progress == null
-                            ? child
-                            : _HomePartnerPlaceholder(partner: partner),
-                        errorBuilder: (_, _, _) =>
-                            _HomePartnerPlaceholder(partner: partner),
-                      ),
-                    )
-                  : _HomePartnerPlaceholder(partner: partner),
             ),
-            if (partner.imageSourceName != null) ...[
+            if (ecoPartnerPreviewCredit(partner) case final credit?) ...[
               const SizedBox(height: 5),
               Text(
-                '${partner.imageSourceName}${partner.imageCapturedAt == null ? '' : ' · ${partner.imageCapturedAt!.year}'}',
+                '$credit${partner.imageCapturedAt == null ? '' : ' · ${partner.imageCapturedAt!.year}'}',
                 style: Theme.of(context).textTheme.labelSmall,
               ),
             ],
@@ -1058,15 +1041,6 @@ class _PartnerGridCard extends StatelessWidget {
   final double? outsideRadiusKm;
   final VoidCallback onTap;
 
-  IconData get _icon => switch (partner.category) {
-    EcoPartnerCategory.stay => Icons.hotel_outlined,
-    EcoPartnerCategory.dining => Icons.restaurant_outlined,
-    EcoPartnerCategory.transport =>
-      partner.subtype == 'EV charging'
-          ? Icons.ev_station_outlined
-          : Icons.directions_transit_outlined,
-  };
-
   @override
   Widget build(BuildContext context) => Card(
     margin: EdgeInsets.zero,
@@ -1088,29 +1062,13 @@ class _PartnerGridCard extends StatelessWidget {
                       color: const Color(0xFFDDEBE4),
                       borderRadius: BorderRadius.circular(dense ? 7 : 10),
                     ),
-                    child: partner.imageUrl?.isNotEmpty == true
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(dense ? 7 : 10),
-                            child: Image.network(
-                              partner.imageUrl!,
-                              fit: BoxFit.cover,
-                              cacheWidth: dense ? 220 : 420,
-                              loadingBuilder: (context, child, progress) =>
-                                  progress == null
-                                  ? child
-                                  : _HomePartnerPlaceholder(partner: partner),
-                              errorBuilder: (_, _, _) => Icon(
-                                _icon,
-                                color: const Color(0xFF07513C),
-                                size: dense ? 20 : 34,
-                              ),
-                            ),
-                          )
-                        : Icon(
-                            _icon,
-                            color: const Color(0xFF07513C),
-                            size: dense ? 20 : 34,
-                          ),
+                    child: EcoPartnerImage(
+                      partner: partner,
+                      cacheWidth: dense ? 220 : 420,
+                      borderRadius: BorderRadius.circular(dense ? 7 : 10),
+                      placeholderIconSize: dense ? 20 : 34,
+                      showPlaceholderLabel: !dense,
+                    ),
                   ),
                   if (outsideRadiusKm != null)
                     Positioned(
@@ -1273,6 +1231,7 @@ class _Message extends StatelessWidget {
 class _EcoFilterValue {
   const _EcoFilterValue(
     this.filter,
+    this.transportType,
     this.areaMode,
     this.radius,
     this.state,
@@ -1281,6 +1240,7 @@ class _EcoFilterValue {
   );
 
   final String filter;
+  final String transportType;
   final EcoPartnerAreaMode areaMode;
   final double radius;
   final String state;

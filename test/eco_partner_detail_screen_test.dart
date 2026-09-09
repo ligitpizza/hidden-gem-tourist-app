@@ -218,7 +218,7 @@ void main() {
       sourceUrl: 'https://www.openstreetmap.org/node/42',
       lastUpdated: DateTime(2026, 9, 6),
       imageSourceName: 'Nearby street-level image · Mapillary',
-      imageSourceUrl: 'https://www.mapillary.com/app/?pKey=42',
+      imageSourceUrl: 'https://legacy-street-images.invalid/photo/42',
       imageCapturedAt: DateTime(2020),
       chargingDetails: const EcoChargingDetails(
         capacity: 1,
@@ -253,12 +253,9 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Last checked 6 September 2026'), findsOneWidget);
-    expect(
-      find.text('Street-level photo from Mapillary · Captured in 2020'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Mapillary'), findsNothing);
     expect(find.byTooltip('Open place information source'), findsOneWidget);
-    expect(find.byTooltip('Open photo source'), findsOneWidget);
+    expect(find.byTooltip('Open photo source'), findsNothing);
     expect(find.textContaining('capacity:'), findsNothing);
     expect(find.textContaining('access: yes'), findsNothing);
     expect(find.textContaining('operator:'), findsNothing);
@@ -294,6 +291,51 @@ void main() {
     );
 
     expect(find.text('Charging details'), findsNothing);
+  });
+
+  testWidgets('transport photo is labelled as representative', (tester) async {
+    final station = EcoPartner(
+      id: 'stop:representative',
+      name: 'Central LRT station',
+      category: EcoPartnerCategory.transport,
+      subtype: 'LRT',
+      latitude: 3.14,
+      longitude: 101.69,
+      address: 'Kuala Lumpur',
+      sustainabilityLabel: 'LRT public transport',
+      evidence: 'Official public transport stop.',
+      sourceName: 'Official Malaysia GTFS',
+      sourceUrl: 'https://example.com/feed',
+      lastUpdated: DateTime(2026, 9, 9),
+      imageSourceName:
+          'Representative LRT image · A2613 · CC BY-SA 4.0 · cropped/compressed',
+      imageSourceUrl:
+          'https://commons.wikimedia.org/wiki/File:LRT_Kuala_Lumpur.jpg',
+      imageCapturedAt: DateTime(2024, 8, 9),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EcoPartnerDetailScreen(
+          partner: station,
+          destinationLabel: 'Kuala Lumpur',
+        ),
+      ),
+    );
+    await tester.scrollUntilVisible(
+      find.text('Source & freshness'),
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(
+      find.text(
+        'Representative LRT image · A2613 · CC BY-SA 4.0 · '
+        'cropped/compressed · Captured in 2024',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Open photo source'), findsOneWidget);
   });
 
   testWidgets('legacy in-memory charger metadata still renders', (

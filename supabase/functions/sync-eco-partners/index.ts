@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { cacheMapillaryMetadata, cacheWikimediaMetadata } from "./image_metadata.ts";
+import { cacheWikimediaMetadata } from "./wikimedia_metadata.ts";
 import { parseOverpassElements, type OverpassElement } from "./osm_parser.ts";
 
 const mirrors = [
@@ -56,11 +56,7 @@ Deno.serve(async (request) => {
   try {
     const elements = await loadState(region.iso_code);
     const parsed = parseOverpassElements(elements);
-    const wikimediaRows = await cacheWikimediaMetadata(parsed);
-    const rows = await cacheMapillaryMetadata(
-      wikimediaRows,
-      Deno.env.get("MAPILLARY_ACCESS_TOKEN")?.trim(),
-    );
+    const rows = await cacheWikimediaMetadata(parsed);
     const { data: count, error: replaceError } = await client.rpc("replace_eco_partner_region", {
       p_source: "osm",
       p_state: region.state,

@@ -209,7 +209,7 @@ class EcoPartnerRepository
     EcoPartnerSearchScope scope = const EcoPartnerSearchScope.nearby(10),
   }) async => value;
 
-  static EcoPartner _mapRow(Map<String, dynamic> row) {
+  EcoPartner _mapRow(Map<String, dynamic> row) {
     final transitRoutes = (row['transit_routes'] as List? ?? const [])
         .whereType<Map>()
         .map(
@@ -221,6 +221,14 @@ class EcoPartnerRepository
         )
         .toList(growable: false);
     final chargingValue = row['charging_details'];
+    final rawImageUrl = _nullableText(row['image_url']);
+    final rawImageSourceName = _nullableText(row['image_source_name']);
+    final rawImageSourceUrl = _nullableText(row['image_source_url']);
+    final legacyMapillary = ecoPartnerImageIsLegacyMapillary(
+      imageUrl: rawImageUrl,
+      imageSourceName: rawImageSourceName,
+      imageSourceUrl: rawImageSourceUrl,
+    );
     return EcoPartner(
       id: '${row['id']}',
       name: '${row['name']}',
@@ -243,10 +251,23 @@ class EcoPartnerRepository
           DateTime.now(),
       priceBand: _nullableText(row['price_band']),
       website: _nullableText(row['website']),
-      imageUrl: _nullableText(row['image_url']),
-      imageSourceName: _nullableText(row['image_source_name']),
-      imageSourceUrl: _nullableText(row['image_source_url']),
-      imageCapturedAt: DateTime.tryParse('${row['image_captured_at'] ?? ''}'),
+      imageUrl: _resolveImageUrl(
+        ecoPartnerSafeImageValue(
+          rawImageUrl,
+          isLegacyMapillary: legacyMapillary,
+        ),
+      ),
+      imageSourceName: ecoPartnerSafeImageValue(
+        rawImageSourceName,
+        isLegacyMapillary: legacyMapillary,
+      ),
+      imageSourceUrl: ecoPartnerSafeImageValue(
+        rawImageSourceUrl,
+        isLegacyMapillary: legacyMapillary,
+      ),
+      imageCapturedAt: legacyMapillary
+          ? null
+          : DateTime.tryParse('${row['image_captured_at'] ?? ''}'),
       transitRoutes: transitRoutes,
       veganClassification: _nullableText(row['vegan_classification']),
       chargingDetails: chargingValue is Map
@@ -254,6 +275,21 @@ class EcoPartnerRepository
           : null,
       gstcVerified: row['gstc_verified'] == true,
     );
+  }
+
+  String? _resolveImageUrl(String? value) {
+    if (value == null || !value.startsWith('storage://')) return value;
+    final uri = Uri.tryParse(value);
+    if (uri == null || uri.host.isEmpty || uri.pathSegments.isEmpty) {
+      return null;
+    }
+    try {
+      return _client.storage
+          .from(uri.host)
+          .getPublicUrl(uri.pathSegments.join('/'));
+    } catch (_) {
+      return null;
+    }
   }
 
   static String? _nullableText(Object? value) {

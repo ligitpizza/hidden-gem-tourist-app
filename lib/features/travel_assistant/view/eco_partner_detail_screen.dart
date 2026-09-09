@@ -10,6 +10,7 @@ import '../../../shared/widgets/app_header.dart';
 import '../model/eco_partner.dart';
 import '../model/eco_partner_routing_service.dart';
 import '../model/saved_eco_partners_store.dart';
+import 'widgets/eco_partner_image.dart';
 import 'widgets/transit_mode_icon.dart';
 
 class EcoPartnerDetailScreen extends StatelessWidget {
@@ -163,7 +164,12 @@ class EcoPartnerDetailScreen extends StatelessWidget {
                 icon: Icons.update_outlined,
                 text: 'Last checked ${_date(partner.lastUpdated)}',
               ),
-              if (partner.imageSourceName?.isNotEmpty == true) ...[
+              if (!ecoPartnerImageIsLegacyMapillary(
+                    imageUrl: partner.imageUrl,
+                    imageSourceName: partner.imageSourceName,
+                    imageSourceUrl: partner.imageSourceUrl,
+                  ) &&
+                  partner.imageSourceName?.isNotEmpty == true) ...[
                 _InformationRow(
                   icon: Icons.photo_outlined,
                   text: _imageSourceLabel,
@@ -209,25 +215,13 @@ class EcoPartnerDetailScreen extends StatelessWidget {
     aspectRatio: 16 / 9,
     child: ClipRRect(
       borderRadius: BorderRadius.circular(18),
-      child: partner.imageUrl?.isNotEmpty == true
-          ? Image.network(
-              partner.imageUrl!,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => _heroFallback(context),
-            )
-          : _heroFallback(context),
-    ),
-  );
-
-  Widget _heroFallback(BuildContext context) => DecoratedBox(
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFFD9EEE4), Color(0xFF356B55)],
+      child: EcoPartnerImage(
+        partner: partner,
+        cacheWidth: 1200,
+        borderRadius: BorderRadius.circular(18),
+        placeholderIconSize: 72,
       ),
     ),
-    child: Center(child: Icon(_categoryIcon, size: 72, color: Colors.white)),
   );
 
   Widget _section(
@@ -296,8 +290,8 @@ class EcoPartnerDetailScreen extends StatelessWidget {
   String get _imageSourceLabel {
     final source = partner.imageSourceName!.trim();
     final lower = source.toLowerCase();
-    final label = lower.contains('mapillary')
-        ? 'Street-level photo from Mapillary'
+    final label = lower.startsWith('representative')
+        ? source
         : lower.startsWith('photo:')
         ? 'Photo by ${source.substring('photo:'.length).trim()}'
         : 'Photo from $source';

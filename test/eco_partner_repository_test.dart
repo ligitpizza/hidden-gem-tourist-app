@@ -79,11 +79,78 @@ void main() {
     expect(result.partners.single.chargingDetails?.capacity, 4);
     expect(result.partners.single.distanceKm, isNull);
   });
+
+  test('resolves a Supabase Storage preview reference', () async {
+    final client = SupabaseClient(
+      'https://example.supabase.co',
+      'test-key',
+      httpClient: MockClient(
+        (request) async => http.Response(
+          jsonEncode([
+            _row(
+              totalCount: 1,
+              distanceKm: null,
+              imageUrl: 'storage://eco-partner-previews/transport/lrt.webp',
+              imageSourceName: 'Representative LRT image · A2613',
+            ),
+          ]),
+          200,
+          headers: {'content-type': 'application/json'},
+          request: request,
+        ),
+      ),
+    );
+
+    final result = await EcoPartnerRepository(
+      client: client,
+    ).searchByName('LRT');
+
+    expect(
+      result.partners.single.imageUrl,
+      'https://example.supabase.co/storage/v1/object/public/'
+      'eco-partner-previews/transport/lrt.webp',
+    );
+  });
+
+  test('ignores legacy Mapillary image metadata', () async {
+    final client = SupabaseClient(
+      'https://example.supabase.co',
+      'test-key',
+      httpClient: MockClient(
+        (request) async => http.Response(
+          jsonEncode([
+            _row(
+              totalCount: 1,
+              distanceKm: null,
+              imageUrl: 'https://legacy-street-images.invalid/example.jpg',
+              imageSourceName: 'Nearby street-level image · Mapillary',
+              imageSourceUrl: 'https://legacy-street-images.invalid/photo/1',
+            ),
+          ]),
+          200,
+          headers: {'content-type': 'application/json'},
+          request: request,
+        ),
+      ),
+    );
+
+    final partner = (await EcoPartnerRepository(
+      client: client,
+    ).searchByName('Station')).partners.single;
+
+    expect(partner.imageUrl, isNull);
+    expect(partner.imageSourceName, isNull);
+    expect(partner.imageSourceUrl, isNull);
+    expect(partner.imageCapturedAt, isNull);
+  });
 }
 
 Map<String, dynamic> _row({
   required int totalCount,
   required double? distanceKm,
+  String imageUrl = 'https://upload.wikimedia.org/photo.jpg',
+  String imageSourceName = 'Photo: Example · CC BY 4.0',
+  String imageSourceUrl = 'https://commons.wikimedia.org/wiki/File:Photo.jpg',
 }) => {
   'id': 'osm:node:10',
   'name': 'Green Cafe',
@@ -98,9 +165,9 @@ Map<String, dynamic> _row({
   'source_name': 'OpenStreetMap contributors',
   'source_url': 'https://www.openstreetmap.org/node/10',
   'source_updated_at': '2026-09-09T00:00:00Z',
-  'image_url': 'https://upload.wikimedia.org/photo.jpg',
-  'image_source_name': 'Photo: Example · CC BY 4.0',
-  'image_source_url': 'https://commons.wikimedia.org/wiki/File:Photo.jpg',
+  'image_url': imageUrl,
+  'image_source_name': imageSourceName,
+  'image_source_url': imageSourceUrl,
   'transit_routes': <dynamic>[],
   'vegan_classification': 'Vegan',
   'charging_details': {
