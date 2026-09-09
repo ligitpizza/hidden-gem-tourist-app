@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
 
 import '../../../core/router/shell_routes.dart';
 import '../../../shared/widgets/app_header.dart';
@@ -23,6 +21,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
   final _scrollController = ScrollController();
+  final _resultsAnchorKey = GlobalKey();
   bool _showingHomeSectionResults = false;
 
   @override
@@ -110,7 +109,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
             textEditingController: _search,
             focusNode: _searchFocus,
             displayStringForOption: (partner) => partner.name,
-            optionsBuilder: (value) => _controller.suggestionsFor(value.text),
+            optionsBuilder: (value) => _controller.loadSuggestions(value.text),
             onSelected: _selectSuggestion,
             fieldViewBuilder:
                 (context, textController, focusNode, onFieldSubmitted) =>
@@ -255,9 +254,13 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          if (_controller.isLoading)
+          if (_controller.isLoading && _controller.result == null)
             ...List.generate(3, (_) => const _LoadingCard()),
-          if (!_controller.isLoading && _controller.error != null)
+          if (_controller.isLoading && _controller.result != null) ...[
+            const LinearProgressIndicator(minHeight: 2),
+            const SizedBox(height: 10),
+          ],
+          if (_controller.error != null)
             _Message(
               Icons.cloud_off,
               _controller.error!,
@@ -266,19 +269,24 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
                   ? () => _controller.loadInitialRecommendations(refresh: true)
                   : () => _find(refresh: true),
             ),
-          if (!_controller.isLoading && _controller.result != null) ...[
+          if (_controller.notice != null) ...[
+            Card(
+              color: const Color(0xFFFFF5D6),
+              child: ListTile(
+                leading: const Icon(Icons.cloud_off_outlined),
+                title: Text(_controller.notice!),
+                trailing: TextButton(
+                  onPressed: _controller.isLoading ? null : _retry,
+                  child: const Text('Retry'),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (_controller.result != null) ...[
             if (_controller.isExplicitSearch) ...[
               _SearchScopeNotice(radiusKm: _controller.activeNearbyRadius),
               const SizedBox(height: 10),
-            ],
-            if (_controller.isLoadingImages) ...[
-              const LinearProgressIndicator(minHeight: 2),
-              const SizedBox(height: 8),
-              Text(
-                'Recommendations ready · loading partner photos…',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 8),
             ],
             for (final warning in _controller.result!.warnings)
               Card(
@@ -295,6 +303,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
             if (showSectionedHome)
               _sectionedHome()
             else ...[
+              SizedBox(key: _resultsAnchorKey, height: 0),
               if (shown.isEmpty)
                 _Message(
                   Icons.eco_outlined,
@@ -305,16 +314,19 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
               if (shown.isNotEmpty) _resultsView(shown),
               if (_controller.totalPages > 1) ...[
                 const SizedBox(height: 4),
+                if (_controller.isLoading) ...[
+                  const LinearProgressIndicator(minHeight: 2),
+                  const SizedBox(height: 8),
+                ],
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     IconButton(
                       tooltip: 'Previous page',
-                      onPressed: _controller.currentPage == 0
+                      onPressed:
+                          _controller.isLoading || _controller.currentPage == 0
                           ? null
-                          : () => _controller.goToPage(
-                              _controller.currentPage - 1,
-                            ),
+                          : () => _changePage(_controller.currentPage - 1),
                       icon: const Icon(Icons.chevron_left),
                     ),
                     Text(
@@ -323,11 +335,11 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
                     IconButton(
                       tooltip: 'Next page',
                       onPressed:
-                          _controller.currentPage + 1 >= _controller.totalPages
+                          _controller.isLoading ||
+                              _controller.currentPage + 1 >=
+                                  _controller.totalPages
                           ? null
-                          : () => _controller.goToPage(
-                              _controller.currentPage + 1,
-                            ),
+                          : () => _changePage(_controller.currentPage + 1),
                       icon: const Icon(Icons.chevron_right),
                     ),
                   ],
@@ -364,10 +376,26 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
     ],
   );
 
-  void _showAllForHomeSection(EcoPartnerHomeSection section) {
+  Future<void> _showAllForHomeSection(EcoPartnerHomeSection section) async {
     setState(() => _showingHomeSectionResults = true);
-    _controller.showAllForHomeSection(section);
+    await _controller.showAllForHomeSection(section);
+    if (!mounted) return;
     if (_scrollController.hasClients) _scrollController.jumpTo(0);
+  }
+
+  Future<void> _changePage(int page) async {
+    final changed = await _controller.goToPage(page);
+    if (!mounted || !changed) return;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    final anchorContext = _resultsAnchorKey.currentContext;
+    if (anchorContext == null || !anchorContext.mounted) return;
+    await Scrollable.ensureVisible(
+      anchorContext,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      alignment: 0.02,
+    );
   }
 
   void _returnToSectionedHome() {
@@ -637,13 +665,12 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
       _search.clear();
       await _controller.clearSearch();
     }
-    _controller.selectFilter(value.filter);
-    _controller.selectSort(value.sort);
-    await _controller.applySearchArea(
-      mode: value.areaMode,
+    await _controller.applyFilters(
+      filter: value.filter,
+      areaMode: value.areaMode,
       radius: value.radius,
       state: value.state,
-      fallbackQuery: _search.text,
+      sort: value.sort,
       useCurrentLocation: value.useCurrentLocation,
     );
   }
@@ -846,6 +873,11 @@ class _HomePartnerCard extends StatelessWidget {
                       ? Image.network(
                           partner.imageUrl!,
                           fit: BoxFit.cover,
+                          cacheWidth: 420,
+                          loadingBuilder: (context, child, progress) =>
+                              progress == null
+                              ? child
+                              : _HomePartnerPlaceholder(partner: partner),
                           errorBuilder: (_, _, _) =>
                               _HomePartnerPlaceholder(partner: partner),
                         )
@@ -946,11 +978,16 @@ class _PartnerCard extends StatelessWidget {
                       child: Image.network(
                         partner.imageUrl!,
                         fit: BoxFit.cover,
+                        cacheWidth: 720,
+                        loadingBuilder: (context, child, progress) =>
+                            progress == null
+                            ? child
+                            : _HomePartnerPlaceholder(partner: partner),
                         errorBuilder: (_, _, _) =>
-                            _PartnerMapPreview(partner, icon: _icon),
+                            _HomePartnerPlaceholder(partner: partner),
                       ),
                     )
-                  : _PartnerMapPreview(partner, icon: _icon),
+                  : _HomePartnerPlaceholder(partner: partner),
             ),
             if (partner.imageSourceName != null) ...[
               const SizedBox(height: 5),
@@ -1004,14 +1041,6 @@ class _PartnerCard extends StatelessWidget {
       ),
     ),
   );
-  IconData get _icon => switch (partner.category) {
-    EcoPartnerCategory.stay => Icons.hotel_outlined,
-    EcoPartnerCategory.dining => Icons.restaurant_outlined,
-    EcoPartnerCategory.transport =>
-      partner.subtype == 'EV charging'
-          ? Icons.ev_station_outlined
-          : Icons.directions_transit_outlined,
-  };
 }
 
 class _PartnerGridCard extends StatelessWidget {
@@ -1065,6 +1094,11 @@ class _PartnerGridCard extends StatelessWidget {
                             child: Image.network(
                               partner.imageUrl!,
                               fit: BoxFit.cover,
+                              cacheWidth: dense ? 220 : 420,
+                              loadingBuilder: (context, child, progress) =>
+                                  progress == null
+                                  ? child
+                                  : _HomePartnerPlaceholder(partner: partner),
                               errorBuilder: (_, _, _) => Icon(
                                 _icon,
                                 color: const Color(0xFF07513C),
@@ -1105,10 +1139,13 @@ class _PartnerGridCard extends StatelessWidget {
             ),
             SizedBox(height: dense ? 2 : 4),
             Text(
-              showDistance
+              showDistance && partner.distanceKm != null
                   ? dense
-                        ? '${partner.distanceKm.toStringAsFixed(1)} km'
-                        : '${partner.subtype} · ${partner.distanceKm.toStringAsFixed(1)} km'
+                        ? ecoPartnerDistanceLabel(
+                            partner.distanceKm!,
+                            compact: true,
+                          )
+                        : '${partner.subtype} · ${ecoPartnerDistanceLabel(partner.distanceKm!, compact: true)}'
                   : dense
                   ? _partnerAddress(partner)
                   : '${partner.subtype} · ${_partnerAddress(partner)}',
@@ -1118,53 +1155,6 @@ class _PartnerGridCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    ),
-  );
-}
-
-class _PartnerMapPreview extends StatelessWidget {
-  const _PartnerMapPreview(this.partner, {required this.icon});
-  final EcoPartner partner;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(14),
-    child: IgnorePointer(
-      child: FlutterMap(
-        options: MapOptions(
-          initialCenter: LatLng(partner.latitude, partner.longitude),
-          initialZoom: 15,
-          interactionOptions: const InteractionOptions(
-            flags: InteractiveFlag.none,
-          ),
-        ),
-        children: [
-          TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.example.collab',
-          ),
-          MarkerLayer(
-            markers: [
-              Marker(
-                point: LatLng(partner.latitude, partner.longitude),
-                width: 38,
-                height: 38,
-                child: DecoratedBox(
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF0B684B),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 22),
-                ),
-              ),
-            ],
-          ),
-          const RichAttributionWidget(
-            attributions: [TextSourceAttribution('OpenStreetMap contributors')],
-          ),
-        ],
       ),
     ),
   );
@@ -1321,16 +1311,13 @@ IconData _homeSectionIcon(EcoPartnerHomeSection section) => switch (section) {
 };
 
 String _partnerAddress(EcoPartner partner) {
-  final address = partner.address.trim();
-  if (address.isNotEmpty) return address;
-  return partner.category == EcoPartnerCategory.transport
-      ? '${partner.name}, Malaysia'
-      : 'Address unavailable';
+  final location = ecoPartnerLocationLabel(partner);
+  return location.isEmpty ? 'Address unavailable' : location;
 }
 
 String _partnerLocationText(EcoPartner partner, {required bool showDistance}) =>
-    showDistance
-    ? '${partner.distanceKm.toStringAsFixed(1)} km away'
+    showDistance && partner.distanceKm != null
+    ? ecoPartnerDistanceLabel(partner.distanceKm!)
     : _partnerAddress(partner);
 
 IconData _partnerIcon(EcoPartner partner) => switch (partner.category) {

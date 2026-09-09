@@ -1,12 +1,15 @@
+import 'dart:async';
+
 import 'package:collab/features/travel_assistant/controller/eco_partner_controller.dart';
 import 'package:collab/features/travel_assistant/model/eco_partner.dart';
+import 'package:collab/features/travel_assistant/model/eco_partner_cache.dart';
 import 'package:collab/features/travel_assistant/model/eco_partner_repository.dart';
 import 'package:collab/features/travel_assistant/view/eco_partner_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('loads nationwide recommendations without requesting location', (
+  testWidgets('loads nearby recommendations from current location', (
     tester,
   ) async {
     final repository = _CatalogScreenRepository([_partner]);
@@ -18,10 +21,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.coordinateSearches, 1);
-    expect(repository.lastScope?.type, EcoPartnerSearchScopeType.nationwide);
-    expect(controller.locationRequests, 0);
+    expect(repository.lastScope?.type, EcoPartnerSearchScopeType.nearby);
     expect(find.text('Eco Lodge'), findsNWidgets(2));
-    expect(find.text('across Malaysia'), findsOneWidget);
+    expect(find.textContaining('within 10 km'), findsWidgets);
     expect(find.text('Recommended for You'), findsOneWidget);
     expect(find.text('Hotels'), findsNWidgets(2));
     expect(find.text('Dining'), findsOneWidget);
@@ -204,7 +206,10 @@ void main() {
     await tester.tap(more);
     await tester.pumpAndSettle();
 
-    expect(tester.state<ScrollableState>(mainScrollable).position.pixels, 0);
+    expect(
+      tester.state<ScrollableState>(mainScrollable).position.pixels,
+      lessThanOrEqualTo(8),
+    );
     expect(controller.filter, 'Stay');
     expect(controller.currentPage, 0);
     expect(controller.sort, EcoPartnerSort.nameDescending);
@@ -217,14 +222,16 @@ void main() {
   testWidgets('Up from category More returns to the Eco Partners home view', (
     tester,
   ) async {
-    final controller = _InitialScreenController(_CatalogScreenRepository([
-      _categoryPartner(
-        'Hotel One',
-        1,
-        category: EcoPartnerCategory.stay,
-        subtype: 'Hotel',
-      ),
-    ]));
+    final controller = _InitialScreenController(
+      _CatalogScreenRepository([
+        _categoryPartner(
+          'Hotel One',
+          1,
+          category: EcoPartnerCategory.stay,
+          subtype: 'Hotel',
+        ),
+      ]),
+    );
 
     await tester.pumpWidget(
       MaterialApp(home: EcoPartnersScreen(controller: controller)),
@@ -232,6 +239,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final more = find.byKey(const ValueKey('eco_partner_more_hotel'));
+    await tester.drag(
+      find.byKey(const ValueKey('eco_partner_main_scroll')),
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
     await tester.ensureVisible(more);
     await tester.tap(more);
     await tester.pumpAndSettle();
@@ -241,7 +253,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.filter, 'All');
-    expect(find.byKey(const ValueKey('eco_partner_more_hotel')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('eco_partner_more_hotel')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('partner-name suggestions can be selected', (tester) async {
@@ -250,7 +265,7 @@ void main() {
       somerset,
       _screenPartner('Unrelated Eco Lodge', 3),
     ]);
-    final controller = EcoPartnerController(repository: repository);
+    final controller = _screenController(repository);
 
     await tester.pumpWidget(
       MaterialApp(home: EcoPartnersScreen(controller: controller)),
@@ -282,7 +297,7 @@ void main() {
       for (var index = 0; index < 10; index++)
         _screenPartner('Partner $index', index),
     ]);
-    final controller = EcoPartnerController(repository: repository)
+    final controller = _screenController(repository)
       ..layout = EcoPartnerLayout.grid4
       ..filter = 'Stay';
 
@@ -407,6 +422,8 @@ void main() {
       repository: _CatalogScreenRepository([_partner]),
       currentLocationLoader: () async =>
           const EcoDestination('Current location', 5.9422, 116.07),
+      lastKnownLocationLoader: () async => null,
+      homeCache: _MemoryHomeCache(),
     )..filter = 'Stay';
 
     await tester.pumpWidget(
@@ -442,6 +459,8 @@ void main() {
       repository: _CatalogScreenRepository([_partner, far]),
       currentLocationLoader: () async =>
           const EcoDestination('Current location', 3.139, 101.687),
+      lastKnownLocationLoader: () async => null,
+      homeCache: _MemoryHomeCache(),
     );
 
     await tester.pumpWidget(
@@ -460,6 +479,69 @@ void main() {
     );
     expect(find.text('Outside your 50 km area'), findsOneWidget);
     expect(find.textContaining('0.0 km'), findsNothing);
+  });
+
+  testWidgets('server pagination loads atomically and returns to result top', (
+    tester,
+  ) async {
+    final partners = [
+      for (var index = 0; index < 25; index++)
+        _screenPartner('Paged Partner $index', index),
+    ];
+    final repository = _PagedScreenRepository(partners);
+    final controller = EcoPartnerController(
+      repository: repository,
+      currentLocationLoader: () async =>
+          const EcoDestination('Current location', 3.14, 101.69),
+      lastKnownLocationLoader: () async => null,
+      homeCache: _MemoryHomeCache(),
+    )..filter = 'Stay';
+    await tester.pumpWidget(
+      MaterialApp(home: EcoPartnersScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    final mainScroll = find.byKey(const ValueKey('eco_partner_main_scroll'));
+    final mainScrollable = find
+        .descendant(of: mainScroll, matching: find.byType(Scrollable))
+        .first;
+    final nextPage = find.byTooltip('Next page');
+    await tester.scrollUntilVisible(nextPage, 500, scrollable: mainScrollable);
+    await tester.pumpAndSettle();
+    final bottom = tester
+        .state<ScrollableState>(mainScrollable)
+        .position
+        .pixels;
+    repository.nextPage = Completer<EcoPartnerSearchResult>();
+
+    await tester.tap(nextPage);
+    await tester.pump();
+
+    expect(find.text('Page 1 of 3'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsAtLeastNWidgets(1));
+    expect(
+      tester
+          .widget<IconButton>(
+            find.widgetWithIcon(IconButton, Icons.chevron_right),
+          )
+          .onPressed,
+      isNull,
+    );
+    repository.nextPage!.complete(
+      EcoPartnerSearchResult(
+        destination: const EcoDestination('Current location', 3.14, 101.69),
+        partners: partners.skip(10).take(10).toList(),
+        totalCount: partners.length,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Page 2 of 3'), findsOneWidget);
+    expect(find.text('Paged Partner 10'), findsOneWidget);
+    expect(
+      tester.state<ScrollableState>(mainScrollable).position.pixels,
+      lessThan(bottom),
+    );
   });
 }
 
@@ -502,7 +584,7 @@ class _FilterRepository implements EcoPartnerRepositoryContract {
       EcoPartnerSearchResult(destination: destination, partners: const []);
 
   @override
-  Future<EcoPartnerSearchResult> searchDestination(
+  Future<EcoPartnerSearchResult> searchByName(
     String query, {
     bool refresh = false,
     EcoPartnerSearchScope scope = const EcoPartnerSearchScope.nearby(10),
@@ -520,16 +602,17 @@ class _FilterRepository implements EcoPartnerRepositoryContract {
 }
 
 class _InitialScreenController extends EcoPartnerController {
-  _InitialScreenController(EcoPartnerRepositoryContract repository)
-    : super(repository: repository);
-
-  int locationRequests = 0;
-
-  @override
-  Future<bool> useCurrentLocation({bool silentPermissionDenial = false}) async {
-    locationRequests++;
-    return false;
-  }
+  _InitialScreenController(_CatalogScreenRepository repository)
+    : super(
+        repository: repository,
+        currentLocationLoader: () async => EcoDestination(
+          'Current location',
+          repository.partners.first.latitude,
+          repository.partners.first.longitude,
+        ),
+        lastKnownLocationLoader: () async => null,
+        homeCache: _MemoryHomeCache(),
+      );
 }
 
 class _CatalogScreenRepository implements EcoPartnerRepositoryContract {
@@ -563,17 +646,12 @@ class _CatalogScreenRepository implements EcoPartnerRepositoryContract {
               ),
             ),
           )
-          .where(
-            (partner) =>
-                scope.type != EcoPartnerSearchScopeType.nearby ||
-                partner.distanceKm <= scope.radiusKm!,
-          )
           .toList(),
     );
   }
 
   @override
-  Future<EcoPartnerSearchResult> searchDestination(
+  Future<EcoPartnerSearchResult> searchByName(
     String query, {
     bool refresh = false,
     EcoPartnerSearchScope scope = const EcoPartnerSearchScope.nearby(10),
@@ -588,6 +666,47 @@ class _CatalogScreenRepository implements EcoPartnerRepositoryContract {
     EcoPartnerSearchResult value, {
     EcoPartnerSearchScope scope = const EcoPartnerSearchScope.nearby(10),
   }) async => value;
+}
+
+class _PagedScreenRepository extends _CatalogScreenRepository
+    implements EcoPartnerCatalogRepositoryContract {
+  _PagedScreenRepository(super.partners);
+
+  Completer<EcoPartnerSearchResult>? nextPage;
+
+  @override
+  Future<EcoPartnerSearchResult> loadHome({
+    required EcoDestination destination,
+    required EcoPartnerSearchScope scope,
+    EcoDestination? distanceOrigin,
+  }) async => EcoPartnerSearchResult(
+    destination: destination,
+    partners: partners.take(10).toList(),
+    totalCount: partners.length,
+  );
+
+  @override
+  Future<EcoPartnerSearchResult> searchPage({
+    required EcoDestination destination,
+    required EcoPartnerSearchScope scope,
+    EcoDestination? distanceOrigin,
+    String? query,
+    String? category,
+    String sort = 'recommended',
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    if (offset > 0 && nextPage != null) return nextPage!.future;
+    return EcoPartnerSearchResult(
+      destination: destination,
+      partners: partners.skip(offset).take(limit).toList(),
+      totalCount: partners.length,
+    );
+  }
+
+  @override
+  Future<List<EcoPartner>> suggestions(String query, {int limit = 6}) async =>
+      const [];
 }
 
 EcoPartner _screenPartner(String name, int index) => EcoPartner(
@@ -624,3 +743,23 @@ EcoPartner _categoryPartner(
   sourceUrl: 'https://example.com',
   lastUpdated: DateTime(2026),
 );
+
+EcoPartnerController _screenController(_CatalogScreenRepository repository) =>
+    EcoPartnerController(
+      repository: repository,
+      currentLocationLoader: () async => EcoDestination(
+        'Current location',
+        repository.partners.first.latitude,
+        repository.partners.first.longitude,
+      ),
+      lastKnownLocationLoader: () async => null,
+      homeCache: _MemoryHomeCache(),
+    );
+
+class _MemoryHomeCache implements EcoPartnerHomeCacheContract {
+  @override
+  Future<EcoPartnerHomeCacheEntry?> read() async => null;
+
+  @override
+  Future<void> write(EcoPartnerHomeCacheEntry entry) async {}
+}

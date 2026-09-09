@@ -384,7 +384,8 @@ class EcoPartner {
     required this.sourceName,
     required this.sourceUrl,
     required this.lastUpdated,
-    this.distanceKm = 0,
+    this.state,
+    this.distanceKm,
     this.priceBand,
     this.website,
     this.imageUrl,
@@ -405,7 +406,8 @@ class EcoPartner {
   final double latitude;
   final double longitude;
   final String address;
-  final double distanceKm;
+  final String? state;
+  final double? distanceKm;
   final String sustainabilityLabel;
   final String evidence;
   final String sourceName;
@@ -434,7 +436,7 @@ class EcoPartner {
     return parsed.hasUsefulDetails ? parsed : null;
   }
 
-  EcoPartner withDistance(double value) => EcoPartner(
+  EcoPartner withDistance(double? value) => EcoPartner(
     id: id,
     name: name,
     category: category,
@@ -442,6 +444,7 @@ class EcoPartner {
     latitude: latitude,
     longitude: longitude,
     address: address,
+    state: state,
     distanceKm: value,
     sustainabilityLabel: sustainabilityLabel,
     evidence: evidence,
@@ -474,6 +477,7 @@ class EcoPartner {
     latitude: latitude,
     longitude: longitude,
     address: address,
+    state: state,
     distanceKm: distanceKm,
     sustainabilityLabel: sustainabilityLabel,
     evidence: evidence,
@@ -494,6 +498,84 @@ class EcoPartner {
   );
 }
 
+String ecoPartnerDistanceLabel(double distanceKm, {bool compact = false}) {
+  if (distanceKm < 0.1) return compact ? '<100 m' : '<100 m away';
+  if (distanceKm < 1) {
+    final metres = (distanceKm * 1000).round();
+    return compact ? '$metres m' : '$metres m away';
+  }
+  final kilometres = '${distanceKm.toStringAsFixed(1)} km';
+  return compact ? kilometres : '$kilometres away';
+}
+
+String ecoPartnerLocationLabel(EcoPartner partner) {
+  final address = partner.address.trim();
+  final state = partner.state?.trim() ?? '';
+  final values = <String>[
+    if (address.isNotEmpty) address,
+    if (address.isEmpty && partner.category == EcoPartnerCategory.transport)
+      partner.name.trim(),
+    if (state.isNotEmpty) state,
+    'Malaysia',
+  ];
+  final normalized = <String>{};
+  return values
+      .where((value) {
+        final key = value.toLowerCase();
+        if (key.isEmpty || normalized.contains(key)) return false;
+        if (normalized.any(
+          (existing) =>
+              existing.split(',').map((part) => part.trim()).contains(key),
+        )) {
+          return false;
+        }
+        normalized.add(key);
+        return true;
+      })
+      .join(', ');
+}
+
+bool ecoPartnerHasPartialAddress(EcoPartner partner) {
+  final address = partner.address.trim();
+  return partner.sourceName.toLowerCase().contains('gtfs') &&
+      address.isNotEmpty &&
+      !address.contains(',');
+}
+
+String ecoPartnerEvidenceLabel(EcoPartner partner) {
+  final evidence = partner.evidence.trim();
+  final normalized = evidence.toLowerCase();
+  if (normalized == 'openstreetmap diet:vegan tag') {
+    return 'Listed as vegan-friendly.';
+  }
+  if (normalized == 'openstreetmap diet:vegetarian tag') {
+    return 'Listed as vegetarian-friendly.';
+  }
+  if (normalized == 'openstreetmap charging station tags') {
+    return 'Listed as an electric vehicle charging station.';
+  }
+  if (normalized == 'official gtfs stop') {
+    return 'Official public transport stop.';
+  }
+  if (normalized.startsWith('routes:')) {
+    final routes = evidence.substring(evidence.indexOf(':') + 1).trim();
+    return routes.isEmpty
+        ? 'Scheduled public transport service is available.'
+        : 'Scheduled services include: $routes';
+  }
+  if (evidence.isNotEmpty) return evidence;
+  return switch (partner.category) {
+    EcoPartnerCategory.stay =>
+      'Sustainability information is available from the listed source.',
+    EcoPartnerCategory.dining =>
+      'Plant-friendly information is available from the listed source.',
+    EcoPartnerCategory.transport when partner.subtype == 'EV charging' =>
+      'Electric vehicle charging information is available from the listed source.',
+    EcoPartnerCategory.transport =>
+      'Public transport information is available from the listed source.',
+  };
+}
+
 class EcoDestination {
   const EcoDestination(this.label, this.latitude, this.longitude);
   final String label;
@@ -506,8 +588,11 @@ class EcoPartnerSearchResult {
     required this.destination,
     required this.partners,
     this.warnings = const [],
-  });
+    int? totalCount,
+  }) : _totalCount = totalCount;
   final EcoDestination destination;
   final List<EcoPartner> partners;
   final List<String> warnings;
+  final int? _totalCount;
+  int get totalCount => _totalCount ?? partners.length;
 }

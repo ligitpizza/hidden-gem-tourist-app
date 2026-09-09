@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../model/eco_partner.dart';
+import '../model/eco_partner_cache.dart';
 import '../model/eco_partner_repository.dart';
 
 enum EcoPartnerLayout { list, grid2, grid4 }
@@ -13,18 +14,29 @@ enum EcoPartnerSort { recommended, nameAscending, nameDescending }
 enum EcoPartnerHomeSection { recommended, hotel, dining, transport, ev }
 
 typedef EcoCurrentLocationLoader = Future<EcoDestination> Function();
+typedef EcoLastKnownLocationLoader = Future<EcoDestination?> Function();
 
 /// Coordinates Eco Partner searches and exposes presentation-ready state.
 class EcoPartnerController extends ChangeNotifier {
   EcoPartnerController({
     EcoPartnerRepositoryContract? repository,
     EcoCurrentLocationLoader? currentLocationLoader,
+    EcoLastKnownLocationLoader? lastKnownLocationLoader,
+    EcoPartnerHomeCacheContract? homeCache,
+    DateTime Function()? now,
   }) : _repository = repository ?? EcoPartnerRepository(),
        _currentLocationLoader =
-           currentLocationLoader ?? _loadDeviceCurrentLocation;
+           currentLocationLoader ?? _loadDeviceCurrentLocation,
+       _lastKnownLocationLoader =
+           lastKnownLocationLoader ?? _loadDeviceLastKnownLocation,
+       _homeCache = homeCache ?? SharedPreferencesEcoPartnerHomeCache(),
+       _now = now ?? DateTime.now;
 
   final EcoPartnerRepositoryContract _repository;
   final EcoCurrentLocationLoader _currentLocationLoader;
+  final EcoLastKnownLocationLoader _lastKnownLocationLoader;
+  final EcoPartnerHomeCacheContract _homeCache;
+  final DateTime Function() _now;
 
   EcoPartnerSearchResult? result;
   String filter = 'All';
@@ -33,8 +45,8 @@ class EcoPartnerController extends ChangeNotifier {
   EcoPartnerSort sort = EcoPartnerSort.recommended;
   double radiusSelection = 10;
   String? error;
+  String? notice;
   bool isLoading = false;
-  bool isLoadingImages = false;
   EcoPartnerLayout layout = EcoPartnerLayout.list;
   int currentPage = 0;
   int _requestId = 0;
@@ -44,11 +56,15 @@ class EcoPartnerController extends ChangeNotifier {
   _EcoPartnerBrowseSnapshot? _browseSnapshot;
   EcoPartnerSearchResult? _latestBrowseResult;
   bool _isExplicitSearch = false;
+  bool _serverPageActive = false;
+  int _serverTotalCount = 0;
   String activeSearchTerm = '';
   static const standardPageSize = 10;
   static const compactPageSize = 8;
   static const suggestionLimit = 6;
   static const homeSectionLimit = 8;
+  static const _homeCacheLifetime = Duration(hours: 24);
+  static const _homeCacheOriginToleranceKm = 5.0;
 
   int get effectivePageSize =>
       layout == EcoPartnerLayout.grid4 ? compactPageSize : standardPageSize;
@@ -61,10 +77,11 @@ class EcoPartnerController extends ChangeNotifier {
   };
   bool get isExplicitSearch => _isExplicitSearch;
   bool get isUsingCurrentLocation =>
-      !_isExplicitSearch && result?.destination.label == 'Current location';
+      !_isExplicitSearch && _userLocation != null;
   bool get hasUserLocation => _userLocation != null;
   bool get showsUserDistance =>
-      _userLocation != null && (_isExplicitSearch || isUsingCurrentLocation);
+      _userLocation != null &&
+      (result?.partners.any((partner) => partner.distanceKm != null) ?? false);
   double? get activeNearbyRadius {
     final mode = _browseSnapshot?.areaMode ?? areaMode;
     if (mode != EcoPartnerAreaMode.nearby) return null;
@@ -73,10 +90,12 @@ class EcoPartnerController extends ChangeNotifier {
 
   bool isOutsideBrowseRadius(EcoPartner partner) {
     final radius = activeNearbyRadius;
+    final distance = partner.distanceKm;
     return _isExplicitSearch &&
         _userLocation != null &&
         radius != null &&
-        partner.distanceKm > radius;
+        distance != null &&
+        distance > radius;
   }
 
   String get scopeLabel => _isExplicitSearch
@@ -135,6 +154,7 @@ class EcoPartnerController extends ChangeNotifier {
 
   List<EcoPartner> get visiblePartners {
     final values = filteredPartners;
+    if (_serverPageActive) return values;
     final start = currentPage * effectivePageSize;
     if (start >= values.length) return const [];
     final end = start + effectivePageSize > values.length
@@ -143,7 +163,10 @@ class EcoPartnerController extends ChangeNotifier {
     return values.sublist(start, end);
   }
 
-  int get totalPages => (filteredPartners.length / effectivePageSize).ceil();
+  int get totalPages =>
+      ((_serverPageActive ? _serverTotalCount : filteredPartners.length) /
+              effectivePageSize)
+          .ceil();
 
   bool get showSectionedHome =>
       !_isExplicitSearch && activeSearchTerm.trim().isEmpty && filter == 'All';
@@ -172,7 +195,7 @@ class EcoPartnerController extends ChangeNotifier {
     return partners.take(homeSectionLimit).toList();
   }
 
-  void showAllForHomeSection(EcoPartnerHomeSection section) {
+  Future<void> showAllForHomeSection(EcoPartnerHomeSection section) async {
     final targetFilter = switch (section) {
       EcoPartnerHomeSection.hotel => 'Stay',
       EcoPartnerHomeSection.dining => 'Dining',
@@ -180,7 +203,11 @@ class EcoPartnerController extends ChangeNotifier {
       EcoPartnerHomeSection.ev => 'EV Charging',
       EcoPartnerHomeSection.recommended => null,
     };
-    if (targetFilter != null) selectFilter(targetFilter);
+    if (targetFilter == null) return;
+    filter = targetFilter;
+    currentPage = 0;
+    notifyListeners();
+    await _loadCatalogPage();
   }
 
   List<EcoPartner> _diversifiedRecommendations(List<EcoPartner> ranked) {
@@ -268,35 +295,107 @@ class EcoPartnerController extends ChangeNotifier {
     return suggestions.take(suggestionLimit).toList();
   }
 
+  Future<List<EcoPartner>> loadSuggestions(String query) async {
+    final clean = query.trim();
+    if (clean.length < 2) return const [];
+    final repository = _repository;
+    if (repository is EcoPartnerCatalogRepositoryContract) {
+      final catalogRepository =
+          repository as EcoPartnerCatalogRepositoryContract;
+      try {
+        return await catalogRepository.suggestions(
+          clean,
+          limit: suggestionLimit,
+        );
+      } catch (_) {
+        return suggestionsFor(clean);
+      }
+    }
+    return suggestionsFor(clean);
+  }
+
   Future<void> loadInitialRecommendations({bool refresh = false}) async {
     final requestId = ++_requestId;
     activeSearchTerm = '';
     _isExplicitSearch = false;
     _browseSnapshot = null;
-    areaMode = EcoPartnerAreaMode.statewide;
+    areaMode = EcoPartnerAreaMode.nearby;
     stateFilter = 'All Malaysia';
+    radiusSelection = 10;
     currentPage = 0;
-    result = null;
-    _beginRequest();
+    if (refresh) result = null;
+    _beginRequest(preserveResult: !refresh);
+
+    final cacheFuture = refresh
+        ? Future<EcoPartnerHomeCacheEntry?>.value(null)
+        : _homeCache.read();
+    final lastKnownFuture = _lastKnownLocationLoader();
+    EcoPartnerHomeCacheEntry? cached;
+    EcoDestination? lastKnown;
     try {
-      final initial = await _repository.searchCoordinates(
-        const EcoDestination('Malaysia', 4.2105, 101.9758),
-        refresh: refresh,
-        scope: const EcoPartnerSearchScope.nationwide(),
-        includeImages: false,
+      cached = await cacheFuture;
+      lastKnown = await lastKnownFuture;
+      if (requestId != _requestId) return;
+      if (_isUsableHomeCache(cached, lastKnown)) {
+        _userLocation = lastKnown;
+        _acceptBrowseResult(
+          EcoPartnerSearchResult(
+            destination: lastKnown!,
+            partners: cached!.partners,
+          ),
+          cacheAsInitial: true,
+        );
+        notifyListeners();
+      }
+
+      EcoDestination currentLocation;
+      try {
+        currentLocation = await _currentLocationLoader();
+      } catch (_) {
+        if (requestId != _requestId) return;
+        areaMode = EcoPartnerAreaMode.statewide;
+        _userLocation = null;
+        const malaysia = EcoDestination('Malaysia', 4.2105, 101.9758);
+        final nationwide = await _loadHome(
+          destination: malaysia,
+          scope: const EcoPartnerSearchScope.nationwide(),
+        );
+        if (requestId != _requestId) return;
+        _acceptBrowseResult(nationwide, cacheAsInitial: true);
+        return;
+      }
+
+      final nearby = await _loadHome(
+        destination: currentLocation,
+        distanceOrigin: currentLocation,
+        scope: EcoPartnerSearchScope.nearby(radiusSelection),
       );
-      result = initial;
-      _initialResult = initial;
-      _latestBrowseResult = initial;
-      _suggestionCatalog = List.unmodifiable(initial.partners);
-      _finishRequest();
-      _loadImages(requestId, cacheAsInitial: true);
-    } on EcoSearchException catch (exception) {
-      error = exception.message;
+      if (requestId != _requestId) return;
+      _userLocation = currentLocation;
+      _acceptBrowseResult(nearby, cacheAsInitial: true);
+      try {
+        await _homeCache.write(
+          EcoPartnerHomeCacheEntry(
+            partners: nearby.partners,
+            origin: currentLocation,
+            radiusKm: radiusSelection,
+            fetchedAt: _now(),
+          ),
+        );
+      } catch (_) {
+        // A cache failure must never hide fresh catalogue results.
+      }
     } catch (_) {
-      error = 'Could not load Eco Partner recommendations. Please retry.';
+      if (requestId != _requestId) return;
+      if (result != null) {
+        notice =
+            'Showing saved Eco Partners. Fresh results are temporarily unavailable.';
+      } else {
+        error =
+            'We couldn’t load Eco Partner recommendations. Please try again.';
+      }
     } finally {
-      if (isLoading) _finishRequest();
+      if (requestId == _requestId && isLoading) _finishRequest();
     }
   }
 
@@ -320,14 +419,37 @@ class EcoPartnerController extends ChangeNotifier {
     currentPage = 0;
     _beginRequest();
     try {
-      final catalogResult = await _nationwideCatalogForSearch(refresh: refresh);
+      final repository = _repository;
+      final catalogResult = repository is EcoPartnerCatalogRepositoryContract
+          ? await (repository as EcoPartnerCatalogRepositoryContract)
+                .searchPage(
+                  destination: const EcoDestination(
+                    'Eco Partner name search',
+                    4.2105,
+                    101.9758,
+                  ),
+                  scope: const EcoPartnerSearchScope.nationwide(),
+                  distanceOrigin: _userLocation,
+                  query: clean,
+                  sort: _catalogSort,
+                  limit: effectivePageSize,
+                )
+          : await _repository.searchByName(
+              clean,
+              refresh: refresh,
+              scope: const EcoPartnerSearchScope.nationwide(),
+              includeImages: false,
+            );
       if (requestId != _requestId) return;
       final normalizedQuery = _normalize(clean);
-      final matches = catalogResult.partners
-          .where(
-            (partner) => _normalize(partner.name).contains(normalizedQuery),
-          )
-          .toList();
+      final matches = repository is EcoPartnerCatalogRepositoryContract
+          ? catalogResult.partners
+          : catalogResult.partners
+                .where(
+                  (partner) =>
+                      _normalize(partner.name).contains(normalizedQuery),
+                )
+                .toList();
       result = EcoPartnerSearchResult(
         destination: const EcoDestination(
           'Eco Partner name search',
@@ -336,7 +458,12 @@ class EcoPartnerController extends ChangeNotifier {
         ),
         partners: _withUserDistances(matches),
         warnings: catalogResult.warnings,
+        totalCount: repository is EcoPartnerCatalogRepositoryContract
+            ? catalogResult.totalCount
+            : matches.length,
       );
+      _serverPageActive = repository is EcoPartnerCatalogRepositoryContract;
+      _serverTotalCount = catalogResult.totalCount;
       currentPage = 0;
       _finishRequest();
     } on EcoSearchException catch (exception) {
@@ -346,9 +473,10 @@ class EcoPartnerController extends ChangeNotifier {
     } catch (_) {
       if (requestId != _requestId) return;
       _restoreBrowseSnapshot();
-      error = 'Search failed. Check your connection and retry.';
+      error =
+          'We couldn’t complete the search. Check your connection and try again.';
     } finally {
-      if (isLoading) _finishRequest();
+      if (requestId == _requestId && isLoading) _finishRequest();
     }
   }
 
@@ -381,11 +509,11 @@ class EcoPartnerController extends ChangeNotifier {
     if (_browseSnapshot != null) {
       _restoreBrowseSnapshot();
       isLoading = false;
-      isLoadingImages = false;
       notifyListeners();
       return;
     }
     _isExplicitSearch = false;
+    _serverPageActive = false;
     currentPage = 0;
     final cachedBrowse = _latestBrowseResult ?? _initialResult;
     if (cachedBrowse == null) {
@@ -394,29 +522,24 @@ class EcoPartnerController extends ChangeNotifier {
     }
     result = cachedBrowse;
     isLoading = false;
-    isLoadingImages = false;
     notifyListeners();
   }
 
   Future<bool> useCurrentLocation({bool silentPermissionDenial = false}) async {
     final requestId = ++_requestId;
-    _beginRequest();
+    _beginRequest(preserveResult: true);
     try {
       final userLocation = await _currentLocationLoader();
-      final locationResult = await _repository.searchCoordinates(
-        userLocation,
-        scope: searchScope,
-        includeImages: false,
-      );
+      if (requestId != _requestId) return false;
       _userLocation = userLocation;
       _isExplicitSearch = false;
       _browseSnapshot = null;
-      result = locationResult;
-      _latestBrowseResult = locationResult;
       activeSearchTerm = '';
       currentPage = 0;
+      final locationResult = await _queryBrowseView();
+      if (requestId != _requestId) return false;
+      _acceptBrowseResult(locationResult);
       _finishRequest();
-      _loadImages(requestId);
       return true;
     } on EcoSearchException catch (exception) {
       error = silentPermissionDenial ? null : exception.message;
@@ -424,10 +547,10 @@ class EcoPartnerController extends ChangeNotifier {
     } catch (_) {
       error = silentPermissionDenial
           ? null
-          : 'Could not retrieve your current location.';
+          : 'We couldn’t find your current location.';
       return false;
     } finally {
-      if (isLoading) _finishRequest();
+      if (requestId == _requestId && isLoading) _finishRequest();
     }
   }
 
@@ -436,29 +559,20 @@ class EcoPartnerController extends ChangeNotifier {
       await search(activeSearchTerm, refresh: true);
       return;
     }
-    final destination = result?.destination;
-    if (destination == null) {
-      await search(fallbackQuery, refresh: true);
-      return;
-    }
     final requestId = ++_requestId;
-    _beginRequest();
+    _beginRequest(preserveResult: true);
     try {
-      final refreshed = await _repository.searchCoordinates(
-        destination,
-        refresh: true,
-        scope: searchScope,
-        includeImages: false,
-      );
-      result = refreshed;
-      _latestBrowseResult = refreshed;
-      currentPage = 0;
+      final refreshed = await _queryBrowseView(refresh: true);
+      if (requestId != _requestId) return;
+      _acceptBrowseResult(refreshed);
       _finishRequest();
-      _loadImages(requestId);
     } catch (_) {
-      error = 'Retry failed. Check your connection.';
+      if (requestId == _requestId) {
+        notice =
+            'Could not refresh Eco Partners. Showing the previous results.';
+      }
     } finally {
-      if (isLoading) _finishRequest();
+      if (requestId == _requestId && isLoading) _finishRequest();
     }
   }
 
@@ -490,11 +604,84 @@ class EcoPartnerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void goToPage(int value) {
-    if (value < 0 || value >= totalPages || value == currentPage) return;
+  Future<bool> goToPage(int value) async {
+    if (isLoading || value < 0 || value >= totalPages || value == currentPage) {
+      return false;
+    }
+    if (_serverPageActive) {
+      return _loadCatalogPage(targetPage: value);
+    }
     currentPage = value;
     notifyListeners();
+    return true;
   }
+
+  Future<bool> _loadCatalogPage({int? targetPage}) async {
+    final repository = _repository;
+    if (repository is! EcoPartnerCatalogRepositoryContract) return false;
+    final catalogRepository = repository as EcoPartnerCatalogRepositoryContract;
+    final requestedPage = targetPage ?? currentPage;
+    final requestId = ++_requestId;
+    _beginRequest(preserveResult: true);
+    try {
+      final destination = _isExplicitSearch
+          ? const EcoDestination('Eco Partner name search', 4.2105, 101.9758)
+          : result?.destination ??
+                const EcoDestination('Malaysia', 4.2105, 101.9758);
+      final page = await catalogRepository.searchPage(
+        destination: destination,
+        scope: _isExplicitSearch
+            ? const EcoPartnerSearchScope.nationwide()
+            : searchScope,
+        distanceOrigin: _userLocation,
+        query: _isExplicitSearch ? activeSearchTerm : null,
+        category: _catalogCategory,
+        sort: _catalogSort,
+        limit: effectivePageSize,
+        offset: requestedPage * effectivePageSize,
+      );
+      if (requestId != _requestId) return false;
+      result = EcoPartnerSearchResult(
+        destination: page.destination,
+        partners: _withUserDistances(page.partners),
+        warnings: page.warnings,
+        totalCount: page.totalCount,
+      );
+      _serverPageActive = true;
+      _serverTotalCount = page.totalCount;
+      currentPage = requestedPage;
+      error = null;
+      notice = null;
+      _finishRequest();
+      return true;
+    } on EcoSearchException catch (exception) {
+      if (requestId == _requestId) {
+        notice = '${exception.message} Your current page is still shown.';
+      }
+    } catch (_) {
+      if (requestId == _requestId) {
+        notice =
+            'Could not load the next page. Your current results are still shown.';
+      }
+    } finally {
+      if (requestId == _requestId && isLoading) _finishRequest();
+    }
+    return false;
+  }
+
+  String? get _catalogCategory => switch (filter) {
+    'Stay' => 'stay',
+    'Dining' => 'dining',
+    'Public Transport' => 'public_transport',
+    'EV Charging' => 'ev',
+    _ => null,
+  };
+
+  String get _catalogSort => switch (sort) {
+    EcoPartnerSort.recommended => 'recommended',
+    EcoPartnerSort.nameAscending => 'name_asc',
+    EcoPartnerSort.nameDescending => 'name_desc',
+  };
 
   Future<void> selectRadius(
     double value, {
@@ -517,32 +704,52 @@ class EcoPartnerController extends ChangeNotifier {
     String fallbackQuery = '',
     bool useCurrentLocation = false,
   }) async {
-    if (_isExplicitSearch) await clearSearch();
     final previousMode = areaMode;
     final previousRadius = radiusSelection;
     final previousState = stateFilter;
     final previousPage = currentPage;
-    final changed =
-        areaMode != mode || radiusSelection != radius || stateFilter != state;
-    areaMode = mode;
-    radiusSelection = radius;
-    stateFilter = state;
-    if (changed) {
-      currentPage = 0;
+    final succeeded = await applyFilters(
+      filter: filter,
+      areaMode: mode,
+      radius: radius,
+      state: state,
+      sort: sort,
+      useCurrentLocation: useCurrentLocation,
+    );
+    if (!succeeded && useCurrentLocation) {
+      areaMode = previousMode;
+      radiusSelection = previousRadius;
+      stateFilter = previousState;
+      currentPage = previousPage;
       notifyListeners();
     }
-    if (useCurrentLocation) {
-      final succeeded = await this.useCurrentLocation();
-      if (!succeeded) {
-        areaMode = previousMode;
-        radiusSelection = previousRadius;
-        stateFilter = previousState;
-        currentPage = previousPage;
-        notifyListeners();
-      }
-    } else if (changed && result != null) {
-      await retry(fallbackQuery: fallbackQuery);
+  }
+
+  Future<bool> applyFilters({
+    required String filter,
+    required EcoPartnerAreaMode areaMode,
+    required double radius,
+    required String state,
+    required EcoPartnerSort sort,
+    bool useCurrentLocation = false,
+  }) async {
+    if (_isExplicitSearch) await clearSearch();
+    this.filter = filter;
+    this.areaMode = areaMode;
+    radiusSelection = radius;
+    stateFilter = state;
+    this.sort = sort;
+    currentPage = 0;
+    _serverPageActive =
+        _repository is EcoPartnerCatalogRepositoryContract && filter != 'All';
+    notifyListeners();
+
+    if (areaMode == EcoPartnerAreaMode.nearby &&
+        (useCurrentLocation || _userLocation == null)) {
+      return this.useCurrentLocation();
     }
+    await retry();
+    return error == null;
   }
 
   void _saveBrowseSnapshot() {
@@ -579,39 +786,6 @@ class EcoPartnerController extends ChangeNotifier {
     currentPage = snapshot.currentPage;
   }
 
-  Future<EcoPartnerSearchResult> _nationwideCatalogForSearch({
-    required bool refresh,
-  }) async {
-    if (_suggestionCatalog.isNotEmpty && !refresh) {
-      return EcoPartnerSearchResult(
-        destination: const EcoDestination('Malaysia', 4.2105, 101.9758),
-        partners: _suggestionCatalog,
-        warnings: _initialResult?.warnings ?? const [],
-      );
-    }
-    final cachedCatalog = _suggestionCatalog;
-    try {
-      final nationwide = await _repository.searchCoordinates(
-        const EcoDestination('Malaysia', 4.2105, 101.9758),
-        refresh: refresh,
-        scope: const EcoPartnerSearchScope.nationwide(),
-        includeImages: false,
-      );
-      if (nationwide.partners.isNotEmpty || cachedCatalog.isEmpty) {
-        _suggestionCatalog = List.unmodifiable(nationwide.partners);
-        _initialResult = nationwide;
-        return nationwide;
-      }
-    } catch (_) {
-      if (cachedCatalog.isEmpty) rethrow;
-    }
-    return EcoPartnerSearchResult(
-      destination: const EcoDestination('Malaysia', 4.2105, 101.9758),
-      partners: cachedCatalog,
-      warnings: _initialResult?.warnings ?? const [],
-    );
-  }
-
   List<EcoPartner> _withUserDistances(Iterable<EcoPartner> partners) {
     final origin = _userLocation;
     if (origin == null) return List.unmodifiable(partners);
@@ -629,35 +803,104 @@ class EcoPartnerController extends ChangeNotifier {
         .toList(growable: false);
   }
 
-  void _beginRequest() {
-    isLoading = true;
-    isLoadingImages = false;
+  Future<EcoPartnerSearchResult> _loadHome({
+    required EcoDestination destination,
+    required EcoPartnerSearchScope scope,
+    EcoDestination? distanceOrigin,
+  }) {
+    final repository = _repository;
+    if (repository is EcoPartnerCatalogRepositoryContract) {
+      return (repository as EcoPartnerCatalogRepositoryContract).loadHome(
+        destination: destination,
+        scope: scope,
+        distanceOrigin: distanceOrigin,
+      );
+    }
+    return repository.searchCoordinates(
+      distanceOrigin ?? destination,
+      scope: scope,
+      includeImages: false,
+    );
+  }
+
+  Future<EcoPartnerSearchResult> _queryBrowseView({bool refresh = false}) {
+    final origin = _userLocation;
+    final destination =
+        origin ??
+        result?.destination ??
+        const EcoDestination('Malaysia', 4.2105, 101.9758);
+    final repository = _repository;
+    if (repository is EcoPartnerCatalogRepositoryContract) {
+      final catalog = repository as EcoPartnerCatalogRepositoryContract;
+      if (filter == 'All') {
+        return catalog.loadHome(
+          destination: destination,
+          scope: searchScope,
+          distanceOrigin: origin,
+        );
+      }
+      return catalog.searchPage(
+        destination: destination,
+        scope: searchScope,
+        distanceOrigin: origin,
+        category: _catalogCategory,
+        sort: _catalogSort,
+        limit: effectivePageSize,
+        offset: currentPage * effectivePageSize,
+      );
+    }
+    return repository.searchCoordinates(
+      destination,
+      refresh: refresh,
+      scope: searchScope,
+      includeImages: false,
+    );
+  }
+
+  void _acceptBrowseResult(
+    EcoPartnerSearchResult value, {
+    bool cacheAsInitial = false,
+  }) {
+    result = value;
+    _serverPageActive =
+        _repository is EcoPartnerCatalogRepositoryContract && filter != 'All';
+    _serverTotalCount = value.totalCount;
+    _latestBrowseResult = value;
+    _suggestionCatalog = List.unmodifiable(value.partners);
+    if (cacheAsInitial) _initialResult = value;
     error = null;
+    notice = null;
+  }
+
+  bool _isUsableHomeCache(
+    EcoPartnerHomeCacheEntry? cached,
+    EcoDestination? lastKnown,
+  ) {
+    if (cached == null || lastKnown == null || cached.partners.isEmpty) {
+      return false;
+    }
+    final age = _now().difference(cached.fetchedAt);
+    if (age.isNegative || age > _homeCacheLifetime) return false;
+    if ((cached.radiusKm - radiusSelection).abs() > 0.01) return false;
+    return EcoPartnerRepository.distanceKm(
+          cached.origin.latitude,
+          cached.origin.longitude,
+          lastKnown.latitude,
+          lastKnown.longitude,
+        ) <=
+        _homeCacheOriginToleranceKm;
+  }
+
+  void _beginRequest({bool preserveResult = false}) {
+    isLoading = true;
+    error = null;
+    notice = null;
+    if (!preserveResult) result = null;
     notifyListeners();
   }
 
   void _finishRequest() {
     isLoading = false;
-    notifyListeners();
-  }
-
-  Future<void> _loadImages(int requestId, {bool cacheAsInitial = false}) async {
-    final current = result;
-    if (current == null || requestId != _requestId) return;
-    isLoadingImages = true;
-    notifyListeners();
-    final enriched = await _repository.enrichResult(
-      current,
-      scope: searchScope,
-    );
-    if (requestId != _requestId) return;
-    result = enriched;
-    if (cacheAsInitial) {
-      _initialResult = enriched;
-      _suggestionCatalog = List.unmodifiable(enriched.partners);
-    }
-    if (!_isExplicitSearch) _latestBrowseResult = enriched;
-    isLoadingImages = false;
     notifyListeners();
   }
 
@@ -688,6 +931,21 @@ class EcoPartnerController extends ChangeNotifier {
         'Could not determine your current location. Please try again.',
       );
     }
+    return EcoDestination(
+      'Current location',
+      position.latitude,
+      position.longitude,
+    );
+  }
+
+  static Future<EcoDestination?> _loadDeviceLastKnownLocation() async {
+    final permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return null;
+    }
+    final position = await Geolocator.getLastKnownPosition();
+    if (position == null) return null;
     return EcoDestination(
       'Current location',
       position.latitude,

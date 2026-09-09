@@ -1,25 +1,107 @@
+import 'dart:async';
+
 import 'package:collab/features/travel_assistant/controller/eco_partner_controller.dart';
 import 'package:collab/features/travel_assistant/model/eco_partner.dart';
+import 'package:collab/features/travel_assistant/model/eco_partner_cache.dart';
 import 'package:collab/features/travel_assistant/model/eco_partner_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('initial recommendations load nationwide without geolocation', () async {
+  test('initial recommendations load Nearby 10 km using location', () async {
     final repository = _CatalogRepository(_catalog);
-    final controller = EcoPartnerController(repository: repository);
+    final controller = _testController(repository);
 
     await controller.loadInitialRecommendations();
 
     expect(repository.coordinateSearches, 1);
-    expect(repository.lastDestination?.label, 'Malaysia');
-    expect(repository.lastScope?.type, EcoPartnerSearchScopeType.nationwide);
-    expect(controller.scopeLabel, 'across Malaysia');
+    expect(repository.lastDestination?.label, 'Current location');
+    expect(repository.lastScope?.type, EcoPartnerSearchScopeType.nearby);
+    expect(repository.lastScope?.radiusKm, 10);
+    expect(controller.scopeLabel, 'within 10 km');
     expect(controller.filteredPartners, hasLength(_catalog.length));
   });
 
+  test('production catalogue search and pagination stay server-side', () async {
+    final partners = [
+      for (var index = 0; index < 24; index++)
+        _partner('Remote Eco $index', index),
+    ];
+    final repository = _ServerCatalogRepository(partners);
+    final controller = _testController(repository);
+    await controller.loadInitialRecommendations();
+
+    await controller.search('Remote Eco');
+
+    expect(repository.lastQuery, 'Remote Eco');
+    expect(repository.lastLimit, controller.effectivePageSize);
+    expect(controller.visiblePartners, hasLength(10));
+    expect(controller.totalPages, 3);
+
+    await controller.goToPage(1);
+    expect(repository.lastOffset, 10);
+  });
+
+  test(
+    'server pagination commits the page only after its request succeeds',
+    () async {
+      final partners = [
+        for (var index = 0; index < 24; index++)
+          _partner('Paged Eco $index', index),
+      ];
+      final repository = _ServerCatalogRepository(partners);
+      final controller = _testController(repository);
+      await controller.loadInitialRecommendations();
+      await controller.search('Paged Eco');
+      final firstPage = controller.result;
+      repository.nextPageCompleter = Completer<EcoPartnerSearchResult>();
+
+      final pageChange = controller.goToPage(1);
+
+      expect(controller.isLoading, isTrue);
+      expect(controller.currentPage, 0);
+      expect(controller.result, same(firstPage));
+      repository.nextPageCompleter!.complete(
+        EcoPartnerSearchResult(
+          destination: const EcoDestination('Page 2', 3.14, 101.69),
+          partners: partners.skip(10).take(10).toList(),
+          totalCount: partners.length,
+        ),
+      );
+
+      expect(await pageChange, isTrue);
+      expect(controller.currentPage, 1);
+      expect(controller.isLoading, isFalse);
+      expect(controller.result?.partners.first.name, 'Paged Eco 10');
+    },
+  );
+
+  test(
+    'failed server pagination preserves the current page and results',
+    () async {
+      final partners = [
+        for (var index = 0; index < 24; index++)
+          _partner('Stable Eco $index', index),
+      ];
+      final repository = _ServerCatalogRepository(partners);
+      final controller = _testController(repository);
+      await controller.loadInitialRecommendations();
+      await controller.search('Stable Eco');
+      final firstPage = controller.result;
+      repository.nextPageCompleter = Completer<EcoPartnerSearchResult>();
+
+      final pageChange = controller.goToPage(1);
+      repository.nextPageCompleter!.completeError(StateError('offline'));
+
+      expect(await pageChange, isFalse);
+      expect(controller.currentPage, 0);
+      expect(controller.result, same(firstPage));
+      expect(controller.notice, contains('current results are still shown'));
+    },
+  );
+
   test('search matches normalized partner names only', () async {
     final repository = _CatalogRepository(_catalog);
-    final controller = EcoPartnerController(repository: repository);
+    final controller = _testController(repository);
     await controller.loadInitialRecommendations();
 
     await controller.search('SOMERSET');
@@ -43,7 +125,7 @@ void main() {
         ..._catalog,
         _partner('Somerset Alpha', 99),
       ]);
-      final controller = EcoPartnerController(repository: repository);
+      final controller = _testController(repository);
       await controller.loadInitialRecommendations();
 
       expect(controller.suggestionsFor('s'), isEmpty);
@@ -60,7 +142,7 @@ void main() {
       for (var index = 0; index < 8; index++)
         _partner('Somerset ${String.fromCharCode(65 + index)}', index),
     ]);
-    final controller = EcoPartnerController(repository: repository);
+    final controller = _testController(repository);
     await controller.loadInitialRecommendations();
 
     expect(controller.suggestionsFor('so'), hasLength(6));
@@ -70,7 +152,7 @@ void main() {
     'selecting a suggestion uses the catalog and clear restores initial',
     () async {
       final repository = _CatalogRepository(_catalog);
-      final controller = EcoPartnerController(repository: repository);
+      final controller = _testController(repository);
       await controller.loadInitialRecommendations();
       final suggestion = controller.suggestionsFor('alpha').single;
 
@@ -84,14 +166,14 @@ void main() {
 
       await controller.clearSearch();
       expect(controller.activeSearchTerm, isEmpty);
-      expect(controller.result?.destination.label, 'Malaysia');
+      expect(controller.result?.destination.label, 'Current location');
       expect(controller.filteredPartners, hasLength(_catalog.length));
     },
   );
 
   test('submitting an exact suggestion name bypasses geocoding', () async {
     final repository = _CatalogRepository(_catalog);
-    final controller = EcoPartnerController(repository: repository);
+    final controller = _testController(repository);
     await controller.loadInitialRecommendations();
 
     await controller.search('Somerset Alpha');
@@ -124,6 +206,8 @@ void main() {
               repository: repository,
               currentLocationLoader: () async =>
                   const EcoDestination('Current location', 3.139, 101.687),
+              lastKnownLocationLoader: () async => null,
+              homeCache: _MemoryHomeCache(),
             )
             ..areaMode = EcoPartnerAreaMode.nearby
             ..radiusSelection = 50;
@@ -144,7 +228,8 @@ void main() {
       expect(controller.filteredPartners, [isA<EcoPartner>()]);
       final match = controller.filteredPartners.single;
       expect(match.name, 'Far Eco Hotel');
-      expect(match.distanceKm, greaterThan(1000));
+      expect(match.distanceKm, isNotNull);
+      expect(match.distanceKm!, greaterThan(1000));
       expect(controller.showsUserDistance, isTrue);
       expect(controller.activeNearbyRadius, 50);
       expect(controller.isOutsideBrowseRadius(match), isTrue);
@@ -175,6 +260,8 @@ void main() {
             repository: _CatalogRepository([nearby, far]),
             currentLocationLoader: () async =>
                 const EcoDestination('Current location', 3.139, 101.687),
+            lastKnownLocationLoader: () async => null,
+            homeCache: _MemoryHomeCache(),
           )
           ..areaMode = EcoPartnerAreaMode.nearby
           ..radiusSelection = 50;
@@ -199,6 +286,8 @@ void main() {
               repository: repository,
               currentLocationLoader: () async =>
                   const EcoDestination('Current location', 3.139, 101.687),
+              lastKnownLocationLoader: () async => null,
+              homeCache: _MemoryHomeCache(),
             )
             ..areaMode = EcoPartnerAreaMode.nearby
             ..radiusSelection = 50;
@@ -213,7 +302,7 @@ void main() {
       expect(controller.result?.destination.label, 'Current location');
       expect(
         controller.error,
-        'Search failed. Check your connection and retry.',
+        'We couldn’t complete the search. Check your connection and try again.',
       );
     },
   );
@@ -462,7 +551,7 @@ class _CatalogRepository implements EcoPartnerRepositoryContract {
         .where(
           (partner) =>
               scope.type != EcoPartnerSearchScopeType.nearby ||
-              partner.distanceKm <= scope.radiusKm!,
+              partner.distanceKm! <= scope.radiusKm!,
         )
         .toList();
     return EcoPartnerSearchResult(
@@ -472,7 +561,7 @@ class _CatalogRepository implements EcoPartnerRepositoryContract {
   }
 
   @override
-  Future<EcoPartnerSearchResult> searchDestination(
+  Future<EcoPartnerSearchResult> searchByName(
     String query, {
     bool refresh = false,
     EcoPartnerSearchScope scope = const EcoPartnerSearchScope.nearby(10),
@@ -491,6 +580,65 @@ class _CatalogRepository implements EcoPartnerRepositoryContract {
     EcoPartnerSearchResult value, {
     EcoPartnerSearchScope scope = const EcoPartnerSearchScope.nearby(10),
   }) async => value;
+}
+
+class _ServerCatalogRepository extends _CatalogRepository
+    implements EcoPartnerCatalogRepositoryContract {
+  _ServerCatalogRepository(super.partners);
+
+  String? lastQuery;
+  int? lastLimit;
+  int? lastOffset;
+  Completer<EcoPartnerSearchResult>? nextPageCompleter;
+
+  @override
+  Future<EcoPartnerSearchResult> loadHome({
+    required EcoDestination destination,
+    required EcoPartnerSearchScope scope,
+    EcoDestination? distanceOrigin,
+  }) async =>
+      EcoPartnerSearchResult(destination: destination, partners: partners);
+
+  @override
+  Future<EcoPartnerSearchResult> searchPage({
+    required EcoDestination destination,
+    required EcoPartnerSearchScope scope,
+    EcoDestination? distanceOrigin,
+    String? query,
+    String? category,
+    String sort = 'recommended',
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    lastQuery = query;
+    lastLimit = limit;
+    lastOffset = offset;
+    if (offset > 0 && nextPageCompleter != null) {
+      return nextPageCompleter!.future;
+    }
+    final clean = query?.toLowerCase();
+    final matches = partners
+        .where(
+          (partner) =>
+              clean == null || partner.name.toLowerCase().contains(clean),
+        )
+        .toList();
+    return EcoPartnerSearchResult(
+      destination: destination,
+      partners: matches.skip(offset).take(limit).toList(),
+      totalCount: matches.length,
+    );
+  }
+
+  @override
+  Future<List<EcoPartner>> suggestions(String query, {int limit = 6}) async =>
+      partners
+          .where(
+            (partner) =>
+                partner.name.toLowerCase().contains(query.toLowerCase()),
+          )
+          .take(limit)
+          .toList();
 }
 
 class _DeniedLocationController extends EcoPartnerController {
@@ -525,7 +673,7 @@ class _FailingNationwideRepository implements EcoPartnerRepositoryContract {
   }
 
   @override
-  Future<EcoPartnerSearchResult> searchDestination(
+  Future<EcoPartnerSearchResult> searchByName(
     String query, {
     bool refresh = false,
     EcoPartnerSearchScope scope = const EcoPartnerSearchScope.nearby(10),
@@ -537,4 +685,23 @@ class _FailingNationwideRepository implements EcoPartnerRepositoryContract {
     EcoPartnerSearchResult value, {
     EcoPartnerSearchScope scope = const EcoPartnerSearchScope.nearby(10),
   }) async => value;
+}
+
+EcoPartnerController _testController(EcoPartnerRepositoryContract repository) =>
+    EcoPartnerController(
+      repository: repository,
+      currentLocationLoader: () async =>
+          const EcoDestination('Current location', 3.14, 101.69),
+      lastKnownLocationLoader: () async => null,
+      homeCache: _MemoryHomeCache(),
+    );
+
+class _MemoryHomeCache implements EcoPartnerHomeCacheContract {
+  EcoPartnerHomeCacheEntry? value;
+
+  @override
+  Future<EcoPartnerHomeCacheEntry?> read() async => value;
+
+  @override
+  Future<void> write(EcoPartnerHomeCacheEntry entry) async => value = entry;
 }

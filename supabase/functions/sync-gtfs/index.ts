@@ -8,6 +8,42 @@ const feeds = [
   ...["mybas-kangar", "mybas-alor-setar", "mybas-kota-bharu", "mybas-kuala-terengganu", "mybas-ipoh", "mybas-seremban-a", "mybas-seremban-b", "mybas-melaka", "mybas-johor", "mybas-kuching"].map(c => [c, `https://api.data.gov.my/gtfs-static/${c}`]),
 ] as const;
 
+const stateBoundaryUrl =
+  "https://raw.githubusercontent.com/dosm-malaysia/data-open/main/datasets/geodata/administrative_1_state.geojson";
+
+async function ensureStateBoundaries(
+  client: ReturnType<typeof createClient>,
+): Promise<void> {
+  const { count, error: countError } = await client
+    .from("malaysia_state_boundaries")
+    .select("state", { count: "exact", head: true });
+  if (countError) throw countError;
+  if ((count ?? 0) === 16) return;
+
+  const response = await fetch(stateBoundaryUrl, {
+    headers: {
+      "accept": "application/geo+json, application/json",
+      "user-agent": "HiddenGemTouristApp/1.0 (GTFS state boundary sync)",
+    },
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!response.ok) {
+    throw new Error(`State boundary download returned HTTP ${response.status}`);
+  }
+  const geojson = await response.json();
+  if (geojson?.type !== "FeatureCollection" || !Array.isArray(geojson.features)) {
+    throw new Error("State boundary source returned malformed GeoJSON");
+  }
+  const { data: importedCount, error: replaceError } = await client.rpc(
+    "replace_malaysia_state_boundaries",
+    { p_geojson: geojson },
+  );
+  if (replaceError) throw replaceError;
+  if (importedCount !== 16) {
+    throw new Error(`Expected 16 state boundaries, imported ${importedCount}`);
+  }
+}
+
 Deno.serve(async req => {
   const secret = Deno.env.get("SYNC_GTFS_SECRET");
   if (!secret || req.headers.get("x-sync-secret") !== secret) return new Response("Unauthorized", { status: 401 });
@@ -24,6 +60,15 @@ Deno.serve(async req => {
     : feeds;
   if (selectedFeeds.length === 0) {
     return Response.json({ error: "Unknown GTFS feed." }, { status: 400 });
+  }
+  try {
+    await ensureStateBoundaries(client);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return Response.json(
+      { error: `Transport state setup failed: ${message}` },
+      { status: 502 },
+    );
   }
   const results = [];
   for (const [feedId, url] of selectedFeeds) {

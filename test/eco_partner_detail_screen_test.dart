@@ -1,8 +1,10 @@
 import 'package:collab/features/travel_assistant/model/eco_partner.dart';
 import 'package:collab/features/travel_assistant/view/eco_partner_detail_screen.dart';
 import 'package:collab/features/travel_assistant/view/widgets/transit_mode_icon.dart';
+import 'package:collab/features/itinerary_planning/model/transitous_routing_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 
 void main() {
   testWidgets('transit route identifiers check live in-app journeys', (
@@ -68,8 +70,109 @@ void main() {
           .onPressed,
       isNotNull,
     );
-    expect(find.textContaining('matching live in-app journey'), findsOneWidget);
+    expect(find.textContaining('live journey is available'), findsOneWidget);
     expect(find.textContaining('Maps'), findsNothing);
+  });
+
+  testWidgets('no-coverage route is hidden while generic transit stays usable', (
+    tester,
+  ) async {
+    final partner = _transitPartner(routeCount: 2);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EcoPartnerDetailScreen(
+          partner: partner,
+          destinationLabel: 'Malaysia',
+          transitService: _FailingTransitService(
+            TransitRouteFailure.noCoverage,
+          ),
+          routeOriginLoader: () async => const LatLng(3.14, 101.69),
+        ),
+      ),
+    );
+    final firstRoute = find.text('Test route 1 (T1)');
+    await tester.scrollUntilVisible(
+      firstRoute,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -100));
+    await tester.pumpAndSettle();
+
+    await tester.tap(firstRoute);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Test route 1 (T1)'), findsNothing);
+    expect(find.text('Test route 2 (T2)'), findsOneWidget);
+    expect(
+      find.text(
+        'That route isn’t available for a live trip from your location. Try another route.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(FilledButton, 'Show route'), findsOneWidget);
+  });
+
+  testWidgets('scheduled-route section collapses when its last route fails', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EcoPartnerDetailScreen(
+          partner: _transitPartner(routeCount: 1),
+          destinationLabel: 'Malaysia',
+          transitService: _FailingTransitService(
+            TransitRouteFailure.noCoverage,
+          ),
+          routeOriginLoader: () async => const LatLng(3.14, 101.69),
+        ),
+      ),
+    );
+    final firstRoute = find.text('Test route 1 (T1)');
+    await tester.scrollUntilVisible(
+      firstRoute,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -100));
+    await tester.pumpAndSettle();
+
+    await tester.tap(firstRoute);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Scheduled routes serving this stop'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Show route'), findsOneWidget);
+  });
+
+  testWidgets('retryable transit failure keeps the route chip visible', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EcoPartnerDetailScreen(
+          partner: _transitPartner(routeCount: 1),
+          destinationLabel: 'Malaysia',
+          transitService: _FailingTransitService(
+            TransitRouteFailure.connection,
+          ),
+          routeOriginLoader: () async => const LatLng(3.14, 101.69),
+        ),
+      ),
+    );
+    final firstRoute = find.text('Test route 1 (T1)');
+    await tester.scrollUntilVisible(
+      firstRoute,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -100));
+    await tester.pumpAndSettle();
+
+    await tester.tap(firstRoute);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Test route 1 (T1)'), findsOneWidget);
+    expect(find.textContaining('Check your connection'), findsOneWidget);
   });
 
   test('transit icons recognize Transitous and Malaysian rail modes', () {
@@ -328,3 +431,40 @@ final _detailPartner = EcoPartner(
   sourceUrl: 'https://example.com',
   lastUpdated: DateTime(2026),
 );
+
+EcoPartner _transitPartner({required int routeCount}) => EcoPartner(
+  id: 'stop:test',
+  name: 'Test stop',
+  category: EcoPartnerCategory.transport,
+  subtype: 'Bus',
+  latitude: 3.15,
+  longitude: 101.7,
+  address: 'Test road',
+  sustainabilityLabel: 'Public transport',
+  evidence: 'Official GTFS stop',
+  sourceName: 'Official Malaysia GTFS',
+  sourceUrl: 'https://developer.data.gov.my/',
+  lastUpdated: DateTime(2026),
+  transitRoutes: [
+    for (var index = 1; index <= routeCount; index++)
+      EcoTransitRouteInfo(
+        mode: 'Bus',
+        shortName: 'T$index',
+        longName: 'Test route $index',
+      ),
+  ],
+);
+
+class _FailingTransitService extends TransitousRoutingService {
+  _FailingTransitService(this.failure);
+
+  final TransitRouteFailure failure;
+
+  @override
+  Future<TransitRoute> planOrThrow(
+    LatLng from,
+    LatLng to, {
+    Iterable<String> preferredRouteNames = const [],
+    String? preferredRouteLabel,
+  }) async => throw TransitRouteException(failure, 'Technical provider error');
+}

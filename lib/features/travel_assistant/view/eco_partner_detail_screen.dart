@@ -20,6 +20,8 @@ class EcoPartnerDetailScreen extends StatelessWidget {
     this.showDistance = false,
     this.outsideRadiusKm,
     this.fallbackPath = ShellRoutes.travelAssistant,
+    this.transitService,
+    this.routeOriginLoader,
   });
 
   final EcoPartner partner;
@@ -27,6 +29,8 @@ class EcoPartnerDetailScreen extends StatelessWidget {
   final bool showDistance;
   final double? outsideRadiusKm;
   final String fallbackPath;
+  final TransitousRoutingService? transitService;
+  final Future<LatLng> Function()? routeOriginLoader;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -65,9 +69,9 @@ class EcoPartnerDetailScreen extends StatelessWidget {
           children: [
             _Pill(_categoryLabel(partner.category), _categoryIcon),
             _Pill(partner.subtype, _categoryIcon),
-            if (showDistance)
+            if (showDistance && partner.distanceKm != null)
               _Pill(
-                '${partner.distanceKm.toStringAsFixed(1)} km away',
+                ecoPartnerDistanceLabel(partner.distanceKm!),
                 Icons.near_me_outlined,
               ),
             if (outsideRadiusKm != null)
@@ -103,7 +107,7 @@ class EcoPartnerDetailScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              Text(partner.evidence),
+              Text(ecoPartnerEvidenceLabel(partner)),
             ],
           ),
         ),
@@ -114,13 +118,20 @@ class EcoPartnerDetailScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                partner.address.isEmpty
-                    ? _locationFallback(partner)
-                    : partner.address,
-              ),
+              Text(ecoPartnerLocationLabel(partner)),
+              if (ecoPartnerHasPartialAddress(partner)) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'The available address is limited, but the map pin shows the exact stop location.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
               const SizedBox(height: 12),
-              _EcoPartnerRouteGuide(partner: partner),
+              _EcoPartnerRouteGuide(
+                partner: partner,
+                transitService: transitService,
+                routeOriginLoader: routeOriginLoader,
+              ),
             ],
           ),
         ),
@@ -249,11 +260,11 @@ class EcoPartnerDetailScreen extends StatelessWidget {
     EcoPartnerCategory.stay =>
       '${partner.name} is a nearby accommodation listed for its documented sustainability certification information. Review the evidence and current verification details below before booking.',
     EcoPartnerCategory.dining =>
-      '${partner.name} is a nearby ${partner.subtype.toLowerCase()} with plant-friendly information recorded by the listed data provider. Its classification is based on the available explicit dietary tags.',
+      '${partner.name} is a ${partner.subtype.toLowerCase()} listed for its plant-friendly choices. Check its latest menu before visiting.',
     EcoPartnerCategory.transport when partner.subtype == 'EV charging' =>
-      '${partner.name} provides nearby electric-vehicle charging infrastructure. Availability, access and connector information may change, so confirm the displayed details when you arrive.',
+      '${partner.name} provides electric-vehicle charging infrastructure. Availability, access and connector information may change, so confirm the displayed details when you arrive.',
     EcoPartnerCategory.transport =>
-      '${partner.name} is a nearby public-transport stop or station serving the listed routes. It can support lower-car travel around your selected destination.',
+      '${partner.name} is a public-transport stop or station serving the listed routes. It can support lower-car travel around your selected destination.',
   };
 
   IconData get _categoryIcon => switch (partner.category) {
@@ -475,17 +486,18 @@ bool _supportsPackingChecklist(EcoPartner partner) =>
     partner.category == EcoPartnerCategory.stay ||
     partner.category == EcoPartnerCategory.dining;
 
-String _locationFallback(EcoPartner partner) =>
-    partner.category == EcoPartnerCategory.transport
-    ? '${partner.name}, Malaysia'
-    : 'Location available on the map';
-
 enum _RouteMode { walking, publicTransit, evCar }
 
 class _EcoPartnerRouteGuide extends StatefulWidget {
-  const _EcoPartnerRouteGuide({required this.partner});
+  const _EcoPartnerRouteGuide({
+    required this.partner,
+    this.transitService,
+    this.routeOriginLoader,
+  });
 
   final EcoPartner partner;
+  final TransitousRoutingService? transitService;
+  final Future<LatLng> Function()? routeOriginLoader;
 
   @override
   State<_EcoPartnerRouteGuide> createState() => _EcoPartnerRouteGuideState();
@@ -493,12 +505,14 @@ class _EcoPartnerRouteGuide extends StatefulWidget {
 
 class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
   final _routingService = EcoPartnerRoutingService();
-  final _transitService = TransitousRoutingService();
+  late final _transitService =
+      widget.transitService ?? TransitousRoutingService();
   _RouteMode _mode = _RouteMode.walking;
   LatLng? _origin;
   EcoPartnerRoute? _route;
   TransitRoute? _transitRoute;
   EcoTransitRouteInfo? _requestedTransitRoute;
+  final Set<String> _unavailableTransitRoutes = {};
   String? _error;
   bool _loading = false;
 
@@ -511,27 +525,9 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
     });
 
     try {
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied) {
-        throw const EcoPartnerRouteException(
-          'Location permission is required.',
-        );
-      }
-      if (permission == LocationPermission.deniedForever) {
-        throw const EcoPartnerRouteException(
-          'Location permission is disabled. Enable it in device settings.',
-        );
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          timeLimit: Duration(seconds: 10),
-        ),
-      );
-      final origin = LatLng(position.latitude, position.longitude);
+      final origin = widget.routeOriginLoader == null
+          ? await _loadCurrentPosition()
+          : await widget.routeOriginLoader!();
       if (!mounted) return;
       setState(() => _origin = origin);
       final destination = LatLng(
@@ -575,10 +571,31 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
       setState(() => _error = error.message);
     } on TransitRouteException catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.message);
+      setState(() {
+        if (error.failure == TransitRouteFailure.noCoverage &&
+            _requestedTransitRoute != null) {
+          _unavailableTransitRoutes.add(
+            _transitRouteKey(_requestedTransitRoute!),
+          );
+          _requestedTransitRoute = null;
+          _error =
+              'That route isn’t available for a live trip from your location. Try another route.';
+        } else {
+          _error = switch (error.failure) {
+            TransitRouteFailure.noCoverage =>
+              'No live public transport journey was found from your location. Try another travel option.',
+            TransitRouteFailure.connection =>
+              'We couldn’t check live public transport directions. Check your connection and try again.',
+            TransitRouteFailure.service =>
+              'Live public transport directions are temporarily unavailable. Try again shortly.',
+          };
+        }
+      });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _error = 'Could not calculate a route. Please retry.');
+      setState(
+        () => _error = 'We couldn’t prepare directions. Please try again.',
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -603,11 +620,38 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
     await _loadRoute();
   }
 
+  Future<LatLng> _loadCurrentPosition() async {
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied) {
+      throw const EcoPartnerRouteException('Location permission is required.');
+    }
+    if (permission == LocationPermission.deniedForever) {
+      throw const EcoPartnerRouteException(
+        'Location permission is disabled. Enable it in device settings.',
+      );
+    }
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        timeLimit: Duration(seconds: 10),
+      ),
+    );
+    return LatLng(position.latitude, position.longitude);
+  }
+
   @override
   Widget build(BuildContext context) {
     final route = _route;
     final transitRoute = _transitRoute;
     final origin = _origin;
+    final visibleTransitRoutes = widget.partner.transitRoutes
+        .where(
+          (route) =>
+              !_unavailableTransitRoutes.contains(_transitRouteKey(route)),
+        )
+        .toList(growable: false);
     final destination = LatLng(
       widget.partner.latitude,
       widget.partner.longitude,
@@ -645,7 +689,7 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
             ),
           ],
         ),
-        if (widget.partner.transitRoutes.isNotEmpty) ...[
+        if (visibleTransitRoutes.isNotEmpty) ...[
           const SizedBox(height: 12),
           Text(
             'Scheduled routes serving this stop',
@@ -655,20 +699,19 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Tap a route to check for a matching live in-app journey. Availability depends on Transitous coverage.',
+            'Choose a scheduled route to see whether a live journey is available from your location.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 7,
             runSpacing: 7,
-            children: widget.partner.transitRoutes
+            children: visibleTransitRoutes
                 .map(
                   (route) => ActionChip(
                     avatar: Icon(transitModeIcon(route.mode), size: 17),
                     label: Text(route.displayLabel),
-                    tooltip:
-                        'Check live in-app journey using ${route.displayLabel}',
+                    tooltip: 'Check live directions for ${route.displayLabel}',
                     onPressed: _loading
                         ? null
                         : () => _planWithTransitRoute(route),
@@ -778,8 +821,8 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
         const SizedBox(height: 4),
         Text(
           _mode == _RouteMode.publicTransit
-              ? 'Stop services from Malaysian GTFS. Live journey planning by Transitous.'
-              : 'Map and route data from OpenStreetMap and OSRM.',
+              ? 'Scheduled routes come from official transit feeds. Live directions are checked when requested.'
+              : 'Directions are estimated from current map data.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
       ],
@@ -793,6 +836,12 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
     return remaining == 0 ? '$hours hr' : '$hours hr $remaining min';
   }
 }
+
+String _transitRouteKey(EcoTransitRouteInfo route) => [
+  route.mode.trim().toLowerCase(),
+  route.shortName?.trim().toLowerCase() ?? '',
+  route.longName?.trim().toLowerCase() ?? '',
+].join('|');
 
 class _JourneyStep extends StatelessWidget {
   const _JourneyStep({
