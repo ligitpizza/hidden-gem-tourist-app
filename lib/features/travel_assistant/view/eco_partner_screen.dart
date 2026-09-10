@@ -401,7 +401,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
 
   void _returnToSectionedHome() {
     setState(() => _showingHomeSectionResults = false);
-    _controller.selectFilter('All');
+    _controller.returnToSectionedHome();
     if (_scrollController.hasClients) _scrollController.jumpTo(0);
   }
 

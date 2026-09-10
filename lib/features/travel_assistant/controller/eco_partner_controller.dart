@@ -55,6 +55,7 @@ class EcoPartnerController extends ChangeNotifier {
   List<EcoPartner> _suggestionCatalog = const [];
   EcoDestination? _userLocation;
   _EcoPartnerBrowseSnapshot? _browseSnapshot;
+  _EcoPartnerBrowseSnapshot? _homeSectionSnapshot;
   EcoPartnerSearchResult? _latestBrowseResult;
   bool _isExplicitSearch = false;
   bool _serverPageActive = false;
@@ -214,11 +215,55 @@ class EcoPartnerController extends ChangeNotifier {
       EcoPartnerHomeSection.recommended => null,
     };
     if (targetFilter == null) return;
+    _homeSectionSnapshot = _EcoPartnerBrowseSnapshot(
+      result: result ?? _latestBrowseResult,
+      filter: filter,
+      transportType: transportType,
+      areaMode: areaMode,
+      stateFilter: stateFilter,
+      sort: sort,
+      radiusSelection: radiusSelection,
+      layout: layout,
+      currentPage: currentPage,
+    );
     filter = targetFilter;
     if (filter == 'Public Transport') transportType = 'All transport';
     currentPage = 0;
     notifyListeners();
     await _loadCatalogPage();
+  }
+
+  void returnToSectionedHome() {
+    ++_requestId;
+    final snapshot = _homeSectionSnapshot;
+    _homeSectionSnapshot = null;
+    _isExplicitSearch = false;
+    activeSearchTerm = '';
+
+    if (snapshot != null) {
+      result = snapshot.result ?? _latestBrowseResult ?? _initialResult;
+      areaMode = snapshot.areaMode;
+      stateFilter = snapshot.stateFilter;
+      sort = snapshot.sort;
+      radiusSelection = snapshot.radiusSelection;
+      layout = snapshot.layout;
+    } else {
+      result = _latestBrowseResult ?? _initialResult ?? result;
+    }
+
+    filter = 'All';
+    transportType = 'All transport';
+    currentPage = 0;
+    _serverPageActive = false;
+    _serverTotalCount = result?.totalCount ?? result?.partners.length ?? 0;
+    if (result != null) {
+      _latestBrowseResult = result;
+      _suggestionCatalog = List.unmodifiable(result!.partners);
+    }
+    isLoading = false;
+    error = null;
+    notice = null;
+    notifyListeners();
   }
 
   List<EcoPartner> _diversifiedRecommendations(List<EcoPartner> ranked) {

@@ -222,39 +222,59 @@ void main() {
   testWidgets('Up from category More returns to the Eco Partners home view', (
     tester,
   ) async {
-    final controller = _InitialScreenController(
-      _CatalogScreenRepository([
-        _categoryPartner(
-          'Hotel One',
-          1,
-          category: EcoPartnerCategory.stay,
-          subtype: 'Hotel',
-        ),
-      ]),
-    );
+    final repository = _PagedScreenRepository([
+      _categoryPartner(
+        'Hotel One',
+        1,
+        category: EcoPartnerCategory.stay,
+        subtype: 'Hotel',
+      ),
+      _categoryPartner(
+        'Dining One',
+        2,
+        category: EcoPartnerCategory.dining,
+        subtype: 'Restaurant',
+      ),
+      _categoryPartner(
+        'Bus One',
+        3,
+        category: EcoPartnerCategory.transport,
+        subtype: 'Bus',
+      ),
+    ]);
+    final controller = _InitialScreenController(repository);
 
     await tester.pumpWidget(
       MaterialApp(home: EcoPartnersScreen(controller: controller)),
     );
     await tester.pumpAndSettle();
 
-    final more = find.byKey(const ValueKey('eco_partner_more_hotel'));
+    final more = find.byKey(const ValueKey('eco_partner_more_transport'));
     await tester.drag(
       find.byKey(const ValueKey('eco_partner_main_scroll')),
       const Offset(0, -300),
     );
     await tester.pumpAndSettle();
     await tester.ensureVisible(more);
+    await tester.pumpAndSettle();
     await tester.tap(more);
     await tester.pumpAndSettle();
-    expect(controller.filter, 'Stay');
+    expect(controller.filter, 'Public Transport');
+    expect(controller.result?.partners.map((partner) => partner.name), [
+      'Bus One',
+    ]);
 
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
     await tester.pumpAndSettle();
 
     expect(controller.filter, 'All');
+    expect(controller.result?.partners, hasLength(3));
     expect(
       find.byKey(const ValueKey('eco_partner_more_hotel')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('eco_partner_more_dining')),
       findsOneWidget,
     );
   });
@@ -396,8 +416,8 @@ void main() {
     await tester.tap(find.text('Eco Lodge'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Save Eco Partner'), findsOneWidget);
     expect(find.text('Partner Details'), findsOneWidget);
+    expect(find.text('Eco Lodge'), findsOneWidget);
   });
 
   testWidgets('non-location results show address instead of zero distance', (
@@ -734,10 +754,25 @@ class _PagedScreenRepository extends _CatalogScreenRepository
     int offset = 0,
   }) async {
     if (offset > 0 && nextPage != null) return nextPage!.future;
+    final filtered = partners
+        .where(
+          (partner) => switch (category) {
+            'stay' => partner.category == EcoPartnerCategory.stay,
+            'dining' => partner.category == EcoPartnerCategory.dining,
+            'public_transport' =>
+              partner.category == EcoPartnerCategory.transport &&
+                  partner.subtype != 'EV charging',
+            'ev' =>
+              partner.category == EcoPartnerCategory.transport &&
+                  partner.subtype == 'EV charging',
+            _ => true,
+          },
+        )
+        .toList();
     return EcoPartnerSearchResult(
       destination: destination,
-      partners: partners.skip(offset).take(limit).toList(),
-      totalCount: partners.length,
+      partners: filtered.skip(offset).take(limit).toList(),
+      totalCount: filtered.length,
     );
   }
 

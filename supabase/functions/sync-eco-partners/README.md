@@ -1,9 +1,8 @@
 # Eco Partner synchronisation
 
 `sync-eco-partners` claims one due Malaysian state, fetches dining and EV data
-from OpenStreetMap, caches eligible Wikimedia dining image metadata, and atomically
-replaces that state's OSM catalogue rows. A failed fetch preserves the last
-successful rows and is retried after one hour.
+from OpenStreetMap, and atomically replaces that state's OSM catalogue rows. A
+failed fetch preserves the last successful rows and is retried after one hour.
 
 Before enabling the ten-minute database schedule:
 
@@ -19,6 +18,7 @@ Before enabling the ten-minute database schedule:
 The function uses the standard `SUPABASE_URL` and
 `SUPABASE_SERVICE_ROLE_KEY` environment variables supplied by Supabase.
 
-Transport previews are deterministic licensed images served from Supabase
-Storage. They are assigned by the database and are not part of this external
-data synchronization.
+Transport, dining, and EV previews are deterministic licensed images served
+from Supabase Storage. They are assigned by database triggers and are not part
+of this external data synchronization. The function does not contact an image
+provider.

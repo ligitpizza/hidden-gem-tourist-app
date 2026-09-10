@@ -457,6 +457,31 @@ void main() {
     expect(find.text('243.7 km away'), findsOneWidget);
     expect(find.text('Outside your 50 km area'), findsOneWidget);
   });
+
+  testWidgets('detail page keeps its deep-green theme on a compact screen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EcoPartnerDetailScreen(
+          partner: _detailPartner,
+          destinationLabel: 'Kuala Lumpur',
+        ),
+      ),
+    );
+
+    expect(
+      tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
+      const Color(0xFFEAF2ED),
+    );
+    expect(tester.widget<Card>(find.byType(Card).first).elevation, 0);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 final _detailPartner = EcoPartner(

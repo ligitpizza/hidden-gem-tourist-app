@@ -460,6 +460,43 @@ void main() {
     },
   );
 
+  test('returning from More restores the complete sectioned home', () async {
+    final partners = [
+      _partner('Home Hotel', 130),
+      _partner(
+        'Home Dining',
+        131,
+        category: EcoPartnerCategory.dining,
+        subtype: 'Restaurant',
+      ),
+      _partner(
+        'Home Bus',
+        132,
+        category: EcoPartnerCategory.transport,
+        subtype: 'Bus',
+      ),
+    ];
+    final repository = _ServerCatalogRepository(partners);
+    final controller = _testController(repository);
+    await controller.loadInitialRecommendations();
+    final homeResult = controller.result;
+
+    await controller.showAllForHomeSection(EcoPartnerHomeSection.transport);
+
+    expect(controller.filter, 'Public Transport');
+    expect(controller.result?.partners.map((partner) => partner.name), [
+      'Home Bus',
+    ]);
+
+    controller.returnToSectionedHome();
+
+    expect(controller.filter, 'All');
+    expect(controller.transportType, 'All transport');
+    expect(controller.showSectionedHome, isTrue);
+    expect(controller.result, same(homeResult));
+    expect(controller.result?.partners, hasLength(3));
+  });
+
   test('transport type is sent as a server-side catalogue filter', () async {
     final repository = _ServerCatalogRepository(_catalog);
     final controller = _testController(repository);
@@ -676,6 +713,19 @@ class _ServerCatalogRepository extends _CatalogRepository
         .where(
           (partner) =>
               clean == null || partner.name.toLowerCase().contains(clean),
+        )
+        .where(
+          (partner) => switch (category) {
+            'stay' => partner.category == EcoPartnerCategory.stay,
+            'dining' => partner.category == EcoPartnerCategory.dining,
+            'public_transport' =>
+              partner.category == EcoPartnerCategory.transport &&
+                  partner.subtype != 'EV charging',
+            'ev' =>
+              partner.category == EcoPartnerCategory.transport &&
+                  partner.subtype == 'EV charging',
+            _ => true,
+          },
         )
         .toList();
     return EcoPartnerSearchResult(

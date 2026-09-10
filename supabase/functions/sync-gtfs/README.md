@@ -9,6 +9,13 @@ The ZIP is completely downloaded and parsed before the transactional
 `replace_gtfs_feed` RPC runs. A failed feed records its status but preserves its
 last successful stop and route dataset.
 
+Large bus timetables can expand far beyond the Edge Function memory and CPU
+limits. When `stop_times.txt` exceeds 8 MB, the parser imports all stops and
+route definitions but omits the stop-to-route links. Those stops remain
+available in Nearby and state searches and the general public-transit planner
+still works; only the optional scheduled-route chips are unavailable for that
+feed. Smaller feeds retain their exact route chips.
+
 The function also imports the 16 official state boundaries from the Department
 of Statistics Malaysia when the boundary table is empty. Importing the boundary
 payload immediately repairs the `state` value of existing GTFS catalogue rows.

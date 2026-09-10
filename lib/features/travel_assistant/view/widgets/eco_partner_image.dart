@@ -133,6 +133,9 @@ String? ecoPartnerPreviewCredit(EcoPartner partner) {
   final source = partner.imageSourceName?.trim();
   if (source == null || source.isEmpty) return null;
   if (source.toLowerCase().startsWith('representative')) {
+    if (source.contains(' - Photo by')) {
+      return source.split(' - Photo by').first;
+    }
     return source.split(' · ').first;
   }
   return source;

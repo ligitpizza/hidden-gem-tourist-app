@@ -36,10 +36,9 @@ class SharedPreferencesEcoPartnerHomeCache
   final Future<SharedPreferences> Function() _preferences;
   final String Function() _userId;
 
-  // v2 invalidates results cached before transport preview mode precedence
-  // was corrected. Otherwise an MRT/LRT card can retain a bus preview for up
-  // to 24 hours even after the catalogue has been repaired.
-  String get _storageKey => 'eco_partner_nearby_home_v2_${_userId()}';
+  // v4 invalidates results cached before the expanded deterministic transport,
+  // dining, and EV preview sets were added.
+  String get _storageKey => 'eco_partner_nearby_home_v4_${_userId()}';
 
   @override
   Future<EcoPartnerHomeCacheEntry?> read() async {

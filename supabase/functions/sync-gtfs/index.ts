@@ -1,18 +1,40 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { parseGtfs } from "./gtfs_parser.ts";
 
 const feeds = [
   ["ktmb", "https://api.data.gov.my/gtfs-static/ktmb"],
-  ...["rapid-rail-kl", "rapid-bus-kl", "rapid-bus-mrtfeeder", "rapid-bus-penang", "rapid-bus-kuantan"].map(c => [`prasarana-${c}`, `https://api.data.gov.my/gtfs-static/prasarana?category=${c}`]),
-  ...["mybas-kangar", "mybas-alor-setar", "mybas-kota-bharu", "mybas-kuala-terengganu", "mybas-ipoh", "mybas-seremban-a", "mybas-seremban-b", "mybas-melaka", "mybas-johor", "mybas-kuching"].map(c => [c, `https://api.data.gov.my/gtfs-static/${c}`]),
+  ...[
+    "rapid-rail-kl",
+    "rapid-bus-kl",
+    "rapid-bus-mrtfeeder",
+    "rapid-bus-penang",
+    "rapid-bus-kuantan",
+  ].map(
+    (c) => [
+      `prasarana-${c}`,
+      `https://api.data.gov.my/gtfs-static/prasarana?category=${c}`,
+    ],
+  ),
+  ...[
+    "mybas-kangar",
+    "mybas-alor-setar",
+    "mybas-kota-bharu",
+    "mybas-kuala-terengganu",
+    "mybas-ipoh",
+    "mybas-seremban-a",
+    "mybas-seremban-b",
+    "mybas-melaka",
+    "mybas-johor",
+    "mybas-kuching",
+  ].map((c) => [c, `https://api.data.gov.my/gtfs-static/${c}`]),
 ] as const;
 
 const stateBoundaryUrl =
   "https://raw.githubusercontent.com/dosm-malaysia/data-open/main/datasets/geodata/administrative_1_state.geojson";
 
 async function ensureStateBoundaries(
-  client: ReturnType<typeof createClient>,
+  client: SupabaseClient,
 ): Promise<void> {
   const { count, error: countError } = await client
     .from("malaysia_state_boundaries")
@@ -31,7 +53,9 @@ async function ensureStateBoundaries(
     throw new Error(`State boundary download returned HTTP ${response.status}`);
   }
   const geojson = await response.json();
-  if (geojson?.type !== "FeatureCollection" || !Array.isArray(geojson.features)) {
+  if (
+    geojson?.type !== "FeatureCollection" || !Array.isArray(geojson.features)
+  ) {
     throw new Error("State boundary source returned malformed GeoJSON");
   }
   const { data: importedCount, error: replaceError } = await client.rpc(
@@ -44,10 +68,15 @@ async function ensureStateBoundaries(
   }
 }
 
-Deno.serve(async req => {
+Deno.serve(async (req) => {
   const secret = Deno.env.get("SYNC_GTFS_SECRET");
-  if (!secret || req.headers.get("x-sync-secret") !== secret) return new Response("Unauthorized", { status: 401 });
-  const client = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  if (!secret || req.headers.get("x-sync-secret") !== secret) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+  const client = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
   let requestedFeed: string | null = null;
   try {
     const body = await req.json();
@@ -75,13 +104,36 @@ Deno.serve(async req => {
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const parsed = parseGtfs(new Uint8Array(await response.arrayBuffer()), feedId, url);
-      const { error } = await client.rpc("replace_gtfs_feed", { p_feed_id: feedId, p_source_url: url, p_agencies: parsed.agencies, p_stops: parsed.stops, p_routes: parsed.routes, p_stop_routes: parsed.stop_routes });
+      const parsed = parseGtfs(
+        new Uint8Array(await response.arrayBuffer()),
+        feedId,
+        url,
+      );
+      const { error } = await client.rpc("replace_gtfs_feed", {
+        p_feed_id: feedId,
+        p_source_url: url,
+        p_agencies: parsed.agencies,
+        p_stops: parsed.stops,
+        p_routes: parsed.routes,
+        p_stop_routes: parsed.stop_routes,
+      });
       if (error) throw error;
-      results.push({ feedId, status: "success", stops: parsed.stops.length });
+      results.push({
+        feedId,
+        status: "success",
+        stops: parsed.stops.length,
+        routeLinks: parsed.stop_routes.length,
+        routeLinksOmitted: parsed.stopRoutesOmitted,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await client.from("gtfs_feed_status").upsert({ feed_id: feedId, source_url: url, status: "failed", last_attempt_at: new Date().toISOString(), error: message }, { onConflict: "feed_id" });
+      await client.from("gtfs_feed_status").upsert({
+        feed_id: feedId,
+        source_url: url,
+        status: "failed",
+        last_attempt_at: new Date().toISOString(),
+        error: message,
+      }, { onConflict: "feed_id" });
       results.push({ feedId, status: "failed", error: message });
     }
   }

@@ -13,6 +13,13 @@ import '../model/saved_eco_partners_store.dart';
 import 'widgets/eco_partner_image.dart';
 import 'widgets/transit_mode_icon.dart';
 
+const _ecoDetailDeepGreen = Color(0xFF003B2B);
+const _ecoDetailGreen = Color(0xFF075E46);
+const _ecoDetailBackground = Color(0xFFEAF2ED);
+const _ecoDetailSurface = Color(0xFFF8FCF9);
+const _ecoDetailBorder = Color(0xFFA9C2B6);
+const _ecoDetailTint = Color(0xFFD3E6DC);
+
 class EcoPartnerDetailScreen extends StatelessWidget {
   const EcoPartnerDetailScreen({
     super.key,
@@ -35,6 +42,7 @@ class EcoPartnerDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
+    backgroundColor: _ecoDetailBackground,
     appBar: AppHeader.pushed(
       title: 'Partner Details',
       fallbackPath: fallbackPath,
@@ -51,7 +59,7 @@ class EcoPartnerDetailScreen extends StatelessWidget {
               child: Text(
                 partner.name,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: const Color(0xFF003B2B),
+                  color: _ecoDetailDeepGreen,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -59,7 +67,7 @@ class EcoPartnerDetailScreen extends StatelessWidget {
             if (partner.gstcVerified)
               const Padding(
                 padding: EdgeInsets.only(left: 8, top: 4),
-                child: Icon(Icons.verified, color: Color(0xFF087653)),
+                child: Icon(Icons.verified, color: _ecoDetailGreen),
               ),
           ],
         ),
@@ -103,7 +111,7 @@ class EcoPartnerDetailScreen extends StatelessWidget {
               Text(
                 partner.sustainabilityLabel,
                 style: const TextStyle(
-                  color: Color(0xFF087653),
+                  color: _ecoDetailGreen,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -189,6 +197,10 @@ class EcoPartnerDetailScreen extends StatelessWidget {
           const SizedBox(height: 4),
           if (partner.website?.isNotEmpty == true)
             FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: _ecoDetailGreen,
+                foregroundColor: Colors.white,
+              ),
               onPressed: () => _open(context, partner.website!),
               icon: const Icon(Icons.language),
               label: const Text('Visit partner website'),
@@ -196,6 +208,10 @@ class EcoPartnerDetailScreen extends StatelessWidget {
           if (partner.category == EcoPartnerCategory.dining) ...[
             const SizedBox(height: 8),
             OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _ecoDetailDeepGreen,
+                side: const BorderSide(color: _ecoDetailGreen),
+              ),
               onPressed: () => _open(
                 context,
                 Uri.https('www.happycow.net', '/searchmap', {
@@ -231,6 +247,13 @@ class EcoPartnerDetailScreen extends StatelessWidget {
     required Widget child,
   }) => Card(
     margin: const EdgeInsets.only(bottom: 12),
+    color: _ecoDetailSurface,
+    surfaceTintColor: Colors.transparent,
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+      side: const BorderSide(color: _ecoDetailBorder),
+    ),
     child: Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -238,9 +261,17 @@ class EcoPartnerDetailScreen extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, size: 21, color: const Color(0xFF087653)),
+              Icon(icon, size: 21, color: _ecoDetailGreen),
               const SizedBox(width: 8),
-              Text(title, style: Theme.of(context).textTheme.titleMedium),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: _ecoDetailDeepGreen,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -383,7 +414,7 @@ class _InformationRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          Icon(icon, size: 19, color: const Color(0xFF547064)),
+          Icon(icon, size: 19, color: _ecoDetailGreen),
           const SizedBox(width: 10),
           Expanded(child: Text(text)),
           if (onTap != null) ...[
@@ -393,7 +424,7 @@ class _InformationRow extends StatelessWidget {
               child: const Icon(
                 Icons.open_in_new,
                 size: 17,
-                color: Color(0xFF087653),
+                color: _ecoDetailGreen,
               ),
             ),
           ],
@@ -441,6 +472,10 @@ class _SaveEcoPartnerButtonState extends State<_SaveEcoPartnerButton> {
         width: double.infinity,
         child: saved
             ? OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _ecoDetailDeepGreen,
+                  side: const BorderSide(color: _ecoDetailGreen),
+                ),
                 onPressed: busy ? null : _toggle,
                 icon: const Icon(Icons.bookmark),
                 label: Text(
@@ -448,6 +483,10 @@ class _SaveEcoPartnerButtonState extends State<_SaveEcoPartnerButton> {
                 ),
               )
             : FilledButton.tonalIcon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: _ecoDetailTint,
+                  foregroundColor: _ecoDetailDeepGreen,
+                ),
                 onPressed: busy ? null : _toggle,
                 icon: const Icon(Icons.bookmark_add_outlined),
                 label: const Text('Save Eco Partner'),
@@ -658,6 +697,7 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
           spacing: 8,
           children: [
             ChoiceChip(
+              selectedColor: _ecoDetailTint,
               avatar: const Icon(Icons.directions_walk, size: 18),
               label: const Text('Walking'),
               selected: _mode == _RouteMode.walking,
@@ -666,6 +706,7 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
                   : (_) => _changeMode(_RouteMode.walking),
             ),
             ChoiceChip(
+              selectedColor: _ecoDetailTint,
               avatar: const Icon(Icons.directions_transit, size: 18),
               label: const Text('Public transit'),
               selected: _mode == _RouteMode.publicTransit,
@@ -674,6 +715,7 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
                   : (_) => _changeMode(_RouteMode.publicTransit),
             ),
             ChoiceChip(
+              selectedColor: _ecoDetailTint,
               avatar: const Icon(Icons.electric_car_outlined, size: 18),
               label: const Text('EV car'),
               selected: _mode == _RouteMode.evCar,
@@ -703,6 +745,7 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
             children: visibleTransitRoutes
                 .map(
                   (route) => ActionChip(
+                    side: const BorderSide(color: _ecoDetailBorder),
                     avatar: Icon(transitModeIcon(route.mode), size: 17),
                     label: Text(route.displayLabel),
                     tooltip: 'Check live directions for ${route.displayLabel}',
@@ -719,6 +762,10 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: _ecoDetailGreen,
+                foregroundColor: Colors.white,
+              ),
               onPressed: _loading ? null : _loadRoute,
               icon: _loading
                   ? const SizedBox(
@@ -758,14 +805,14 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
                 ],
               MapMarkerSpec(
                 point: destination,
-                color: const Color(0xFF087653),
+                color: _ecoDetailGreen,
                 icon: Icons.location_on,
               ),
             ],
             polylines: [
               MapPolylineSpec(
                 points: route?.polyline ?? transitRoute!.polyline,
-                color: const Color(0xFF087653),
+                color: _ecoDetailGreen,
               ),
             ],
           ),
@@ -851,7 +898,7 @@ class _JourneyStep extends StatelessWidget {
   Widget build(BuildContext context) => ListTile(
     contentPadding: EdgeInsets.zero,
     dense: true,
-    leading: Icon(icon, color: const Color(0xFF087653)),
+    leading: Icon(icon, color: _ecoDetailGreen),
     title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
     subtitle: Text(subtitle),
   );
@@ -866,15 +913,23 @@ class _Pill extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
     decoration: BoxDecoration(
-      color: const Color(0xFFE5F4EC),
+      color: _ecoDetailTint,
       borderRadius: BorderRadius.circular(30),
+      border: Border.all(color: _ecoDetailBorder),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 15, color: const Color(0xFF07513C)),
+        Icon(icon, size: 15, color: _ecoDetailDeepGreen),
         const SizedBox(width: 5),
-        Text(label, style: const TextStyle(fontSize: 12)),
+        Text(
+          label,
+          style: const TextStyle(
+            color: _ecoDetailDeepGreen,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ],
     ),
   );

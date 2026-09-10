@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(38);
+select plan(44);
 
 select has_table('public', 'eco_partner_catalog', 'catalogue table exists');
 select has_index(
@@ -19,8 +19,8 @@ select has_table(
 );
 select is(
   (select count(*) from public.eco_partner_preview_assets),
-  9::bigint,
-  'all representative transport previews are registered'
+  37::bigint,
+  'all representative preview assets are registered'
 );
 select has_index(
   'public',
@@ -101,6 +101,35 @@ select is(
   public.eco_partner_transport_preview_key('mybas-johor', 'Bus'),
   'bas-my-bus'::text,
   'BAS.MY feeds receive their operator preview'
+);
+select ok(
+  public.eco_partner_transport_preview_key_for_partner(
+    'stop:stable-preview-test', 'unknown-feed', 'LRT'
+  ) in ('lrt', 'lrt-2', 'lrt-3'),
+  'a transport partner receives one of three previews for its mode'
+);
+select is(
+  public.eco_partner_transport_preview_key_for_partner(
+    'stop:stable-preview-test', 'unknown-feed', 'LRT'
+  ),
+  public.eco_partner_transport_preview_key_for_partner(
+    'stop:stable-preview-test', 'unknown-feed', 'LRT'
+  ),
+  'transport preview assignment is stable for the same partner'
+);
+select like(
+  public.eco_partner_category_preview_key(
+    'osm:node:dining-preview-test', 'dining', 'Restaurant'
+  ),
+  'dining-%',
+  'dining partners receive a deterministic dining preview key'
+);
+select like(
+  public.eco_partner_category_preview_key(
+    'osm:node:ev-preview-test', 'transport', 'EV charging'
+  ),
+  'ev-%',
+  'EV partners receive a deterministic EV preview key'
 );
 select is(
   (
@@ -189,13 +218,13 @@ perform public.replace_gtfs_feed(
 end
 $setup$;
 
-select is(
+select like(
   (
     select image_url
     from public.eco_partner_catalog
     where id = 'stop:preview-test-feed:stop-1'
   ),
-  'storage://eco-partner-previews/transport/lrt.webp'::text,
+  'storage://eco-partner-previews/transport/lrt%.webp',
   'new GTFS catalogue rows receive their mode preview'
 );
 
@@ -208,13 +237,13 @@ begin
 end
 $setup$;
 
-select is(
+select like(
   (
     select image_url
     from public.eco_partner_catalog
     where id = 'stop:preview-test-feed:stop-1'
   ),
-  'storage://eco-partner-previews/transport/lrt.webp'::text,
+  'storage://eco-partner-previews/transport/lrt%.webp',
   'GTFS refresh preserves and reapplies its curated preview'
 );
 
@@ -279,6 +308,15 @@ select is(
   'a complete state payload is stored transactionally'
 );
 
+select like(
+  (
+    select image_url from public.eco_partner_catalog
+    where id = 'osm:node:catalog-test'
+  ),
+  'storage://eco-partner-previews/dining/dining-%.webp',
+  'OSM dining rows receive bucket-hosted previews during replacement'
+);
+
 select results_eq(
   $$
     select name
@@ -317,6 +355,15 @@ insert into public.eco_partner_catalog (
   'manual:catalog-ev-test', 'manual', 'catalog-ev-test', 'Catalogue EV Test',
   'transport', 'EV charging', 'Sabah', 'Kota Kinabalu, Sabah',
   5.9805, 116.0736, 'Electric vehicle charging', 'Test fixture', 'Test fixture'
+);
+
+select like(
+  (
+    select image_url from public.eco_partner_catalog
+    where id = 'manual:catalog-ev-test'
+  ),
+  'storage://eco-partner-previews/ev/ev-%.webp',
+  'EV rows receive bucket-hosted previews during insertion'
 );
 
 select results_eq(

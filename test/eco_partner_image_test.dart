@@ -11,6 +11,7 @@ void main() {
     ('Light rail', 'LRT service'),
     ('Monorail', 'Monorail service'),
     ('KTM', 'KTM service'),
+    ('EV charging', 'EV charging'),
   ]) {
     testWidgets('shows a ${value.$2} fallback', (tester) async {
       await tester.pumpWidget(
@@ -27,6 +28,27 @@ void main() {
       expect(find.byType(Image), findsNothing);
     });
   }
+
+  testWidgets('shows a dining-specific fallback', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 300,
+          height: 180,
+          child: EcoPartnerImage(
+            partner: _partner(
+              'Restaurant',
+              category: EcoPartnerCategory.dining,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Dining'), findsOneWidget);
+    expect(find.byIcon(Icons.restaurant_outlined), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
+  });
 
   testWidgets('does not load a legacy Mapillary URL', (tester) async {
     await tester.pumpWidget(
@@ -55,17 +77,28 @@ void main() {
       ),
       'Representative LRT image',
     );
+    expect(
+      ecoPartnerPreviewCredit(
+        _partner(
+          'EV charging',
+          imageSourceName:
+              'Representative EV charging image - Photo by Dean Fugate - Pexels License',
+        ),
+      ),
+      'Representative EV charging image',
+    );
   });
 }
 
 EcoPartner _partner(
   String subtype, {
+  EcoPartnerCategory category = EcoPartnerCategory.transport,
   String? imageUrl,
   String? imageSourceName,
 }) => EcoPartner(
   id: 'gtfs:stop',
   name: 'Transit stop',
-  category: EcoPartnerCategory.transport,
+  category: category,
   subtype: subtype,
   latitude: 3.14,
   longitude: 101.69,
