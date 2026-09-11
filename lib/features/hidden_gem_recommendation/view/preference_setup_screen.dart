@@ -11,6 +11,26 @@ const _monthNames = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
+/// Explains what picking this month actually does to recommendations —
+/// deliberately scoped to what's *really* true today (seasonal data only
+/// exists for Penang's outdoor categories: beach/park/viewpoint/waterfall/
+/// mountain/island), not a generic "this changes everything" line, so it
+/// doubles as an honest talking point during a demo instead of setting up
+/// an expectation that won't show for most places.
+String _seasonHint(int month) {
+  final isWetSeason = month >= 9 && month <= 11;
+  if (isWetSeason) {
+    return "Sep–Nov is Penang's wetter season, so outdoor spots there "
+        '(beaches, parks, viewpoints) score a little lower these months. '
+        "Everything else — restaurants, museums, anywhere outside Penang — "
+        "isn't affected by which month you pick.";
+  }
+  return 'Outdoor spots in Penang (beaches, parks, viewpoints) get a small '
+      'boost in this month compared to Sep–Nov. '
+      "Everything else — restaurants, museums, anywhere outside Penang — "
+      "isn't affected by which month you pick.";
+}
+
 IconData _iconForStyle(TravelStyle style) {
   switch (style) {
     case TravelStyle.nature:
@@ -101,6 +121,25 @@ class PreferenceSetupScreen extends ConsumerWidget {
                       ),
                   ],
                 ),
+                if (controller.selected.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline, size: 15, color: colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Places matching your picks get a ranking boost right '
+                            'away — actually viewing or saving places grows that boost '
+                            'further over time.',
+                            style: TextStyle(fontSize: 11.5, color: colorScheme.onSurfaceVariant),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 const SizedBox(height: 28),
                 Text('Budget', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 10),
@@ -117,6 +156,10 @@ class PreferenceSetupScreen extends ConsumerWidget {
                       ),
                   ],
                 ),
+                const _NotYetRankingHint(
+                  text: "Saved to your profile, but doesn't affect ranking "
+                      'yet — most places don’t have cost data recorded.',
+                ),
                 const SizedBox(height: 20),
                 Text('Destination type', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 10),
@@ -131,6 +174,9 @@ class PreferenceSetupScreen extends ConsumerWidget {
                         onSelected: (_) => controller.toggleDestinationType(type),
                       ),
                   ],
+                ),
+                const _NotYetRankingHint(
+                  text: "Saved to your profile, but doesn't affect ranking yet.",
                 ),
                 const SizedBox(height: 20),
                 Text('When are you planning to visit?', style: Theme.of(context).textTheme.titleMedium),
@@ -156,6 +202,22 @@ class PreferenceSetupScreen extends ConsumerWidget {
                     },
                   ),
                 ),
+                if (controller.intendedTravelMonth != null) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.info_outline, size: 15, color: colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _seasonHint(controller.intendedTravelMonth!),
+                          style: TextStyle(fontSize: 11.5, color: colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 if (controller.errorMessage != null) ...[
                   const SizedBox(height: 16),
                   Text(controller.errorMessage!, style: TextStyle(color: colorScheme.error)),
@@ -256,6 +318,36 @@ class _StyleCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A known-limitation caveat for a preference field that's persisted but
+/// genuinely not read by the ranking algorithm yet (budget/destination
+/// type — see the doc comment on 20260911120000_preference_baseline_affinity.sql
+/// for exactly why: budget's only real signal covers ~2% of places, and
+/// destination type has no existing place classification to hook into).
+/// Deliberately always shown, not gated behind a selection, since it's
+/// true regardless of what's picked.
+class _NotYetRankingHint extends StatelessWidget {
+  final String text;
+  const _NotYetRankingHint({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, size: 15, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(text, style: TextStyle(fontSize: 11.5, color: colorScheme.onSurfaceVariant)),
+          ),
+        ],
       ),
     );
   }
