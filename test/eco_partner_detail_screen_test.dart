@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:collab/features/travel_assistant/model/eco_partner.dart';
 import 'package:collab/features/travel_assistant/view/eco_partner_detail_screen.dart';
 import 'package:collab/features/travel_assistant/view/widgets/transit_mode_icon.dart';
@@ -7,6 +9,28 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 
 void main() {
+  test('detail route data survives JSON browser-history serialization', () {
+    final encoded = jsonDecode(
+      jsonEncode(
+        EcoPartnerDetailRouteData(
+          partner: _detailPartner.withDistance(6.4),
+          destinationLabel: 'Kota Kinabalu',
+          showDistance: true,
+          outsideRadiusKm: 5,
+        ).toExtra(),
+      ),
+    );
+
+    final decoded = EcoPartnerDetailRouteData.tryFromExtra(encoded);
+
+    expect(decoded?.partner.id, _detailPartner.id);
+    expect(decoded?.partner.distanceKm, 6.4);
+    expect(decoded?.destinationLabel, 'Kota Kinabalu');
+    expect(decoded?.showDistance, isTrue);
+    expect(decoded?.outsideRadiusKm, 5);
+    expect(EcoPartnerDetailRouteData.tryFromExtra(null), isNull);
+  });
+
   testWidgets('transit route identifiers check live in-app journeys', (
     tester,
   ) async {

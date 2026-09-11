@@ -41,6 +41,29 @@ void main() {
     expect(repository.lastOffset, 10);
   });
 
+  test('compact layout reloads a server page with eight cards', () async {
+    final partners = [
+      for (var index = 0; index < 24; index++)
+        _partner('Compact Eco $index', index),
+    ];
+    final repository = _ServerCatalogRepository(partners);
+    final controller = _testController(repository);
+    await controller.loadInitialRecommendations();
+    await controller.search('Compact Eco');
+
+    expect(controller.visiblePartners, hasLength(10));
+
+    final layoutChange = controller.selectLayout(EcoPartnerLayout.grid4);
+
+    expect(controller.visiblePartners, hasLength(8));
+    await layoutChange;
+    expect(repository.lastLimit, 8);
+    expect(repository.lastOffset, 0);
+    expect(controller.result?.partners, hasLength(8));
+    expect(controller.visiblePartners, hasLength(8));
+    expect(controller.totalPages, 3);
+  });
+
   test(
     'server pagination commits the page only after its request succeeds',
     () async {
@@ -184,6 +207,39 @@ void main() {
   });
 
   test(
+    'exact suggestion hides stale pagination and restores browse paging',
+    () async {
+      final partners = [
+        for (var index = 0; index < 24; index++)
+          _partner('Paged Eco $index', index),
+      ];
+      final repository = _ServerCatalogRepository(partners);
+      final controller = _testController(repository);
+      await controller.loadInitialRecommendations();
+      controller.filter = 'Stay';
+      await controller.retry();
+      await controller.goToPage(1);
+
+      expect(controller.currentPage, 1);
+      expect(controller.totalPages, 3);
+
+      await controller.searchSuggestion(partners.first);
+
+      expect(controller.currentPage, 0);
+      expect(controller.visiblePartners.map((partner) => partner.id), [
+        partners.first.id,
+      ]);
+      expect(controller.totalPages, 1);
+
+      await controller.clearSearch();
+
+      expect(controller.currentPage, 1);
+      expect(controller.totalPages, 3);
+      expect(controller.result?.partners.first.name, 'Paged Eco 10');
+    },
+  );
+
+  test(
     'far name search bypasses nearby filters and restores browse state',
     () async {
       final nearby = _partner(
@@ -307,7 +363,7 @@ void main() {
     },
   );
 
-  test('compact pagination uses eight cards and resets the page', () {
+  test('compact pagination uses eight cards and resets the page', () async {
     final controller = EcoPartnerController(repository: _CatalogRepository([]))
       ..result = EcoPartnerSearchResult(
         destination: const EcoDestination('Malaysia', 4.21, 101.97),
@@ -321,13 +377,13 @@ void main() {
     controller.goToPage(1);
     expect(controller.currentPage, 1);
 
-    controller.selectLayout(EcoPartnerLayout.grid4);
+    await controller.selectLayout(EcoPartnerLayout.grid4);
     expect(controller.currentPage, 0);
     expect(controller.effectivePageSize, 8);
     expect(controller.visiblePartners, hasLength(8));
     expect(controller.totalPages, 2);
 
-    controller.selectLayout(EcoPartnerLayout.grid2);
+    await controller.selectLayout(EcoPartnerLayout.grid2);
     expect(controller.effectivePageSize, 10);
   });
 

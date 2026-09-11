@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/router/shell_routes.dart';
 import '../../../shared/widgets/app_header.dart';
@@ -22,7 +25,8 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
   final _scrollController = ScrollController();
-  final _resultsAnchorKey = GlobalKey();
+  int _autocompleteGeneration = 0;
+  bool _wasCurrentRoute = true;
   bool _showingHomeSectionResults = false;
 
   @override
@@ -48,6 +52,20 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
 
   void _refresh() {
     if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final isCurrentRoute = ModalRoute.isCurrentOf(context) ?? true;
+    if (isCurrentRoute && !_wasCurrentRoute) {
+      _autocompleteGeneration++;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _searchFocus.unfocus();
+      });
+    }
+    _wasCurrentRoute = isCurrentRoute;
   }
 
   @override
@@ -82,280 +100,300 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
   Widget build(BuildContext context) {
     final shown = _controller.visiblePartners;
     final showSectionedHome = _controller.showSectionedHome;
-    return Scaffold(
-      appBar: AppHeader.pushed(
-        title: 'Eco Partners',
-        fallbackPath: ShellRoutes.travelAssistant,
-        onBack: _showingHomeSectionResults ? _returnToSectionedHome : null,
-      ),
-      body: ListView(
-        key: const ValueKey('eco_partner_main_scroll'),
-        controller: _scrollController,
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            'Eco-Partner\nRecommendations',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-              height: 1.05,
-              color: const Color(0xFF003B2B),
+    final hasInternalBackState =
+        _showingHomeSectionResults || _controller.isExplicitSearch;
+    return PopScope<void>(
+      canPop: !hasInternalBackState,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_showingHomeSectionResults) {
+          _returnToSectionedHome();
+        } else if (_controller.isExplicitSearch) {
+          _returnFromSearch();
+        }
+      },
+      child: Scaffold(
+        appBar: AppHeader.pushed(
+          title: 'Eco Partners',
+          fallbackPath: ShellRoutes.travelAssistant,
+          onBack: _showingHomeSectionResults
+              ? _returnToSectionedHome
+              : _controller.isExplicitSearch
+              ? _returnFromSearch
+              : null,
+        ),
+        body: ListView(
+          key: const ValueKey('eco_partner_main_scroll'),
+          controller: _scrollController,
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(
+              'Eco-Partner\nRecommendations',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                height: 1.05,
+                color: const Color(0xFF003B2B),
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Browse sustainable stays, dining, transit and EV partners ${_controller.scopeLabel}, or search by Eco Partner name.',
-          ),
-          const SizedBox(height: 18),
-          RawAutocomplete<EcoPartner>(
-            textEditingController: _search,
-            focusNode: _searchFocus,
-            displayStringForOption: (partner) => partner.name,
-            optionsBuilder: (value) => _controller.loadSuggestions(value.text),
-            onSelected: _selectSuggestion,
-            fieldViewBuilder:
-                (context, textController, focusNode, onFieldSubmitted) =>
-                    TextField(
-                      controller: textController,
-                      focusNode: focusNode,
-                      textInputAction: TextInputAction.search,
-                      onSubmitted: (_) => _find(),
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.search),
-                        hintText: 'Search an Eco Partner, e.g. Somerset...',
-                        suffixIcon: _search.text.isEmpty
-                            ? IconButton(
-                                tooltip: 'Search Eco Partners',
-                                onPressed: _controller.isLoading
-                                    ? null
-                                    : () => _find(),
-                                icon: const Icon(Icons.arrow_forward),
-                              )
-                            : Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    tooltip: 'Clear search',
-                                    onPressed: _controller.isLoading
-                                        ? null
-                                        : _clearSearch,
-                                    icon: const Icon(Icons.close),
-                                  ),
-                                  IconButton(
-                                    tooltip: 'Search Eco Partners',
-                                    onPressed: _controller.isLoading
-                                        ? null
-                                        : () => _find(),
-                                    icon: const Icon(Icons.arrow_forward),
-                                  ),
-                                ],
-                              ),
+            const SizedBox(height: 10),
+            Text(
+              'Browse sustainable stays, dining, transit and EV partners ${_controller.scopeLabel}, or search by Eco Partner name.',
+            ),
+            const SizedBox(height: 18),
+            RawAutocomplete<EcoPartner>(
+              key: ValueKey(_autocompleteGeneration),
+              textEditingController: _search,
+              focusNode: _searchFocus,
+              displayStringForOption: (partner) => partner.name,
+              optionsBuilder: (value) =>
+                  _controller.loadSuggestions(value.text),
+              onSelected: _selectSuggestion,
+              fieldViewBuilder:
+                  (context, textController, focusNode, onFieldSubmitted) =>
+                      TextField(
+                        controller: textController,
+                        focusNode: focusNode,
+                        textInputAction: TextInputAction.search,
+                        onSubmitted: (_) => _find(),
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.search),
+                          hintText: 'Search an Eco Partner, e.g. Somerset...',
+                          suffixIcon: _search.text.isEmpty
+                              ? IconButton(
+                                  tooltip: 'Search Eco Partners',
+                                  onPressed: _controller.isLoading
+                                      ? null
+                                      : () => _find(),
+                                  icon: const Icon(Icons.arrow_forward),
+                                )
+                              : Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      tooltip: 'Clear search',
+                                      onPressed: _controller.isLoading
+                                          ? null
+                                          : _clearSearch,
+                                      icon: const Icon(Icons.close),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Search Eco Partners',
+                                      onPressed: _controller.isLoading
+                                          ? null
+                                          : () => _find(),
+                                      icon: const Icon(Icons.arrow_forward),
+                                    ),
+                                  ],
+                                ),
+                        ),
                       ),
-                    ),
-            optionsViewBuilder: (context, onSelected, options) {
-              final suggestions = options.toList();
-              return Align(
-                alignment: Alignment.topLeft,
-                child: Material(
-                  elevation: 6,
-                  clipBehavior: Clip.antiAlias,
-                  borderRadius: BorderRadius.circular(12),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: 320,
-                      maxWidth: MediaQuery.sizeOf(context).width - 32,
-                    ),
-                    child: ListView.builder(
-                      padding: EdgeInsets.zero,
-                      shrinkWrap: true,
-                      itemCount: suggestions.length,
-                      itemBuilder: (context, index) {
-                        final partner = suggestions[index];
-                        return ListTile(
-                          leading: Icon(_partnerIcon(partner)),
-                          title: Text(
-                            partner.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            '${_label(partner.category)} · ${partner.address}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          onTap: () => onSelected(partner),
-                        );
-                      },
+              optionsViewBuilder: (context, onSelected, options) {
+                final suggestions = options.toList();
+                return Align(
+                  alignment: Alignment.topLeft,
+                  child: Material(
+                    elevation: 6,
+                    clipBehavior: Clip.antiAlias,
+                    borderRadius: BorderRadius.circular(12),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: 320,
+                        maxWidth: MediaQuery.sizeOf(context).width - 32,
+                      ),
+                      child: ListView.builder(
+                        padding: EdgeInsets.zero,
+                        shrinkWrap: true,
+                        itemCount: suggestions.length,
+                        itemBuilder: (context, index) {
+                          final partner = suggestions[index];
+                          return ListTile(
+                            leading: Icon(_partnerIcon(partner)),
+                            title: Text(
+                              partner.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              '${_label(partner.category)} · ${partner.address}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => onSelected(partner),
+                          );
+                        },
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  [
-                    if (_controller.isUsingCurrentLocation ||
-                        (_controller.isExplicitSearch &&
-                            _controller.hasUserLocation))
-                      'Current location',
-                    _controller.scopeLabel,
-                  ].join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-              IconButton.filledTonal(
-                tooltip: 'Filter recommendations',
-                visualDensity: VisualDensity.compact,
-                onPressed: _controller.isLoading ? null : _showFilters,
-                icon: const Icon(Icons.tune, size: 20),
-              ),
-              const SizedBox(width: 6),
-              if (!showSectionedHome)
-                PopupMenuButton<EcoPartnerLayout>(
-                  tooltip: 'Change results layout',
-                  initialValue: _controller.layout,
-                  onSelected: _controller.selectLayout,
-                  icon: Icon(switch (_controller.layout) {
-                    EcoPartnerLayout.list => Icons.view_list_outlined,
-                    EcoPartnerLayout.grid2 => Icons.grid_view_outlined,
-                    EcoPartnerLayout.grid4 => Icons.apps_outlined,
-                  }),
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(
-                      value: EcoPartnerLayout.list,
-                      child: ListTile(
-                        leading: Icon(Icons.view_list_outlined),
-                        title: Text('List'),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: EcoPartnerLayout.grid2,
-                      child: ListTile(
-                        leading: Icon(Icons.grid_view_outlined),
-                        title: Text('Comfortable grid'),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: EcoPartnerLayout.grid4,
-                      child: ListTile(
-                        leading: Icon(Icons.apps_outlined),
-                        title: Text('Compact grid'),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (_controller.isLoading && _controller.result == null)
-            ...List.generate(3, (_) => const _LoadingCard()),
-          if (_controller.isLoading && _controller.result != null) ...[
-            const LinearProgressIndicator(minHeight: 2),
-            const SizedBox(height: 10),
-          ],
-          if (_controller.error != null)
-            _Message(
-              Icons.cloud_off,
-              _controller.error!,
-              action: 'Retry',
-              onPressed: _controller.activeSearchTerm.isEmpty
-                  ? () => _controller.loadInitialRecommendations(refresh: true)
-                  : () => _find(refresh: true),
-            ),
-          if (_controller.notice != null) ...[
-            Card(
-              color: const Color(0xFFFFF5D6),
-              child: ListTile(
-                leading: const Icon(Icons.cloud_off_outlined),
-                title: Text(_controller.notice!),
-                trailing: TextButton(
-                  onPressed: _controller.isLoading ? null : _retry,
-                  child: const Text('Retry'),
-                ),
-              ),
+                );
+              },
             ),
             const SizedBox(height: 8),
-          ],
-          if (_controller.result != null) ...[
-            if (_controller.isExplicitSearch) ...[
-              _SearchScopeNotice(radiusKm: _controller.activeNearbyRadius),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    [
+                      if (_controller.isUsingCurrentLocation ||
+                          (_controller.isExplicitSearch &&
+                              _controller.hasUserLocation))
+                        'Current location',
+                      _controller.scopeLabel,
+                    ].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                IconButton.filledTonal(
+                  tooltip: 'Filter recommendations',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _controller.isLoading ? null : _showFilters,
+                  icon: const Icon(Icons.tune, size: 20),
+                ),
+                const SizedBox(width: 6),
+                if (!showSectionedHome)
+                  PopupMenuButton<EcoPartnerLayout>(
+                    tooltip: 'Change results layout',
+                    initialValue: _controller.layout,
+                    onSelected: (value) => _controller.selectLayout(value),
+                    icon: Icon(switch (_controller.layout) {
+                      EcoPartnerLayout.list => Icons.view_list_outlined,
+                      EcoPartnerLayout.grid2 => Icons.grid_view_outlined,
+                      EcoPartnerLayout.grid4 => Icons.apps_outlined,
+                    }),
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: EcoPartnerLayout.list,
+                        child: ListTile(
+                          leading: Icon(Icons.view_list_outlined),
+                          title: Text('List'),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: EcoPartnerLayout.grid2,
+                        child: ListTile(
+                          leading: Icon(Icons.grid_view_outlined),
+                          title: Text('Comfortable grid'),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: EcoPartnerLayout.grid4,
+                        child: ListTile(
+                          leading: Icon(Icons.apps_outlined),
+                          title: Text('Compact grid'),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (_controller.isLoading && _controller.result == null)
+              ...List.generate(3, (_) => const _LoadingCard()),
+            if (_controller.isLoading && _controller.result != null) ...[
+              const LinearProgressIndicator(minHeight: 2),
               const SizedBox(height: 10),
             ],
-            for (final warning in _controller.result!.warnings)
+            if (_controller.error != null)
+              _Message(
+                Icons.cloud_off,
+                _controller.error!,
+                action: 'Retry',
+                onPressed: _controller.activeSearchTerm.isEmpty
+                    ? () =>
+                          _controller.loadInitialRecommendations(refresh: true)
+                    : () => _find(refresh: true),
+              ),
+            if (_controller.notice != null) ...[
               Card(
                 color: const Color(0xFFFFF5D6),
                 child: ListTile(
-                  leading: const Icon(Icons.warning_amber),
-                  title: Text(warning),
-                  trailing: IconButton(
-                    onPressed: _retry,
-                    icon: const Icon(Icons.refresh),
+                  leading: const Icon(Icons.cloud_off_outlined),
+                  title: Text(_controller.notice!),
+                  trailing: TextButton(
+                    onPressed: _controller.isLoading ? null : _retry,
+                    child: const Text('Retry'),
                   ),
                 ),
               ),
-            if (showSectionedHome)
-              _sectionedHome()
-            else ...[
-              SizedBox(key: _resultsAnchorKey, height: 0),
-              if (shown.isEmpty)
-                _Message(
-                  Icons.eco_outlined,
-                  _controller.activeSearchTerm.isEmpty
-                      ? 'No ${_controller.filter == 'All' ? 'eco partners' : _controller.filter.toLowerCase()} found ${_controller.scopeLabel}.'
-                      : 'No Eco Partner names containing "${_controller.activeSearchTerm}" found ${_controller.scopeLabel}.',
+              const SizedBox(height: 8),
+            ],
+            if (_controller.result != null) ...[
+              if (_controller.isExplicitSearch) ...[
+                _SearchScopeNotice(radiusKm: _controller.activeNearbyRadius),
+                const SizedBox(height: 10),
+              ],
+              for (final warning in _controller.result!.warnings)
+                Card(
+                  color: const Color(0xFFFFF5D6),
+                  child: ListTile(
+                    leading: const Icon(Icons.warning_amber),
+                    title: Text(warning),
+                    trailing: IconButton(
+                      onPressed: _retry,
+                      icon: const Icon(Icons.refresh),
+                    ),
+                  ),
                 ),
-              if (shown.isNotEmpty) _resultsView(shown),
-              if (_controller.totalPages > 1) ...[
-                const SizedBox(height: 4),
-                if (_controller.isLoading) ...[
-                  const LinearProgressIndicator(minHeight: 2),
-                  const SizedBox(height: 8),
-                ],
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      tooltip: 'Previous page',
-                      onPressed:
-                          _controller.isLoading || _controller.currentPage == 0
-                          ? null
-                          : () => _changePage(_controller.currentPage - 1),
-                      icon: const Icon(Icons.chevron_left),
-                    ),
-                    Text(
-                      'Page ${_controller.currentPage + 1} of ${_controller.totalPages}',
-                    ),
-                    IconButton(
-                      tooltip: 'Next page',
-                      onPressed:
-                          _controller.isLoading ||
-                              _controller.currentPage + 1 >=
-                                  _controller.totalPages
-                          ? null
-                          : () => _changePage(_controller.currentPage + 1),
-                      icon: const Icon(Icons.chevron_right),
-                    ),
+              if (showSectionedHome)
+                _sectionedHome()
+              else ...[
+                if (shown.isEmpty)
+                  _Message(
+                    Icons.eco_outlined,
+                    _controller.activeSearchTerm.isEmpty
+                        ? 'No ${_controller.filter == 'All' ? 'eco partners' : _controller.filter.toLowerCase()} found ${_controller.scopeLabel}.'
+                        : 'No Eco Partner names containing "${_controller.activeSearchTerm}" found ${_controller.scopeLabel}.',
+                  ),
+                if (shown.isNotEmpty) _resultsView(shown),
+                if (_controller.totalPages > 1) ...[
+                  const SizedBox(height: 4),
+                  if (_controller.isLoading) ...[
+                    const LinearProgressIndicator(minHeight: 2),
+                    const SizedBox(height: 8),
                   ],
-                ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        tooltip: 'Previous page',
+                        onPressed:
+                            _controller.isLoading ||
+                                _controller.currentPage == 0
+                            ? null
+                            : () => _changePage(_controller.currentPage - 1),
+                        icon: const Icon(Icons.chevron_left),
+                      ),
+                      Text(
+                        'Page ${_controller.currentPage + 1} of ${_controller.totalPages}',
+                      ),
+                      IconButton(
+                        tooltip: 'Next page',
+                        onPressed:
+                            _controller.isLoading ||
+                                _controller.currentPage + 1 >=
+                                    _controller.totalPages
+                            ? null
+                            : () => _changePage(_controller.currentPage + 1),
+                        icon: const Icon(Icons.chevron_right),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ],
+            if (!_controller.isLoading &&
+                _controller.result == null &&
+                _controller.error == null)
+              const _Message(
+                Icons.travel_explore,
+                'Loading recommendations across Malaysia. You can also search for a specific Eco Partner.',
+              ),
           ],
-          if (!_controller.isLoading &&
-              _controller.result == null &&
-              _controller.error == null)
-            const _Message(
-              Icons.travel_explore,
-              'Loading recommendations across Malaysia. You can also search for a specific Eco Partner.',
-            ),
-        ],
+        ),
       ),
     );
   }
@@ -378,31 +416,49 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
   );
 
   Future<void> _showAllForHomeSection(EcoPartnerHomeSection section) async {
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _showingHomeSectionResults = true);
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
     await _controller.showAllForHomeSection(section);
     if (!mounted) return;
-    if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    await _scrollToPageTop();
   }
 
   Future<void> _changePage(int page) async {
     final changed = await _controller.goToPage(page);
     if (!mounted || !changed) return;
+    await _scrollToPageTop();
+  }
+
+  Future<void> _scrollToPageTop() async {
     await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) return;
-    final anchorContext = _resultsAnchorKey.currentContext;
-    if (anchorContext == null || !anchorContext.mounted) return;
-    await Scrollable.ensureVisible(
-      anchorContext,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-      alignment: 0.02,
-    );
+    if (!mounted || !_scrollController.hasClients) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    _scrollController.jumpTo(0);
+    await WidgetsBinding.instance.endOfFrame;
+    if (mounted && _scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
   }
 
   void _returnToSectionedHome() {
     setState(() => _showingHomeSectionResults = false);
     _controller.returnToSectionedHome();
     if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    unawaited(_scrollToPageTop());
+  }
+
+  void _returnFromSearch() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    _searchFocus.unfocus();
+    unawaited(_clearSearchAndReturn());
+  }
+
+  Future<void> _clearSearchAndReturn() async {
+    await _controller.clearSearch();
+    if (!mounted) return;
+    _search.clear();
+    await _scrollToPageTop();
   }
 
   Widget _resultsView(List<EcoPartner> partners) {
@@ -707,19 +763,19 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
     );
   }
 
-  void _details(EcoPartner partner) => Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      builder: (_) => EcoPartnerDetailScreen(
-        partner: partner,
-        destinationLabel: _controller.result?.destination.label ?? '',
-        fallbackPath: ShellRoutes.ecoPartners,
-        showDistance: _controller.showsUserDistance,
-        outsideRadiusKm: _controller.isOutsideBrowseRadius(partner)
-            ? _controller.activeNearbyRadius
-            : null,
-      ),
-    ),
-  );
+  void _details(EcoPartner partner) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    _searchFocus.unfocus();
+    final data = EcoPartnerDetailRouteData(
+      partner: partner,
+      destinationLabel: _controller.result?.destination.label ?? '',
+      showDistance: _controller.showsUserDistance,
+      outsideRadiusKm: _controller.isOutsideBrowseRadius(partner)
+          ? _controller.activeNearbyRadius
+          : null,
+    );
+    context.go(ShellRoutes.ecoPartnerDetail, extra: data.toExtra());
+  }
 }
 
 class _HomePartnerSection extends StatelessWidget {
@@ -1258,7 +1314,7 @@ String _homeSectionTitle(EcoPartnerHomeSection section) => switch (section) {
   EcoPartnerHomeSection.recommended => 'Recommended for You',
   EcoPartnerHomeSection.hotel => 'Hotels',
   EcoPartnerHomeSection.dining => 'Dining',
-  EcoPartnerHomeSection.transport => 'Transport (MRT, LRT, etc.)',
+  EcoPartnerHomeSection.transport => 'Transport',
   EcoPartnerHomeSection.ev => 'EV Charging',
 };
 

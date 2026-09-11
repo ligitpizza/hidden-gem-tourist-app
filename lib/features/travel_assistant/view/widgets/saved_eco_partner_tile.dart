@@ -5,9 +5,10 @@ import '../../model/saved_eco_partners_store.dart';
 import '../eco_partner_detail_screen.dart';
 
 class SavedEcoPartnerTile extends StatelessWidget {
-  const SavedEcoPartnerTile({super.key, required this.saved});
+  const SavedEcoPartnerTile({super.key, required this.saved, this.onRemove});
 
   final SavedEcoPartner saved;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -33,7 +34,8 @@ class SavedEcoPartnerTile extends StatelessWidget {
         ),
         trailing: IconButton(
           tooltip: 'Remove saved Eco Partner',
-          onPressed: () => SavedEcoPartnersStore.instance.remove(saved.id),
+          onPressed:
+              onRemove ?? () => SavedEcoPartnersStore.instance.remove(saved.id),
           icon: const Icon(Icons.bookmark_remove_outlined),
         ),
       ),

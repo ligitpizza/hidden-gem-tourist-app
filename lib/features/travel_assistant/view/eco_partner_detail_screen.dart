@@ -9,6 +9,7 @@ import '../../itinerary_planning/view/widgets/route_map_view.dart';
 import '../../../shared/widgets/app_header.dart';
 import '../model/eco_partner.dart';
 import '../model/eco_partner_routing_service.dart';
+import '../model/saved_eco_partner_repository.dart';
 import '../model/saved_eco_partners_store.dart';
 import 'widgets/eco_partner_image.dart';
 import 'widgets/transit_mode_icon.dart';
@@ -19,6 +20,46 @@ const _ecoDetailBackground = Color(0xFFEAF2ED);
 const _ecoDetailSurface = Color(0xFFF8FCF9);
 const _ecoDetailBorder = Color(0xFFA9C2B6);
 const _ecoDetailTint = Color(0xFFD3E6DC);
+
+class EcoPartnerDetailRouteData {
+  const EcoPartnerDetailRouteData({
+    required this.partner,
+    required this.destinationLabel,
+    required this.showDistance,
+    this.outsideRadiusKm,
+  });
+
+  final EcoPartner partner;
+  final String destinationLabel;
+  final bool showDistance;
+  final double? outsideRadiusKm;
+
+  Map<String, Object?> toExtra() => {
+    'partner': SavedEcoPartnerCodec.toJson(partner),
+    'destinationLabel': destinationLabel,
+    'showDistance': showDistance,
+    'outsideRadiusKm': outsideRadiusKm,
+  };
+
+  static EcoPartnerDetailRouteData? tryFromExtra(Object? extra) {
+    if (extra is! Map) return null;
+    final values = Map<String, dynamic>.from(extra);
+    final partnerValue = values['partner'];
+    if (partnerValue is! Map) return null;
+    try {
+      return EcoPartnerDetailRouteData(
+        partner: SavedEcoPartnerCodec.fromJson(
+          Map<String, dynamic>.from(partnerValue),
+        ),
+        destinationLabel: '${values['destinationLabel'] ?? ''}',
+        showDistance: values['showDistance'] == true,
+        outsideRadiusKm: (values['outsideRadiusKm'] as num?)?.toDouble(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
 
 class EcoPartnerDetailScreen extends StatelessWidget {
   const EcoPartnerDetailScreen({

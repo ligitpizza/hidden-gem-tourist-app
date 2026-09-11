@@ -165,7 +165,9 @@ class EcoPartnerController extends ChangeNotifier {
 
   List<EcoPartner> get visiblePartners {
     final values = filteredPartners;
-    if (_serverPageActive) return values;
+    if (_serverPageActive) {
+      return values.take(effectivePageSize).toList(growable: false);
+    }
     final start = currentPage * effectivePageSize;
     if (start >= values.length) return const [];
     final end = start + effectivePageSize > values.length
@@ -225,6 +227,8 @@ class EcoPartnerController extends ChangeNotifier {
       radiusSelection: radiusSelection,
       layout: layout,
       currentPage: currentPage,
+      serverPageActive: _serverPageActive,
+      serverTotalCount: _serverTotalCount,
     );
     filter = targetFilter;
     if (filter == 'Public Transport') transportType = 'All transport';
@@ -568,7 +572,10 @@ class EcoPartnerController extends ChangeNotifier {
         101.9758,
       ),
       partners: _withUserDistances([partner]),
+      totalCount: 1,
     );
+    _serverPageActive = false;
+    _serverTotalCount = 1;
     _finishRequest();
   }
 
@@ -676,11 +683,14 @@ class EcoPartnerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void selectLayout(EcoPartnerLayout value) {
+  Future<void> selectLayout(EcoPartnerLayout value) async {
     if (layout == value) return;
     layout = value;
     currentPage = 0;
     notifyListeners();
+    if (_serverPageActive) {
+      await _loadCatalogPage(targetPage: 0);
+    }
   }
 
   Future<bool> goToPage(int value) async {
@@ -856,6 +866,8 @@ class EcoPartnerController extends ChangeNotifier {
       radiusSelection: radiusSelection,
       layout: layout,
       currentPage: currentPage,
+      serverPageActive: _serverPageActive,
+      serverTotalCount: _serverTotalCount,
     );
   }
 
@@ -867,6 +879,8 @@ class EcoPartnerController extends ChangeNotifier {
     if (snapshot == null) {
       result = _latestBrowseResult ?? _initialResult;
       currentPage = 0;
+      _serverPageActive = false;
+      _serverTotalCount = result?.totalCount ?? 0;
       return;
     }
     result = snapshot.result ?? _latestBrowseResult ?? _initialResult;
@@ -878,6 +892,8 @@ class EcoPartnerController extends ChangeNotifier {
     radiusSelection = snapshot.radiusSelection;
     layout = snapshot.layout;
     currentPage = snapshot.currentPage;
+    _serverPageActive = snapshot.serverPageActive;
+    _serverTotalCount = snapshot.serverTotalCount;
   }
 
   List<EcoPartner> _withUserDistances(Iterable<EcoPartner> partners) {
@@ -1059,6 +1075,8 @@ class _EcoPartnerBrowseSnapshot {
     required this.radiusSelection,
     required this.layout,
     required this.currentPage,
+    required this.serverPageActive,
+    required this.serverTotalCount,
   });
 
   final EcoPartnerSearchResult? result;
@@ -1070,4 +1088,6 @@ class _EcoPartnerBrowseSnapshot {
   final double radiusSelection;
   final EcoPartnerLayout layout;
   final int currentPage;
+  final bool serverPageActive;
+  final int serverTotalCount;
 }

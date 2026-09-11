@@ -7,9 +7,11 @@ class ShellRoutes {
   static const assistant = '/assistant';
   static const saved = '/saved';
   static const profile = '/profile';
+  static const profileEmergencyContacts = '/profile/emergency-contacts';
   static const travelAssistant = '/travel-assistant';
   static const checklist = '/travel-assistant/checklist';
   static const ecoPartners = '/travel-assistant/eco-partners';
+  static const ecoPartnerDetail = '/travel-assistant/eco-partners/detail';
   static const documentVault = '/travel-assistant/document-vault';
 
   // Compatibility for links created before the module rename.

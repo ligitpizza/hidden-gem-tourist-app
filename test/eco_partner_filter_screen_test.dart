@@ -1,12 +1,15 @@
 import 'dart:async';
 
+import 'package:collab/core/router/shell_routes.dart';
 import 'package:collab/features/travel_assistant/controller/eco_partner_controller.dart';
 import 'package:collab/features/travel_assistant/model/eco_partner.dart';
 import 'package:collab/features/travel_assistant/model/eco_partner_cache.dart';
 import 'package:collab/features/travel_assistant/model/eco_partner_repository.dart';
+import 'package:collab/features/travel_assistant/view/eco_partner_detail_screen.dart';
 import 'package:collab/features/travel_assistant/view/eco_partner_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 void main() {
   testWidgets('loads nearby recommendations from current location', (
@@ -27,7 +30,7 @@ void main() {
     expect(find.text('Recommended for You'), findsOneWidget);
     expect(find.text('Hotels'), findsNWidgets(2));
     expect(find.text('Dining'), findsOneWidget);
-    expect(find.text('Transport (MRT, LRT, etc.)'), findsOneWidget);
+    expect(find.text('Transport'), findsOneWidget);
     expect(find.text('EV Charging'), findsOneWidget);
     expect(find.byTooltip('Change results layout'), findsNothing);
     expect(
@@ -219,6 +222,60 @@ void main() {
     expect(repository.coordinateSearches, 1);
   });
 
+  testWidgets('server-backed More results initially open at the page top', (
+    tester,
+  ) async {
+    final repository = _PagedScreenRepository([
+      for (var index = 0; index < 25; index++)
+        _categoryPartner(
+          'Hotel $index',
+          index,
+          category: EcoPartnerCategory.stay,
+          subtype: 'Hotel',
+        ),
+    ]);
+    final controller = _InitialScreenController(repository);
+    await tester.pumpWidget(
+      MaterialApp(home: EcoPartnersScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    final mainScroll = find.byKey(const ValueKey('eco_partner_main_scroll'));
+    final mainScrollable = find
+        .descendant(of: mainScroll, matching: find.byType(Scrollable))
+        .first;
+    final hotelList = find.byKey(const ValueKey('eco_partner_home_list_hotel'));
+    await tester.ensureVisible(hotelList);
+    await tester.pumpAndSettle();
+    final hotelScrollable = find
+        .descendant(
+          of: hotelList,
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Scrollable &&
+                widget.axisDirection == AxisDirection.right,
+          ),
+        )
+        .first;
+    final more = find.byKey(const ValueKey('eco_partner_more_hotel'));
+    await tester.scrollUntilVisible(more, 300, scrollable: hotelScrollable);
+    await tester.pumpAndSettle();
+    expect(
+      tester.state<ScrollableState>(mainScrollable).position.pixels,
+      greaterThan(0),
+    );
+
+    await tester.tap(more);
+    await tester.pumpAndSettle();
+
+    expect(controller.filter, 'Stay');
+    expect(controller.visiblePartners, hasLength(10));
+    expect(
+      tester.state<ScrollableState>(mainScrollable).position.pixels,
+      lessThanOrEqualTo(1),
+    );
+  });
+
   testWidgets('Up from category More returns to the Eco Partners home view', (
     tester,
   ) async {
@@ -308,6 +365,53 @@ void main() {
     expect(find.text('Recommended for You'), findsNothing);
     expect(find.byTooltip('Change results layout'), findsOneWidget);
     expect(find.byKey(const ValueKey('eco_partner_more_hotel')), findsNothing);
+  });
+
+  testWidgets('Up and system back unwind search before leaving Eco Partners', (
+    tester,
+  ) async {
+    final somerset = _screenPartner('Somerset Kuala Lumpur', 2);
+    final repository = _CatalogScreenRepository([
+      somerset,
+      _screenPartner('Unrelated Eco Lodge', 3),
+    ]);
+    final controller = _screenController(repository);
+    final router = _ecoPartnerRouter(controller);
+    addTearDown(router.dispose);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+
+    Future<void> selectSearchResult() async {
+      await tester.enterText(find.byType(TextField).first, 'So');
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ListTile, 'Somerset Kuala Lumpur'));
+      await tester.pumpAndSettle();
+      expect(controller.isExplicitSearch, isTrue);
+      expect(find.text('Recommended for You'), findsNothing);
+    }
+
+    await selectSearchResult();
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
+    await tester.pumpAndSettle();
+
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      ShellRoutes.ecoPartners,
+    );
+    expect(controller.isExplicitSearch, isFalse);
+    expect(find.text('Recommended for You'), findsOneWidget);
+
+    await selectSearchResult();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      ShellRoutes.ecoPartners,
+    );
+    expect(controller.isExplicitSearch, isFalse);
+    expect(find.text('Recommended for You'), findsOneWidget);
+    expect(find.text('Travel Assistant dashboard'), findsNothing);
   });
 
   testWidgets('compact grid renders four columns and eight cards', (
@@ -408,17 +512,102 @@ void main() {
         destination: const EcoDestination('Kota Kinabalu', 5.98, 116.07),
         partners: [_partner],
       );
-    await tester.pumpWidget(
-      MaterialApp(home: EcoPartnersScreen(controller: controller)),
-    );
-    await tester.pump();
+    final router = _ecoPartnerRouter(controller);
+    addTearDown(router.dispose);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Eco Lodge'));
     await tester.pumpAndSettle();
 
     expect(find.text('Partner Details'), findsOneWidget);
     expect(find.text('Eco Lodge'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
+    await tester.pumpAndSettle();
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      ShellRoutes.ecoPartners,
+    );
+    expect(find.text('Eco Partners'), findsOneWidget);
   });
+
+  testWidgets('detail route without partner data returns to Eco Partners', (
+    tester,
+  ) async {
+    final controller = _FilterTestController(_FilterRepository());
+    final router = _ecoPartnerRouter(controller);
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+    router.go(ShellRoutes.ecoPartnerDetail);
+    await tester.pumpAndSettle();
+
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      ShellRoutes.ecoPartners,
+    );
+    expect(find.text('Eco Partners'), findsOneWidget);
+  });
+
+  testWidgets(
+    'system back returns from details with search suggestions closed',
+    (tester) async {
+      final somerset = _screenPartner('Somerset Kuala Lumpur', 2);
+      final repository = _CatalogScreenRepository([
+        somerset,
+        _screenPartner('Unrelated Eco Lodge', 3),
+      ]);
+      final controller = _screenController(repository);
+      final router = _ecoPartnerRouter(controller);
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'So');
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ListTile, 'Somerset Kuala Lumpur'));
+      await tester.pumpAndSettle();
+
+      final details = find.text('Details →');
+      await tester.ensureVisible(details);
+      await tester.pumpAndSettle();
+      await tester.tap(details);
+      await tester.pumpAndSettle();
+      expect(
+        router.routerDelegate.currentConfiguration.uri.path,
+        ShellRoutes.ecoPartnerDetail,
+      );
+      expect(find.text('Partner Details'), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(
+        router.routerDelegate.currentConfiguration.uri.path,
+        ShellRoutes.ecoPartners,
+      );
+      expect(
+        tester.widget<TextField>(find.byType(TextField).first).controller?.text,
+        'Somerset Kuala Lumpur',
+      );
+      expect(
+        find.widgetWithText(ListTile, 'Somerset Kuala Lumpur'),
+        findsNothing,
+      );
+
+      await tester.enterText(
+        find.byType(TextField).first,
+        'Somerset Kuala Lumpu',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.widgetWithText(ListTile, 'Somerset Kuala Lumpur'),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('non-location results show address instead of zero distance', (
     tester,
@@ -569,6 +758,7 @@ void main() {
         .state<ScrollableState>(mainScrollable)
         .position
         .pixels;
+    expect(bottom, greaterThan(0));
     repository.nextPage = Completer<EcoPartnerSearchResult>();
 
     await tester.tap(nextPage);
@@ -593,14 +783,96 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Page 2 of 3'), findsOneWidget);
+    expect(controller.currentPage, 1);
+    expect(controller.totalPages, 3);
     expect(find.text('Paged Partner 10'), findsOneWidget);
     expect(
       tester.state<ScrollableState>(mainScrollable).position.pixels,
-      lessThan(bottom),
+      lessThanOrEqualTo(1),
+    );
+  });
+
+  testWidgets('failed pagination keeps the current scroll position', (
+    tester,
+  ) async {
+    final partners = [
+      for (var index = 0; index < 25; index++)
+        _screenPartner('Paged Partner $index', index),
+    ];
+    final repository = _PagedScreenRepository(partners);
+    final controller = EcoPartnerController(
+      repository: repository,
+      currentLocationLoader: () async =>
+          const EcoDestination('Current location', 3.14, 101.69),
+      lastKnownLocationLoader: () async => null,
+      homeCache: _MemoryHomeCache(),
+    )..filter = 'Stay';
+    await tester.pumpWidget(
+      MaterialApp(home: EcoPartnersScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    final mainScroll = find.byKey(const ValueKey('eco_partner_main_scroll'));
+    final mainScrollable = find
+        .descendant(of: mainScroll, matching: find.byType(Scrollable))
+        .first;
+    final nextPage = find.byTooltip('Next page');
+    await tester.scrollUntilVisible(nextPage, 500, scrollable: mainScrollable);
+    await tester.pumpAndSettle();
+    final before = tester
+        .state<ScrollableState>(mainScrollable)
+        .position
+        .pixels;
+    repository.nextPage = Completer<EcoPartnerSearchResult>();
+
+    await tester.tap(nextPage);
+    await tester.pump();
+    repository.nextPage!.completeError(StateError('offline'));
+    await tester.pumpAndSettle();
+
+    expect(controller.currentPage, 0);
+    expect(find.text('Page 1 of 3'), findsOneWidget);
+    expect(
+      tester.state<ScrollableState>(mainScrollable).position.pixels,
+      closeTo(before, 1),
     );
   });
 }
+
+GoRouter _ecoPartnerRouter(EcoPartnerController controller) => GoRouter(
+  initialLocation: ShellRoutes.ecoPartners,
+  routes: [
+    GoRoute(
+      path: ShellRoutes.travelAssistant,
+      builder: (context, state) => const Scaffold(
+        body: Center(child: Text('Travel Assistant dashboard')),
+      ),
+    ),
+    GoRoute(
+      path: ShellRoutes.ecoPartners,
+      builder: (context, state) => EcoPartnersScreen(controller: controller),
+      routes: [
+        GoRoute(
+          path: 'detail',
+          redirect: (context, state) =>
+              EcoPartnerDetailRouteData.tryFromExtra(state.extra) == null
+              ? ShellRoutes.ecoPartners
+              : null,
+          builder: (context, state) {
+            final data = EcoPartnerDetailRouteData.tryFromExtra(state.extra)!;
+            return EcoPartnerDetailScreen(
+              partner: data.partner,
+              destinationLabel: data.destinationLabel,
+              fallbackPath: ShellRoutes.ecoPartners,
+              showDistance: data.showDistance,
+              outsideRadiusKm: data.outsideRadiusKm,
+            );
+          },
+        ),
+      ],
+    ),
+  ],
+);
 
 final _partner = EcoPartner(
   id: 'hotel:1',

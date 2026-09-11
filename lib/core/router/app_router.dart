@@ -54,6 +54,8 @@ import '../../features/destination_exploration/view/comparison_screen.dart';
 import '../../features/destination_exploration/view/destination_map_screen.dart';
 import '../../features/profile/view/profile_screen.dart';
 import '../../features/saved/view/saved_screen.dart';
+import '../../features/travel_assistant/view/eco_partner_detail_screen.dart';
+import '../../features/travel_assistant/view/emergency_contacts_screen.dart';
 import '../../features/travel_assistant/view/travel_assistant_screens.dart';
 import '../../shared/widgets/top_notification_banner.dart';
 import '../widgets/app_bottom_nav_bar.dart';
@@ -258,6 +260,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'eco-partners',
                     builder: (context, state) => const EcoPartnersScreen(),
+                    routes: [
+                      GoRoute(
+                        path: 'detail',
+                        redirect: (context, state) =>
+                            EcoPartnerDetailRouteData.tryFromExtra(
+                                  state.extra,
+                                ) ==
+                                null
+                            ? ShellRoutes.ecoPartners
+                            : null,
+                        builder: (context, state) {
+                          final data = EcoPartnerDetailRouteData.tryFromExtra(
+                            state.extra,
+                          )!;
+                          return EcoPartnerDetailScreen(
+                            partner: data.partner,
+                            destinationLabel: data.destinationLabel,
+                            fallbackPath: ShellRoutes.ecoPartners,
+                            showDistance: data.showDistance,
+                            outsideRadiusKm: data.outsideRadiusKm,
+                          );
+                        },
+                      ),
+                    ],
                   ),
                   GoRoute(
                     path: 'document-vault',
@@ -300,6 +326,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: ShellRoutes.profile,
                 builder: (context, state) => const ProfileScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'emergency-contacts',
+                    builder: (context, state) => const EmergencyContactsScreen(
+                      fallbackPath: ShellRoutes.profile,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

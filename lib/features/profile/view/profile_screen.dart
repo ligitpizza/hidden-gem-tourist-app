@@ -23,9 +23,9 @@ import '../../itinerary_planning/controller/gem_category_preference_controller.d
 import '../../itinerary_planning/model/saved_itineraries_store.dart';
 import '../../itinerary_planning/view/widgets/gem_category_filter.dart';
 import '../../itinerary_planning/view/widgets/saved_itinerary_tile.dart';
-import '../../travel_assistant/model/saved_eco_partners_store.dart';
-import '../../travel_assistant/view/widgets/saved_eco_partner_tile.dart';
+import 'widgets/profile_emergency_contacts_shortcut.dart';
 import 'widgets/profile_share_sheet.dart';
+import 'widgets/saved_eco_partners_section.dart';
 
 /// The Tourist's showcase page — everything worth bragging about in one
 /// place: stats, achievements, and journal highlights, with a Share
@@ -62,7 +62,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _badgeController.addListener(_refresh);
     _journalController.addListener(_refresh);
     SavedItinerariesStore.instance.ensureLoaded();
-    SavedEcoPartnersStore.instance.ensureLoaded();
 
     // The app shell (_MainShell in app_router.dart) owns the module's
     // one-time initial data load at app start, so this just needs an
@@ -257,6 +256,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         label: const Text('Share to…'),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 14),
+                  ProfileEmergencyContactsShortcut(
+                    onTap: () =>
+                        context.push(ShellRoutes.profileEmergencyContacts),
                   ),
                   const SizedBox(height: 24),
 
@@ -626,58 +630,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     },
                   ),
                   const SizedBox(height: 14),
-                  Text(
-                    'Eco Partners',
-                    style: AppTypography.bodySm.copyWith(
-                      color: colors.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  ListenableBuilder(
-                    listenable: SavedEcoPartnersStore.instance,
-                    builder: (context, _) {
-                      final store = SavedEcoPartnersStore.instance;
-                      if (store.isLoading && store.saved.isEmpty) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          child: Center(child: CircularProgressIndicator()),
-                        );
-                      }
-                      if (store.error != null && store.saved.isEmpty) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              store.error!,
-                              style: AppTypography.bodySm.copyWith(
-                                color: colors.onSurfaceVariant,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            OutlinedButton(
-                              onPressed: store.refresh,
-                              child: const Text('Retry'),
-                            ),
-                          ],
-                        );
-                      }
-                      if (store.saved.isEmpty) {
-                        return Text(
-                          'No saved Eco Partners yet — save one from Eco Partner recommendations.',
-                          style: AppTypography.bodySm.copyWith(
-                            color: colors.onSurfaceVariant,
-                          ),
-                        );
-                      }
-                      return Column(
-                        children: [
-                          for (final saved in store.saved)
-                            SavedEcoPartnerTile(saved: saved),
-                        ],
-                      );
-                    },
-                  ),
+                  const SavedEcoPartnersSection(),
                   const SizedBox(height: 20),
                   OutlinedButton.icon(
                     onPressed: () => AuthRepository().signOut(),
