@@ -3,6 +3,7 @@
          the user's current location when none is selected) and the
          locate-me control — without these, geolocator's permission request
          never shows the system prompt at all (silently denied). -->
+         <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <application
