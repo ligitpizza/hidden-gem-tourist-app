@@ -41,8 +41,8 @@ class UserStatsModel {
     return UserStatsModel(
       totalCheckIns: 0,
       statesExplored: 0,
-      // Malaysia has 13 states (federal territories aren't counted here).
-      totalMalaysianRegions: 13,
+      // 13 states + 3 federal territories (Kuala Lumpur, Putrajaya, Labuan).
+      totalMalaysianRegions: 16,
       badgesEarned: 0,
       badgesAvailable: 0,
       categoryBreakdown: const {},

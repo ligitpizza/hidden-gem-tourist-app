@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../config/theme.dart';
 
+/// Shared wording for the "States + Territories" ring's info tooltip, so
+/// the Dashboard and a friend's profile preview never drift out of sync
+/// on how they explain the 16 figure.
+const statesAndTerritoriesTooltip =
+    'Counts all 13 Malaysian states plus 3 federal territories: '
+    'Kuala Lumpur, Putrajaya, and Labuan.';
+
 /// Ring progress indicator with a value/target readout in the centre —
 /// used for "states explored" and "badges earned" on the dashboard.
 class StatRing extends StatelessWidget {
@@ -12,6 +19,7 @@ class StatRing extends StatelessWidget {
     required this.target,
     this.size = 96,
     this.strokeWidth = 8,
+    this.tooltip,
   });
 
   final String label;
@@ -19,6 +27,12 @@ class StatRing extends StatelessWidget {
   final int target;
   final double size;
   final double strokeWidth;
+
+  /// Optional explanation shown via a small info icon beside the label —
+  /// e.g. clarifying that "States + Territories" counts 3 federal
+  /// territories alongside the 13 states. Long-press on touch devices,
+  /// hover on desktop/web.
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -58,10 +72,27 @@ class StatRing extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: AppTypography.labelMd.copyWith(letterSpacing: 0),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: AppTypography.labelMd.copyWith(letterSpacing: 0),
+            ),
+            if (tooltip != null) ...[
+              const SizedBox(width: 4),
+              Tooltip(
+                message: tooltip,
+                triggerMode: TooltipTriggerMode.tap,
+                child: Icon(
+                  Icons.info_outline,
+                  size: 14,
+                  color: AppColors.of(context).onSurfaceVariant,
+                ),
+              ),
+            ],
+          ],
         ),
       ],
     );

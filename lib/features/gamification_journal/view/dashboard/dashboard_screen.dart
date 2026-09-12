@@ -136,11 +136,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   // --- Overview stats -----------------------------------
                   StatRing(
-                    label: 'States Explored',
+                    label: 'States + Territories',
                     current: stats.statesExplored,
                     target: stats.totalMalaysianRegions,
                     size: 148,
                     strokeWidth: 10,
+                    tooltip: statesAndTerritoriesTooltip,
                   ),
                   const SizedBox(height: 16),
                   IntrinsicHeight(

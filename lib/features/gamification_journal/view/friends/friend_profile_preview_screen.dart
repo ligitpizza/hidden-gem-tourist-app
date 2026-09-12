@@ -131,11 +131,15 @@ class _FriendProfilePreviewScreenState extends State<FriendProfilePreviewScreen>
 
                 // --- Overview stats -----------------------------------
                 StatRing(
-                  label: 'States Explored',
+                  label: 'States + Territories',
                   current: statesExplored,
-                  target: 13,
+                  // 13 states + 3 federal territories — matches
+                  // UserStatsModel.totalMalaysianRegions on the owner's
+                  // own dashboard.
+                  target: 16,
                   size: 148,
                   strokeWidth: 10,
+                  tooltip: statesAndTerritoriesTooltip,
                 ),
                 const SizedBox(height: 16),
                 IntrinsicHeight(

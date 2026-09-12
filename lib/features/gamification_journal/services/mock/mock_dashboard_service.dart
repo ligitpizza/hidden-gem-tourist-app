@@ -73,7 +73,11 @@ class MockDashboardService {
     return UserStatsModel(
       totalCheckIns: checkIns.length,
       statesExplored: statesExplored,
-      totalMalaysianRegions: 13,
+      // 13 states + 3 federal territories (Kuala Lumpur, Putrajaya, Labuan)
+      // — _cityToState already resolves those three to their own distinct
+      // values, so statesExplored (a Set) can already legitimately reach
+      // 16; this was just the wrong denominator to show it against.
+      totalMalaysianRegions: 16,
       badgesEarned: userBadges.length,
       badgesAvailable: allBadges.length,
       categoryBreakdown: categoryBreakdown,
