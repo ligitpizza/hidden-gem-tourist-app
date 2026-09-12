@@ -206,8 +206,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ..._legacyTravelAssistantRoutes(ShellRoutes.legacyTravelAssistant),
       ..._legacyTravelAssistantRoutes(ShellRoutes.legacyInterimAssistant),
       StatefulShellRoute.indexedStack(
-        builder: (context, state, navigationShell) =>
-            _MainShell(navigationShell: navigationShell),
+        builder: (context, state, navigationShell) => _MainShell(
+          navigationShell: navigationShell,
+          currentLocation: state.uri.toString(),
+        ),
         branches: [
           StatefulShellBranch(
             navigatorKey: _branchNavigatorKeys[0],
@@ -430,7 +432,15 @@ class GoRouterRefreshStream extends ChangeNotifier {
 /// waiting for a specific tab visit.
 class _MainShell extends StatefulWidget {
   final StatefulNavigationShell navigationShell;
-  const _MainShell({required this.navigationShell});
+
+  /// The full current location (e.g. `/journal/badges`), so the bottom
+  /// nav bar can tell a More-menu push route apart from the Journal tab's
+  /// own root — pushing one doesn't change [navigationShell.currentIndex]
+  /// at all, since it's still the same branch, just a different screen on
+  /// top of that branch's own Navigator stack.
+  final String currentLocation;
+
+  const _MainShell({required this.navigationShell, required this.currentLocation});
 
   @override
   State<_MainShell> createState() => _MainShellState();
@@ -496,6 +506,7 @@ class _MainShellState extends State<_MainShell> {
       body: widget.navigationShell,
       bottomNavigationBar: AppBottomNavBar(
         currentIndex: widget.navigationShell.currentIndex,
+        currentLocation: widget.currentLocation,
         onTabSelected: (index) {
           final reselectingCurrentTab =
               index == widget.navigationShell.currentIndex;

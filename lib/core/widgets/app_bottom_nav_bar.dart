@@ -143,10 +143,18 @@ class AppBottomNavBar extends StatefulWidget {
   final int currentIndex;
   final ValueChanged<int> onTabSelected;
 
+  /// The full current route (e.g. `/journal/badges`) — a More-menu push
+  /// route doesn't change [currentIndex] at all (it's still the Journal
+  /// branch, just a different screen pushed on top of it), so this is
+  /// how the bar tells "on Journal's own timeline" apart from "on Badges/
+  /// Quizzes/Check-ins/Friends, reached via More".
+  final String currentLocation;
+
   const AppBottomNavBar({
     super.key,
     required this.currentIndex,
     required this.onTabSelected,
+    required this.currentLocation,
   });
 
   @override
@@ -161,6 +169,16 @@ class _AppBottomNavBarState extends State<AppBottomNavBar>
   bool get _onSecondaryBranch =>
       _secondaryBranches.contains(widget.currentIndex);
   bool get _isMoreOpen => _moreEntry != null;
+
+  /// Which More-menu push entry (Badges/Quizzes/Check-ins/Friends), if
+  /// any, the current location is showing — null while on any real shell
+  /// branch, including Journal's own root.
+  _MorePushEntry? get _activeMorePushEntry {
+    for (final entry in _morePushEntries) {
+      if (widget.currentLocation == entry.path) return entry;
+    }
+    return null;
+  }
 
   @override
   void didUpdateWidget(covariant AppBottomNavBar oldWidget) {
@@ -233,6 +251,14 @@ class _AppBottomNavBarState extends State<AppBottomNavBar>
 
   @override
   Widget build(BuildContext context) {
+    final activeMorePushEntry = _activeMorePushEntry;
+    // A More-push route (Badges/Quizzes/Check-ins/Friends) doesn't change
+    // currentIndex — it's still the Journal branch — so without this,
+    // Journal's own primary tab would stay highlighted underneath the
+    // More slot showing the pushed screen instead, doubling up the
+    // selected state across two tabs at once.
+    final morePushActive = activeMorePushEntry != null;
+
     return Material(
       color: Theme.of(context).colorScheme.surface,
       elevation: 8,
@@ -246,21 +272,27 @@ class _AppBottomNavBarState extends State<AppBottomNavBar>
                 Expanded(
                   child: _NavItem(
                     destination: _destinations[i],
-                    selected: widget.currentIndex == i,
+                    selected: widget.currentIndex == i && !morePushActive,
                     onTap: () => _selectPrimary(i),
                   ),
                 ),
               Expanded(
                 child: _NavItem(
-                  destination: _onSecondaryBranch
+                  destination: activeMorePushEntry != null
+                      ? _NavDestination(
+                          icon: activeMorePushEntry.icon,
+                          selectedIcon: activeMorePushEntry.icon,
+                          label: activeMorePushEntry.label,
+                        )
+                      : _onSecondaryBranch
                       ? _destinations[widget.currentIndex]
                       : const _NavDestination(
                           icon: Icons.grid_view_outlined,
                           selectedIcon: Icons.grid_view,
                           label: 'More',
                         ),
-                  selected: _onSecondaryBranch || _isMoreOpen,
-                  showIndicator: !_onSecondaryBranch,
+                  selected: _onSecondaryBranch || _isMoreOpen || morePushActive,
+                  showIndicator: !_onSecondaryBranch && !morePushActive,
                   onTap: () => _openMoreMenu(context),
                 ),
               ),
@@ -268,7 +300,7 @@ class _AppBottomNavBarState extends State<AppBottomNavBar>
                 Expanded(
                   child: _NavItem(
                     destination: _destinations[i],
-                    selected: widget.currentIndex == i,
+                    selected: widget.currentIndex == i && !morePushActive,
                     onTap: () => _selectPrimary(i),
                   ),
                 ),
