@@ -169,23 +169,7 @@ class _CultureCommunityHomeScreenState
           ),
         ),
 
-        actions: [
-          // ===================================================
-          // SAVED CULTURE BUTTON
-          // ===================================================
 
-          IconButton(
-            tooltip: 'Saved Culture',
-            onPressed: () {
-              context.push(
-                CultureCommunityRoutes.saved,
-              );
-            },
-            icon: const Icon(
-              Icons.bookmark_outline_rounded,
-            ),
-          ),
-        ],
       ),
 
       // =======================================================

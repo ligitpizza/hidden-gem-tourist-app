@@ -15,7 +15,6 @@ import '../../features/auth/view/login_screen.dart';
 import '../../features/auth/view/signup_screen.dart';
 import '../../features/culture_community/view/culture_community_home_screen.dart';
 import '../../features/culture_community/view/culture_community_routes.dart';
-import '../../features/culture_community/view/culture_saved_screen.dart';
 import '../../features/culture_community/view/cultural_events_home_screen.dart';
 import '../../features/culture_community/view/cultural_events_map_screen.dart';
 import '../../features/culture_community/model/cultural_event.dart';
@@ -388,10 +387,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                       return TraditionalFoodNearbyScreen(food: food);
                     },
                   ),
-                  GoRoute(
-                    path: CultureCommunityRoutes.savedSegment,
-                    builder: (context, state) => const CultureSavedScreen(),
-                  ),
+
                 ],
               ),
             ],

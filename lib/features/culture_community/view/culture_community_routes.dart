@@ -19,8 +19,6 @@ class CultureCommunityRoutes {
   static const foodNearbySegment =
       'food-nearby';
 
-  static const savedSegment =
-      'saved';
 
   static const events =
       '/culture/events';
@@ -40,6 +38,4 @@ class CultureCommunityRoutes {
   static const foodNearby =
       '/culture/food-nearby';
 
-  static const saved =
-      '/culture/saved';
 }
