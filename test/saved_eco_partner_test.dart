@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:collab/features/travel_assistant/model/eco_partner.dart';
 import 'package:collab/features/travel_assistant/model/saved_eco_partner.dart';
 import 'package:collab/features/travel_assistant/model/saved_eco_partner_repository.dart';
@@ -22,6 +24,43 @@ void main() {
     expect(store.saved, isEmpty);
     expect(repository.deletedIds, ['saved-1']);
   });
+
+  test(
+    'account switch clears saved partners and ignores an old load',
+    () async {
+      final repository = _DeferredSavedEcoPartnerRepository();
+      final store = SavedEcoPartnersStore(repository: repository);
+
+      store.scopeToUser('user-a');
+      final oldLoad = store.refresh();
+      expect(store.isLoading, isTrue);
+
+      store.scopeToUser('user-b');
+      expect(store.saved, isEmpty);
+      expect(store.isLoading, isFalse);
+
+      final newLoad = store.ensureLoaded();
+      repository.fetches[1].complete([
+        SavedEcoPartner(
+          id: 'saved-b',
+          partner: _partnerB,
+          savedAt: DateTime(2026),
+        ),
+      ]);
+      await newLoad;
+      expect(store.saved.single.partner.id, _partnerB.id);
+
+      repository.fetches[0].complete([
+        SavedEcoPartner(
+          id: 'saved-a',
+          partner: _partner,
+          savedAt: DateTime(2026),
+        ),
+      ]);
+      await oldLoad;
+      expect(store.saved.single.partner.id, _partnerB.id);
+    },
+  );
 
   test(
     'missing Supabase table falls back to a persistent local save',
@@ -146,6 +185,21 @@ final _partner = EcoPartner(
   lastUpdated: DateTime(2026),
 );
 
+final _partnerB = EcoPartner(
+  id: 'hotel:2',
+  name: 'Forest Retreat',
+  category: EcoPartnerCategory.stay,
+  subtype: 'Hotel',
+  latitude: 3.14,
+  longitude: 101.69,
+  address: 'Kuala Lumpur',
+  sustainabilityLabel: 'GSTC verified',
+  evidence: 'Verified evidence',
+  sourceName: 'Test source',
+  sourceUrl: 'https://example.com',
+  lastUpdated: DateTime(2026),
+);
+
 final _evPartner = EcoPartner(
   id: 'charger:1',
   name: 'Original charger',
@@ -192,6 +246,25 @@ class _MemorySavedEcoPartnerRepository
     values.insert(0, saved);
     return saved;
   }
+}
+
+class _DeferredSavedEcoPartnerRepository
+    implements SavedEcoPartnerRepositoryContract {
+  final List<Completer<List<SavedEcoPartner>>> fetches = [];
+
+  @override
+  Future<List<SavedEcoPartner>> fetchAll() {
+    final completer = Completer<List<SavedEcoPartner>>();
+    fetches.add(completer);
+    return completer.future;
+  }
+
+  @override
+  Future<SavedEcoPartner> save(EcoPartner partner) =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> delete(String id) => throw UnimplementedError();
 }
 
 class _MissingTableRepository implements SavedEcoPartnerRepositoryContract {

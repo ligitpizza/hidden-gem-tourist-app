@@ -17,6 +17,8 @@ import 'features/gamification_journal/controller/dashboard_controller.dart';
 import 'features/gamification_journal/controller/friend_controller.dart';
 import 'features/gamification_journal/controller/journal_controller.dart';
 import 'features/gamification_journal/controller/quiz_controller.dart';
+import 'features/itinerary_planning/model/saved_itineraries_store.dart';
+import 'features/travel_assistant/model/saved_eco_partners_store.dart';
 
 /// Flutter's default [ScrollBehavior] leaves mouse out of its drag
 /// devices — deliberate upstream, since click-and-drag can conflict with
@@ -61,6 +63,11 @@ class HiddenGemsApp extends ConsumerWidget {
       stream: Supabase.instance.client.auth.onAuthStateChange,
       builder: (context, snapshot) {
         final journalUserId = Supabase.instance.client.auth.currentUser?.id ?? 'guest';
+
+        // These stores intentionally live across tabs. Reset their in-memory
+        // caches before building a different account's keyed app subtree.
+        SavedEcoPartnersStore.instance.scopeToUser(journalUserId);
+        SavedItinerariesStore.instance.scopeToUser(journalUserId);
 
         return MultiProvider(
           key: ValueKey(journalUserId),

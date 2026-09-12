@@ -14,13 +14,6 @@ import '../model/saved_eco_partners_store.dart';
 import 'widgets/eco_partner_image.dart';
 import 'widgets/transit_mode_icon.dart';
 
-const _ecoDetailDeepGreen = Color(0xFF003B2B);
-const _ecoDetailGreen = Color(0xFF075E46);
-const _ecoDetailBackground = Color(0xFFEAF2ED);
-const _ecoDetailSurface = Color(0xFFF8FCF9);
-const _ecoDetailBorder = Color(0xFFA9C2B6);
-const _ecoDetailTint = Color(0xFFD3E6DC);
-
 class EcoPartnerDetailRouteData {
   const EcoPartnerDetailRouteData({
     required this.partner,
@@ -83,7 +76,7 @@ class EcoPartnerDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: _ecoDetailBackground,
+    backgroundColor: Theme.of(context).colorScheme.surface,
     appBar: AppHeader.pushed(
       title: 'Partner Details',
       fallbackPath: fallbackPath,
@@ -100,15 +93,18 @@ class EcoPartnerDetailScreen extends StatelessWidget {
               child: Text(
                 partner.name,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: _ecoDetailDeepGreen,
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontWeight: FontWeight.w800,
                 ),
               ),
             ),
             if (partner.gstcVerified)
-              const Padding(
-                padding: EdgeInsets.only(left: 8, top: 4),
-                child: Icon(Icons.verified, color: _ecoDetailGreen),
+              Padding(
+                padding: const EdgeInsets.only(left: 8, top: 4),
+                child: Icon(
+                  Icons.verified,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
               ),
           ],
         ),
@@ -151,8 +147,8 @@ class EcoPartnerDetailScreen extends StatelessWidget {
             children: [
               Text(
                 partner.sustainabilityLabel,
-                style: const TextStyle(
-                  color: _ecoDetailGreen,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -239,8 +235,8 @@ class EcoPartnerDetailScreen extends StatelessWidget {
           if (partner.website?.isNotEmpty == true)
             FilledButton.icon(
               style: FilledButton.styleFrom(
-                backgroundColor: _ecoDetailGreen,
-                foregroundColor: Colors.white,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
               ),
               onPressed: () => _open(context, partner.website!),
               icon: const Icon(Icons.language),
@@ -250,8 +246,8 @@ class EcoPartnerDetailScreen extends StatelessWidget {
             const SizedBox(height: 8),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
-                foregroundColor: _ecoDetailDeepGreen,
-                side: const BorderSide(color: _ecoDetailGreen),
+                foregroundColor: Theme.of(context).colorScheme.primary,
+                side: BorderSide(color: Theme.of(context).colorScheme.primary),
               ),
               onPressed: () => _open(
                 context,
@@ -286,41 +282,44 @@ class EcoPartnerDetailScreen extends StatelessWidget {
     required String title,
     required IconData icon,
     required Widget child,
-  }) => Card(
-    margin: const EdgeInsets.only(bottom: 12),
-    color: _ecoDetailSurface,
-    surfaceTintColor: Colors.transparent,
-    elevation: 0,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(16),
-      side: const BorderSide(color: _ecoDetailBorder),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 21, color: _ecoDetailGreen),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: _ecoDetailDeepGreen,
-                    fontWeight: FontWeight.w700,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: colors.surfaceContainerLow,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: colors.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 21, color: colors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: colors.onSurface,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          child,
-        ],
+              ],
+            ),
+            const SizedBox(height: 10),
+            child,
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   String get _description => switch (partner.category) {
     EcoPartnerCategory.stay =>
@@ -451,22 +450,19 @@ class _InformationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final content = Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          Icon(icon, size: 19, color: _ecoDetailGreen),
+          Icon(icon, size: 19, color: colors.primary),
           const SizedBox(width: 10),
           Expanded(child: Text(text)),
           if (onTap != null) ...[
             const SizedBox(width: 8),
             Tooltip(
               message: tooltip!,
-              child: const Icon(
-                Icons.open_in_new,
-                size: 17,
-                color: _ecoDetailGreen,
-              ),
+              child: Icon(Icons.open_in_new, size: 17, color: colors.primary),
             ),
           ],
         ],
@@ -505,6 +501,7 @@ class _SaveEcoPartnerButtonState extends State<_SaveEcoPartnerButton> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: SavedEcoPartnersStore.instance,
     builder: (context, _) {
+      final colors = Theme.of(context).colorScheme;
       final store = SavedEcoPartnersStore.instance;
       final saved = store.isSaved(widget.partner.id);
       final busy = store.isBusy(widget.partner.id);
@@ -514,8 +511,8 @@ class _SaveEcoPartnerButtonState extends State<_SaveEcoPartnerButton> {
         child: saved
             ? OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _ecoDetailDeepGreen,
-                  side: const BorderSide(color: _ecoDetailGreen),
+                  foregroundColor: colors.primary,
+                  side: BorderSide(color: colors.primary),
                 ),
                 onPressed: busy ? null : _toggle,
                 icon: const Icon(Icons.bookmark),
@@ -525,8 +522,8 @@ class _SaveEcoPartnerButtonState extends State<_SaveEcoPartnerButton> {
               )
             : FilledButton.tonalIcon(
                 style: FilledButton.styleFrom(
-                  backgroundColor: _ecoDetailTint,
-                  foregroundColor: _ecoDetailDeepGreen,
+                  backgroundColor: colors.primaryContainer,
+                  foregroundColor: colors.onPrimaryContainer,
                 ),
                 onPressed: busy ? null : _toggle,
                 icon: const Icon(Icons.bookmark_add_outlined),
@@ -717,6 +714,7 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final route = _route;
     final transitRoute = _transitRoute;
     final origin = _origin;
@@ -738,7 +736,7 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
           spacing: 8,
           children: [
             ChoiceChip(
-              selectedColor: _ecoDetailTint,
+              selectedColor: colors.primaryContainer,
               avatar: const Icon(Icons.directions_walk, size: 18),
               label: const Text('Walking'),
               selected: _mode == _RouteMode.walking,
@@ -747,7 +745,7 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
                   : (_) => _changeMode(_RouteMode.walking),
             ),
             ChoiceChip(
-              selectedColor: _ecoDetailTint,
+              selectedColor: colors.primaryContainer,
               avatar: const Icon(Icons.directions_transit, size: 18),
               label: const Text('Public transit'),
               selected: _mode == _RouteMode.publicTransit,
@@ -756,7 +754,7 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
                   : (_) => _changeMode(_RouteMode.publicTransit),
             ),
             ChoiceChip(
-              selectedColor: _ecoDetailTint,
+              selectedColor: colors.primaryContainer,
               avatar: const Icon(Icons.electric_car_outlined, size: 18),
               label: const Text('EV car'),
               selected: _mode == _RouteMode.evCar,
@@ -786,7 +784,7 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
             children: visibleTransitRoutes
                 .map(
                   (route) => ActionChip(
-                    side: const BorderSide(color: _ecoDetailBorder),
+                    side: BorderSide(color: colors.outlineVariant),
                     avatar: Icon(transitModeIcon(route.mode), size: 17),
                     label: Text(route.displayLabel),
                     tooltip: 'Check live directions for ${route.displayLabel}',
@@ -804,8 +802,8 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
             width: double.infinity,
             child: FilledButton.icon(
               style: FilledButton.styleFrom(
-                backgroundColor: _ecoDetailGreen,
-                foregroundColor: Colors.white,
+                backgroundColor: colors.primary,
+                foregroundColor: colors.onPrimary,
               ),
               onPressed: _loading ? null : _loadRoute,
               icon: _loading
@@ -846,14 +844,14 @@ class _EcoPartnerRouteGuideState extends State<_EcoPartnerRouteGuide> {
                 ],
               MapMarkerSpec(
                 point: destination,
-                color: _ecoDetailGreen,
+                color: colors.primary,
                 icon: Icons.location_on,
               ),
             ],
             polylines: [
               MapPolylineSpec(
                 points: route?.polyline ?? transitRoute!.polyline,
-                color: _ecoDetailGreen,
+                color: colors.primary,
               ),
             ],
           ),
@@ -936,13 +934,16 @@ class _JourneyStep extends StatelessWidget {
   final String subtitle;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    contentPadding: EdgeInsets.zero,
-    dense: true,
-    leading: Icon(icon, color: _ecoDetailGreen),
-    title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-    subtitle: Text(subtitle),
-  );
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      leading: Icon(icon, color: colors.primary),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text(subtitle),
+    );
+  }
 }
 
 class _Pill extends StatelessWidget {
@@ -951,29 +952,32 @@ class _Pill extends StatelessWidget {
   final IconData icon;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-    decoration: BoxDecoration(
-      color: _ecoDetailTint,
-      borderRadius: BorderRadius.circular(30),
-      border: Border.all(color: _ecoDetailBorder),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 15, color: _ecoDetailDeepGreen),
-        const SizedBox(width: 5),
-        Text(
-          label,
-          style: const TextStyle(
-            color: _ecoDetailDeepGreen,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      decoration: BoxDecoration(
+        color: colors.primaryContainer,
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: colors.onPrimaryContainer),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: colors.onPrimaryContainer,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 String _categoryLabel(EcoPartnerCategory category) => switch (category) {

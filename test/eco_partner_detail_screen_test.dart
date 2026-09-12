@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:collab/core/theme/app_theme.dart';
 import 'package:collab/features/travel_assistant/model/eco_partner.dart';
 import 'package:collab/features/travel_assistant/view/eco_partner_detail_screen.dart';
 import 'package:collab/features/travel_assistant/view/widgets/transit_mode_icon.dart';
@@ -482,7 +483,7 @@ void main() {
     expect(find.text('Outside your 50 km area'), findsOneWidget);
   });
 
-  testWidgets('detail page keeps its deep-green theme on a compact screen', (
+  testWidgets('detail page uses light theme colors on a compact screen', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(320, 640);
@@ -492,6 +493,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        theme: AppTheme.light,
         home: EcoPartnerDetailScreen(
           partner: _detailPartner,
           destinationLabel: 'Kuala Lumpur',
@@ -499,11 +501,69 @@ void main() {
       ),
     );
 
+    final colors = AppTheme.light.colorScheme;
     expect(
       tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
-      const Color(0xFFEAF2ED),
+      colors.surface,
+    );
+    expect(
+      tester.widget<Card>(find.byType(Card).first).color,
+      colors.surfaceContainerLow,
     );
     expect(tester.widget<Card>(find.byType(Card).first).elevation, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('detail page uses readable semantic colors in dark mode', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: ThemeMode.dark,
+        home: EcoPartnerDetailScreen(
+          partner: _detailPartner,
+          destinationLabel: 'Kuala Lumpur',
+        ),
+      ),
+    );
+
+    final colors = AppTheme.dark.colorScheme;
+    final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
+    final title = tester.widget<Text>(find.text(_detailPartner.name));
+    final categoryPillText = tester.widget<Text>(find.text('Stay'));
+
+    expect(scaffold.backgroundColor, colors.surface);
+    expect(title.style?.color, colors.onSurface);
+    expect(categoryPillText.style?.color, colors.onPrimaryContainer);
+
+    await tester.scrollUntilVisible(
+      find.text('Save Eco Partner'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final saveButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Save Eco Partner'),
+    );
+    expect(
+      saveButton.style?.backgroundColor?.resolve(<WidgetState>{}),
+      colors.primaryContainer,
+    );
+    expect(
+      saveButton.style?.foregroundColor?.resolve(<WidgetState>{}),
+      colors.onPrimaryContainer,
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('About this partner'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final firstCard = tester.widget<Card>(find.byType(Card).first);
+    final cardShape = firstCard.shape! as RoundedRectangleBorder;
+    expect(firstCard.color, colors.surfaceContainerLow);
+    expect(cardShape.side.color, colors.outlineVariant);
     expect(tester.takeException(), isNull);
   });
 }

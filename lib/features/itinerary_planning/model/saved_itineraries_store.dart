@@ -11,7 +11,7 @@ import 'saved_itinerary_repository.dart';
 /// owning the state.
 class SavedItinerariesStore extends ChangeNotifier {
   SavedItinerariesStore({SavedItineraryRepository? repository})
-      : _repository = repository ?? SavedItineraryRepository();
+    : _repository = repository ?? SavedItineraryRepository();
 
   // Mutable (not `final`) so tests can swap in a fake-repository-backed
   // instance instead of hitting real Supabase through the default —
@@ -25,8 +25,24 @@ class SavedItinerariesStore extends ChangeNotifier {
   bool isLoading = false;
   String? error;
   bool _loadedOnce = false;
+  String? _userScope;
+  int _accountRevision = 0;
 
   List<SavedItinerary> get saved => List.unmodifiable(_saved);
+
+  /// Clears cached records when authentication moves to another user.
+  /// Pending work is tagged with [_accountRevision], so a late response from
+  /// the previous account cannot repopulate this store after the switch.
+  void scopeToUser(String? userId) {
+    final nextScope = userId ?? 'guest';
+    if (_userScope == nextScope) return;
+    _userScope = nextScope;
+    _accountRevision++;
+    _saved = [];
+    isLoading = false;
+    error = null;
+    _loadedOnce = false;
+  }
 
   /// Loads from Supabase the first time this is called; a no-op afterwards
   /// unless [refresh] is called explicitly (e.g. pull-to-refresh).
@@ -36,21 +52,29 @@ class SavedItinerariesStore extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
+    final revision = _accountRevision;
     isLoading = true;
     error = null;
     notifyListeners();
     try {
-      _saved = await _repository.fetchAll();
+      final saved = await _repository.fetchAll();
+      if (revision != _accountRevision) return;
+      _saved = saved;
       _loadedOnce = true;
     } catch (_) {
-      error = 'Could not load your saved itineraries. Check your connection and try again.';
+      if (revision != _accountRevision) return;
+      error =
+          'Could not load your saved itineraries. Check your connection and try again.';
     }
+    if (revision != _accountRevision) return;
     isLoading = false;
     notifyListeners();
   }
 
   Future<SavedItinerary> save(ItineraryPlan plan) async {
+    final revision = _accountRevision;
     final saved = await _repository.save(plan);
+    if (revision != _accountRevision) return saved;
     _saved = [saved, ..._saved];
     _loadedOnce = true;
     notifyListeners();
@@ -58,21 +82,29 @@ class SavedItinerariesStore extends ChangeNotifier {
   }
 
   Future<SavedItinerary> update(String id, ItineraryPlan plan) async {
+    final revision = _accountRevision;
     final updated = await _repository.update(id, plan);
-    _saved = [for (final item in _saved) if (item.id == id) updated else item];
+    if (revision != _accountRevision) return updated;
+    _saved = [
+      for (final item in _saved)
+        if (item.id == id) updated else item,
+    ];
     notifyListeners();
     return updated;
   }
 
   Future<void> remove(String id) async {
+    final revision = _accountRevision;
     final previous = _saved;
     _saved = _saved.where((item) => item.id != id).toList();
     notifyListeners();
     try {
       await _repository.delete(id);
     } catch (_) {
+      if (revision != _accountRevision) return;
       _saved = previous; // rollback — the delete didn't actually go through
-      error = 'Could not remove this itinerary. Check your connection and try again.';
+      error =
+          'Could not remove this itinerary. Check your connection and try again.';
       notifyListeners();
     }
   }
