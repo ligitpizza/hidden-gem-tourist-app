@@ -161,6 +161,14 @@ void main() {
       find.text('2 documents stored securely for your journey.'),
       findsOneWidget,
     );
+    expect(
+      tester.widget<Text>(find.text('Manage Documents')).textAlign,
+      TextAlign.center,
+    );
+    expect(
+      tester.widget<Text>(find.text('Emergency Contacts')).textAlign,
+      TextAlign.center,
+    );
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());

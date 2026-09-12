@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -542,7 +541,7 @@ class _DashboardCard extends StatelessWidget {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: onTap,
-                      child: Text(button),
+                      child: Text(button, textAlign: TextAlign.center),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -2326,6 +2325,7 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
   final Set<String> _selectedCategories = {};
   bool _loadingDocuments = true;
   bool _busy = false;
+  String? _openingDocumentId;
   String _query = '';
   String? _documentLoadError;
   final Set<String> _selectedIds = {};
@@ -2594,12 +2594,15 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
                     _DocumentCard(
                       document: document,
                       selected: _selectedIds.contains(document.id),
+                      isOpening: _openingDocumentId == document.id,
                       onSelect: () => setState(() {
                         if (!_selectedIds.add(document.id)) {
                           _selectedIds.remove(document.id);
                         }
                       }),
-                      onView: () => _viewDocument(document),
+                      onView: _openingDocumentId == null
+                          ? () => _viewDocument(document)
+                          : null,
                     ),
               ],
             ),
@@ -2891,33 +2894,38 @@ class _UnlockedDocumentVaultState extends State<_UnlockedDocumentVault> {
   }
 
   Future<void> _viewDocument(TravelDocument document) async {
-    File localFile;
+    if (_openingDocumentId != null) return;
+    setState(() => _openingDocumentId = document.id);
     try {
-      localFile = await _repository.ensureLocalFile(document);
+      final localFile = await _repository.ensureLocalFile(document);
+      final localDocument = document.copyWith(storedPath: localFile.path);
+      if (localDocument.isPdf || localDocument.isImage) {
+        if (!mounted) return;
+        setState(() => _openingDocumentId = null);
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => TravelDocumentViewerScreen(
+              document: localDocument,
+              fallbackPath: ShellRoutes.documentVault,
+            ),
+          ),
+        );
+        return;
+      }
+      final result = await OpenFilex.open(localFile.path);
+      if (result.type != ResultType.done && mounted) {
+        _showMessage(
+          result.message.isEmpty
+              ? 'No compatible app could open this file.'
+              : result.message,
+        );
+      }
     } on Object catch (error) {
       if (mounted) _showMessage('Document unavailable: $error');
-      return;
-    }
-    final localDocument = document.copyWith(storedPath: localFile.path);
-    if (localDocument.isPdf || localDocument.isImage) {
-      if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => TravelDocumentViewerScreen(
-            document: localDocument,
-            fallbackPath: ShellRoutes.documentVault,
-          ),
-        ),
-      );
-      return;
-    }
-    final result = await OpenFilex.open(localFile.path);
-    if (result.type != ResultType.done && mounted) {
-      _showMessage(
-        result.message.isEmpty
-            ? 'No compatible app could open this file.'
-            : result.message,
-      );
+    } finally {
+      if (mounted && _openingDocumentId == document.id) {
+        setState(() => _openingDocumentId = null);
+      }
     }
   }
 
@@ -3053,14 +3061,16 @@ class _DocumentCard extends StatelessWidget {
   const _DocumentCard({
     required this.document,
     required this.selected,
+    required this.isOpening,
     required this.onSelect,
     required this.onView,
   });
 
   final TravelDocument document;
   final bool selected;
+  final bool isOpening;
   final VoidCallback onSelect;
-  final VoidCallback onView;
+  final VoidCallback? onView;
 
   @override
   Widget build(BuildContext context) {
@@ -3164,8 +3174,16 @@ class _DocumentCard extends StatelessWidget {
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: onView,
-                icon: const Icon(Icons.visibility_outlined),
-                label: const Text('View Document'),
+                icon: isOpening
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.visibility_outlined),
+                label: Text(
+                  isOpening ? 'Opening document...' : 'View Document',
+                ),
               ),
             ],
           ),

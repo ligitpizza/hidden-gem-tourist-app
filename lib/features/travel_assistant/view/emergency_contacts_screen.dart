@@ -33,6 +33,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
   late final EmergencyContactController _controller;
   final _pin = TextEditingController();
   final _search = TextEditingController();
+  bool _isSavingContact = false;
 
   @override
   void initState() {
@@ -84,9 +85,20 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
       ),
       floatingActionButton: _controller.isUnlocked
           ? FloatingActionButton.extended(
-              onPressed: () => _edit(),
-              icon: const Icon(Icons.person_add_alt_1),
-              label: const Text('Add contact'),
+              onPressed: _isSavingContact ? null : () => _edit(),
+              icon: _isSavingContact
+                  ? SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    )
+                  : const Icon(Icons.person_add_alt_1),
+              label: Text(
+                _isSavingContact ? 'Saving contact...' : 'Add contact',
+              ),
             )
           : null,
       body: _controller.isLoading
@@ -348,14 +360,36 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
       builder: (_) => _ContactDialog(existing: existing),
     );
     if (!mounted || result == null) return;
-    if (!await _controller.saveContact(result)) {
+    setState(() => _isSavingContact = true);
+    try {
+      if (!await _controller.saveContact(result)) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('A contact with this phone number already exists.'),
+          ),
+        );
+        return;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            existing == null
+                ? '${result.name} was added to emergency contacts.'
+                : '${result.name} was updated.',
+          ),
+        ),
+      );
+    } on Object catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('A contact with this phone number already exists.'),
+          content: Text('Could not save this contact. Please try again.'),
         ),
       );
-      return;
+    } finally {
+      if (mounted) setState(() => _isSavingContact = false);
     }
   }
 

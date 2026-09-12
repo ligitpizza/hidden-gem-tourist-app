@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:collab/features/travel_assistant/model/travel_document.dart';
 import 'package:collab/features/travel_assistant/model/travel_document_repository.dart';
 import 'package:collab/features/travel_assistant/model/vault_pin_service.dart';
@@ -187,19 +190,48 @@ void main() {
     expect(tester.takeException(), isNull);
     semantics.dispose();
   });
+
+  testWidgets('opening a document shows progress until the file is ready', (
+    tester,
+  ) async {
+    final repository = _DelayedOpenDocumentRepository(_documents.first);
+    await _pumpUnlockedVault(tester, userId: userId, repository: repository);
+
+    final card = find.byKey(const Key('vault-document-passport'));
+    await tester.ensureVisible(card);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: card,
+        matching: find.widgetWithText(ElevatedButton, 'View Document'),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Opening document...'), findsOneWidget);
+    repository.openCompleter.completeError(
+      const FileSystemException('Download failed'),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Opening document...'), findsNothing);
+    expect(find.textContaining('Document unavailable:'), findsOneWidget);
+  });
 }
 
 Future<void> _pumpUnlockedVault(
   WidgetTester tester, {
   required String userId,
   ThemeData? theme,
+  TravelDocumentRepository? repository,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
       theme: theme ?? AppTheme.light,
       home: DocumentVaultScreen(
         pinService: _ConfiguredPinService(),
-        repository: TravelDocumentRepository(userId: userId),
+        repository: repository ?? TravelDocumentRepository(userId: userId),
       ),
     ),
   );
@@ -278,4 +310,17 @@ class _ConfiguredPinService implements VaultPinServiceContract {
 
   @override
   Future<void> writePin(String pin) async {}
+}
+
+class _DelayedOpenDocumentRepository extends TravelDocumentRepository {
+  _DelayedOpenDocumentRepository(this.document) : super(userId: 'test-user');
+
+  final TravelDocument document;
+  final openCompleter = Completer<File>();
+
+  @override
+  Future<List<TravelDocument>> load() async => [document];
+
+  @override
+  Future<File> ensureLocalFile(TravelDocument document) => openCompleter.future;
 }

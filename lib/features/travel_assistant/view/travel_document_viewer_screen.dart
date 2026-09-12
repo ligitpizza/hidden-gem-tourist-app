@@ -25,7 +25,12 @@ class TravelDocumentViewerScreen extends StatelessWidget {
         fallbackPath: fallbackPath,
       ),
       body: document.isPdf
-          ? PdfViewer.file(document.storedPath)
+          ? PdfViewer.file(
+              document.storedPath,
+              params: PdfViewerParams(
+                loadingBannerBuilder: (_, _, _) => const _ViewerLoading(),
+              ),
+            )
           : Center(
               child: InteractiveViewer(
                 minScale: .5,
@@ -33,12 +38,32 @@ class TravelDocumentViewerScreen extends StatelessWidget {
                 child: Image.file(
                   File(document.storedPath),
                   fit: BoxFit.contain,
+                  frameBuilder: (context, child, frame, loadedSynchronously) =>
+                      loadedSynchronously || frame != null
+                      ? child
+                      : const _ViewerLoading(),
                   errorBuilder: (_, _, _) => const _ViewerError(),
                 ),
               ),
             ),
     );
   }
+}
+
+class _ViewerLoading extends StatelessWidget {
+  const _ViewerLoading();
+
+  @override
+  Widget build(BuildContext context) => const Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircularProgressIndicator(),
+        SizedBox(height: 14),
+        Text('Loading document...'),
+      ],
+    ),
+  );
 }
 
 class _ViewerError extends StatelessWidget {

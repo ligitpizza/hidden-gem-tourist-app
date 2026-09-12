@@ -28,23 +28,26 @@ void main() {
     expect(find.text('Eco Lodge'), findsNWidgets(2));
     expect(find.textContaining('within 10 km'), findsWidgets);
     expect(find.text('Recommended for You'), findsOneWidget);
-    expect(find.text('Hotels'), findsNWidgets(2));
+    expect(find.text('Hotels'), findsOneWidget);
     expect(find.text('Dining'), findsOneWidget);
     expect(find.text('Transport'), findsOneWidget);
     expect(find.text('EV Charging'), findsOneWidget);
     expect(find.byTooltip('Change results layout'), findsNothing);
     expect(
-      find.byKey(const ValueKey('eco_partner_more_recommended')),
+      find.byKey(const ValueKey('eco_partner_view_all_recommended')),
       findsNothing,
     );
     expect(
-      find.byKey(const ValueKey('eco_partner_more_hotel')),
+      find.byKey(const ValueKey('eco_partner_view_all_hotel')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('eco_partner_more_dining')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('eco_partner_view_all_dining')),
+      findsNothing,
+    );
   });
 
-  testWidgets('home rows keep eight previews and append category More cards', (
+  testWidgets('home rows keep eight previews with header View all actions', (
     tester,
   ) async {
     final repository = _CatalogScreenRepository([
@@ -93,17 +96,18 @@ void main() {
     }
 
     expect(itemCount(EcoPartnerHomeSection.recommended), 8);
-    expect(itemCount(EcoPartnerHomeSection.hotel), 9);
-    expect(itemCount(EcoPartnerHomeSection.dining), 2);
-    expect(itemCount(EcoPartnerHomeSection.transport), 2);
-    expect(itemCount(EcoPartnerHomeSection.ev), 2);
+    expect(itemCount(EcoPartnerHomeSection.hotel), 8);
+    expect(itemCount(EcoPartnerHomeSection.dining), 1);
+    expect(itemCount(EcoPartnerHomeSection.transport), 1);
+    expect(itemCount(EcoPartnerHomeSection.ev), 1);
+    expect(find.text('View all'), findsNWidgets(4));
     expect(
-      find.byKey(const ValueKey('eco_partner_more_recommended')),
+      find.byKey(const ValueKey('eco_partner_view_all_recommended')),
       findsNothing,
     );
   });
 
-  testWidgets('each category More card opens its full filtered results', (
+  testWidgets('each category View all button opens full filtered results', (
     tester,
   ) async {
     const cases = {
@@ -151,10 +155,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final more = find.byKey(ValueKey('eco_partner_more_${section.name}'));
-      await tester.ensureVisible(more);
+      final viewAll = find.byKey(
+        ValueKey('eco_partner_view_all_${section.name}'),
+      );
+      await tester.ensureVisible(viewAll);
       await tester.pumpAndSettle();
-      await tester.tap(more);
+      await tester.tap(viewAll);
       await tester.pumpAndSettle();
 
       expect(controller.filter, value.filter);
@@ -163,14 +169,14 @@ void main() {
       expect(find.byTooltip('Change results layout'), findsOneWidget);
       for (final candidate in EcoPartnerHomeSection.values) {
         expect(
-          find.byKey(ValueKey('eco_partner_more_${candidate.name}')),
+          find.byKey(ValueKey('eco_partner_view_all_${candidate.name}')),
           findsNothing,
         );
       }
     }
   });
 
-  testWidgets('More preserves browse settings and resets the main scroll', (
+  testWidgets('View all preserves browse settings and resets main scroll', (
     tester,
   ) async {
     final repository = _CatalogScreenRepository([_partner]);
@@ -197,8 +203,8 @@ void main() {
           ),
         )
         .first;
-    final more = find.byKey(const ValueKey('eco_partner_more_hotel'));
-    await tester.ensureVisible(more);
+    final viewAll = find.byKey(const ValueKey('eco_partner_view_all_hotel'));
+    await tester.ensureVisible(viewAll);
     await tester.pumpAndSettle();
     final before = tester
         .state<ScrollableState>(mainScrollable)
@@ -206,7 +212,7 @@ void main() {
         .pixels;
     expect(before, greaterThan(0));
 
-    await tester.tap(more);
+    await tester.tap(viewAll);
     await tester.pumpAndSettle();
 
     expect(
@@ -222,7 +228,7 @@ void main() {
     expect(repository.coordinateSearches, 1);
   });
 
-  testWidgets('server-backed More results initially open at the page top', (
+  testWidgets('server-backed View all results open at the page top', (
     tester,
   ) async {
     final repository = _PagedScreenRepository([
@@ -244,28 +250,15 @@ void main() {
     final mainScrollable = find
         .descendant(of: mainScroll, matching: find.byType(Scrollable))
         .first;
-    final hotelList = find.byKey(const ValueKey('eco_partner_home_list_hotel'));
-    await tester.ensureVisible(hotelList);
-    await tester.pumpAndSettle();
-    final hotelScrollable = find
-        .descendant(
-          of: hotelList,
-          matching: find.byWidgetPredicate(
-            (widget) =>
-                widget is Scrollable &&
-                widget.axisDirection == AxisDirection.right,
-          ),
-        )
-        .first;
-    final more = find.byKey(const ValueKey('eco_partner_more_hotel'));
-    await tester.scrollUntilVisible(more, 300, scrollable: hotelScrollable);
+    final viewAll = find.byKey(const ValueKey('eco_partner_view_all_hotel'));
+    await tester.scrollUntilVisible(viewAll, 300, scrollable: mainScrollable);
     await tester.pumpAndSettle();
     expect(
       tester.state<ScrollableState>(mainScrollable).position.pixels,
       greaterThan(0),
     );
 
-    await tester.tap(more);
+    await tester.tap(viewAll);
     await tester.pumpAndSettle();
 
     expect(controller.filter, 'Stay');
@@ -276,7 +269,7 @@ void main() {
     );
   });
 
-  testWidgets('Up from category More returns to the Eco Partners home view', (
+  testWidgets('Up from View all returns to the Eco Partners home view', (
     tester,
   ) async {
     final repository = _PagedScreenRepository([
@@ -306,15 +299,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final more = find.byKey(const ValueKey('eco_partner_more_transport'));
+    final viewAll = find.byKey(
+      const ValueKey('eco_partner_view_all_transport'),
+    );
     await tester.drag(
       find.byKey(const ValueKey('eco_partner_main_scroll')),
       const Offset(0, -300),
     );
     await tester.pumpAndSettle();
-    await tester.ensureVisible(more);
+    await tester.ensureVisible(viewAll);
     await tester.pumpAndSettle();
-    await tester.tap(more);
+    await tester.tap(viewAll);
     await tester.pumpAndSettle();
     expect(controller.filter, 'Public Transport');
     expect(controller.result?.partners.map((partner) => partner.name), [
@@ -327,11 +322,11 @@ void main() {
     expect(controller.filter, 'All');
     expect(controller.result?.partners, hasLength(3));
     expect(
-      find.byKey(const ValueKey('eco_partner_more_hotel')),
+      find.byKey(const ValueKey('eco_partner_view_all_hotel')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('eco_partner_more_dining')),
+      find.byKey(const ValueKey('eco_partner_view_all_dining')),
       findsOneWidget,
     );
   });
@@ -364,7 +359,10 @@ void main() {
     ]);
     expect(find.text('Recommended for You'), findsNothing);
     expect(find.byTooltip('Change results layout'), findsOneWidget);
-    expect(find.byKey(const ValueKey('eco_partner_more_hotel')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('eco_partner_view_all_hotel')),
+      findsNothing,
+    );
   });
 
   testWidgets('Up and system back unwind search before leaving Eco Partners', (

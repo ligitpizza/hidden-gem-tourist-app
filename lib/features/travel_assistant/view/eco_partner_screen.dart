@@ -408,7 +408,7 @@ class _EcoPartnersScreenState extends State<EcoPartnersScreen> {
           partners: _controller.partnersForHomeSection(section),
           showDistance: _controller.showsUserDistance,
           onTap: _details,
-          onMore: section == EcoPartnerHomeSection.recommended
+          onViewAll: section == EcoPartnerHomeSection.recommended
               ? null
               : () => _showAllForHomeSection(section),
         ),
@@ -786,7 +786,7 @@ class _HomePartnerSection extends StatelessWidget {
     required this.partners,
     required this.showDistance,
     required this.onTap,
-    required this.onMore,
+    required this.onViewAll,
   });
 
   final EcoPartnerHomeSection section;
@@ -795,7 +795,7 @@ class _HomePartnerSection extends StatelessWidget {
   final List<EcoPartner> partners;
   final bool showDistance;
   final ValueChanged<EcoPartner> onTap;
-  final VoidCallback? onMore;
+  final VoidCallback? onViewAll;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -807,12 +807,23 @@ class _HomePartnerSection extends StatelessWidget {
           children: [
             Icon(icon, size: 21, color: const Color(0xFF0B684B)),
             const SizedBox(width: 8),
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            Expanded(
+              child: Text(
+                title,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
             ),
+            if (partners.isNotEmpty && onViewAll != null)
+              TextButton(
+                key: ValueKey('eco_partner_view_all_${section.name}'),
+                onPressed: onViewAll,
+                child: const Text(
+                  'View all',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
           ],
         ),
         const SizedBox(height: 10),
@@ -835,17 +846,9 @@ class _HomePartnerSection extends StatelessWidget {
             child: ListView.separated(
               key: ValueKey('eco_partner_home_list_${section.name}'),
               scrollDirection: Axis.horizontal,
-              itemCount: partners.length + (onMore == null ? 0 : 1),
+              itemCount: partners.length,
               separatorBuilder: (_, _) => const SizedBox(width: 10),
               itemBuilder: (context, index) {
-                if (index == partners.length) {
-                  return _HomeMoreCard(
-                    section: section,
-                    title: title,
-                    icon: icon,
-                    onTap: onMore!,
-                  );
-                }
                 final partner = partners[index];
                 return _HomePartnerCard(
                   partner: partner,
@@ -856,74 +859,6 @@ class _HomePartnerSection extends StatelessWidget {
             ),
           ),
       ],
-    ),
-  );
-}
-
-class _HomeMoreCard extends StatelessWidget {
-  const _HomeMoreCard({
-    required this.section,
-    required this.title,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final EcoPartnerHomeSection section;
-  final String title;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    key: ValueKey('eco_partner_more_${section.name}'),
-    width: 205,
-    child: Card(
-      margin: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      color: const Color(0xFFF1F5F2),
-      child: InkWell(
-        onTap: onTap,
-        child: Semantics(
-          button: true,
-          label: 'View all $title Eco Partners',
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: const Color(0xFFDDEBE4),
-                  child: Icon(icon, color: const Color(0xFF07513C), size: 28),
-                ),
-                const SizedBox(height: 14),
-                const Text(
-                  'More',
-                  style: TextStyle(
-                    color: Color(0xFF164C3B),
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 10),
-                const Icon(
-                  Icons.arrow_forward,
-                  color: Color(0xFF07513C),
-                  size: 21,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     ),
   );
 }

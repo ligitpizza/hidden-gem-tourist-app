@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:collab/features/travel_assistant/model/emergency_contact.dart';
 import 'package:collab/features/travel_assistant/model/emergency_contact_repository.dart';
 import 'package:collab/features/travel_assistant/model/vault_pin_service.dart';
 import 'package:collab/features/travel_assistant/view/emergency_contacts_screen.dart';
@@ -43,6 +46,46 @@ void main() {
       },
     );
   }
+
+  testWidgets('adding a contact shows progress and a success message', (
+    tester,
+  ) async {
+    final repository = _DelayedEmergencyContactRepository();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EmergencyContactsScreen(
+          initiallyUnlocked: true,
+          pinService: _FakeVaultPinService('1234'),
+          repository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Add contact'));
+    await tester.pumpAndSettle();
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(0), 'Jane Doe');
+    await tester.enterText(fields.at(1), 'Sibling');
+    await tester.enterText(fields.at(2), '+60123456789');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Saving contact...'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    repository.saveCompleter.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Saving contact...'), findsNothing);
+    expect(
+      find.text('Jane Doe was added to emergency contacts.'),
+      findsOneWidget,
+    );
+    expect(repository.saved.single.name, 'Jane Doe');
+  });
 }
 
 Finder _pinBoxes(String label) => find.byWidgetPredicate((widget) {
@@ -78,4 +121,20 @@ class _FakeVaultPinService implements VaultPinServiceContract {
 
   @override
   Future<void> writePin(String pin) async {}
+}
+
+class _DelayedEmergencyContactRepository extends EmergencyContactRepository {
+  _DelayedEmergencyContactRepository() : super(userId: 'test-user');
+
+  final saveCompleter = Completer<void>();
+  List<EmergencyContact> saved = const [];
+
+  @override
+  Future<List<EmergencyContact>> load() async => const [];
+
+  @override
+  Future<void> save(List<EmergencyContact> contacts) {
+    saved = List.of(contacts);
+    return saveCompleter.future;
+  }
 }
