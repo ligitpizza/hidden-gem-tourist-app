@@ -58,6 +58,7 @@ import '../../features/travel_assistant/view/emergency_contacts_screen.dart';
 import '../../features/travel_assistant/view/travel_assistant_screens.dart';
 import '../../shared/widgets/top_notification_banner.dart';
 import '../widgets/app_bottom_nav_bar.dart';
+import 'journal_more_screen_tracker.dart';
 import 'shell_routes.dart';
 
 /// The bottom-nav branches, in on-screen order: Map | Explore | Home |
@@ -205,10 +206,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ..._legacyTravelAssistantRoutes(ShellRoutes.legacyTravelAssistant),
       ..._legacyTravelAssistantRoutes(ShellRoutes.legacyInterimAssistant),
       StatefulShellRoute.indexedStack(
-        builder: (context, state, navigationShell) => _MainShell(
-          navigationShell: navigationShell,
-          currentLocation: state.uri.toString(),
-        ),
+        builder: (context, state, navigationShell) =>
+            _MainShell(navigationShell: navigationShell),
         branches: [
           StatefulShellBranch(
             navigatorKey: _branchNavigatorKeys[0],
@@ -303,19 +302,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 routes: [
                   GoRoute(
                     path: 'badges',
-                    builder: (context, state) => const BadgeGalleryScreen(),
+                    builder: (context, state) => const JournalMoreScreenAnnouncer(
+                      name: 'badges',
+                      child: BadgeGalleryScreen(),
+                    ),
                   ),
                   GoRoute(
                     path: 'quizzes',
-                    builder: (context, state) => const QuizListScreen(),
+                    builder: (context, state) => const JournalMoreScreenAnnouncer(
+                      name: 'quizzes',
+                      child: QuizListScreen(),
+                    ),
                   ),
                   GoRoute(
                     path: 'history',
-                    builder: (context, state) => const CheckInHistoryScreen(),
+                    builder: (context, state) => const JournalMoreScreenAnnouncer(
+                      name: 'history',
+                      child: CheckInHistoryScreen(),
+                    ),
                   ),
                   GoRoute(
                     path: 'friends',
-                    builder: (context, state) => const FriendsListScreen(),
+                    builder: (context, state) => const JournalMoreScreenAnnouncer(
+                      name: 'friends',
+                      child: FriendsListScreen(),
+                    ),
                   ),
                 ],
               ),
@@ -428,15 +439,7 @@ class GoRouterRefreshStream extends ChangeNotifier {
 /// waiting for a specific tab visit.
 class _MainShell extends StatefulWidget {
   final StatefulNavigationShell navigationShell;
-
-  /// The full current location (e.g. `/journal/badges`), so the bottom
-  /// nav bar can tell a More-menu push route apart from the Journal tab's
-  /// own root — pushing one doesn't change [navigationShell.currentIndex]
-  /// at all, since it's still the same branch, just a different screen on
-  /// top of that branch's own Navigator stack.
-  final String currentLocation;
-
-  const _MainShell({required this.navigationShell, required this.currentLocation});
+  const _MainShell({required this.navigationShell});
 
   @override
   State<_MainShell> createState() => _MainShellState();
@@ -444,6 +447,89 @@ class _MainShell extends StatefulWidget {
 
 class _MainShellState extends State<_MainShell> {
   StreamSubscription<FriendRequestEntry>? _incomingRequestSubscription;
+
+  // Guards against two tab switches overlapping — popUntil() + goBranch()
+  // both mutate a Navigator's history, and firing a second pair before the
+  // first has fully settled (e.g. from fast repeated tapping, or a tap
+  // landing while Friends' own async loads/realtime subscription are still
+  // triggering rebuilds right after it mounts) can hit Navigator's
+  // reentrancy guard ("!_debugLocked"), throwing mid-pop and leaving that
+  // branch's history stuck. A tap that arrives while one is still being
+  // processed is simply dropped rather than queued, since queuing it would
+  // just delay the same race rather than remove it.
+  bool _isSwitchingTab = false;
+
+  void _handleTabSelected(int index) {
+    if (_isSwitchingTab) return;
+    _isSwitchingTab = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final reselectingCurrentTab = index == widget.navigationShell.currentIndex;
+      // The pop(s) below and goBranch used to fire back-to-back in this
+      // same frame callback, which could still collide with Navigator's
+      // own reentrancy guard (Flutter's "!_debugLocked" assertion) — e.g.
+      // if popping a branch's Navigator kicks off a dispose/rebuild that
+      // isn't fully settled yet. goBranch is now deferred to its own,
+      // later frame so any pop has fully flushed first. And because a
+      // thrown assertion here must never be allowed to skip past the code
+      // that releases _isSwitchingTab below — that's exactly what left
+      // every main tab permanently frozen last time — both mutations are
+      // wrapped so a failure is swallowed (the tap that caused it is
+      // simply dropped) rather than allowed to propagate.
+      //
+      // Whenever a screen pushed from the More menu (Badges/Quizzes/
+      // History/Friends) is currently showing, tapping any tab means
+      // we're leaving it behind — clear the flag that drives the bottom
+      // nav's collapsed-slot icon immediately and unconditionally, rather
+      // than waiting for a pop to dispose the screen and clear it as a
+      // side effect. A screen reached via the More menu from a tab other
+      // than Journal (the ordinary case) lands on a Navigator that isn't
+      // the one _branchNavigatorKeys[5] resolves to at all — its
+      // `currentState` comes back null there, so a popUntil aimed at it
+      // silently does nothing, and the flag was previously left stuck
+      // showing that screen's icon forever. Only the flag itself needs to
+      // be right for the nav bar's own purposes; the best-effort popUntil
+      // below still runs to actually reset the branch when it CAN reach
+      // it (e.g. Badges was opened while already on the Journal tab).
+      journalMoreScreenNotifier.value = null;
+      try {
+        _branchNavigatorKeys[5].currentState?.popUntil(
+          (route) => route.isFirst,
+        );
+        if (reselectingCurrentTab) {
+          // Belt-and-braces: goBranch's initialLocation flag is supposed
+          // to reset a branch to its root on its own, but re-tapping Map
+          // while a destination detail screen was pushed on top of it
+          // wasn't reliably clearing that screen — so pop the branch's
+          // own Navigator directly first, then let goBranch do its
+          // normal work.
+          _branchNavigatorKeys[index].currentState?.popUntil(
+            (route) => route.isFirst,
+          );
+        }
+      } catch (_) {
+        // Fall through to goBranch anyway — the pop is a nice-to-have
+        // reset, not something goBranch depends on to work.
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          widget.navigationShell.goBranch(
+            index,
+            initialLocation: reselectingCurrentTab,
+          );
+        } catch (_) {
+          // Same reasoning as above: drop this switch rather than crash
+          // and leave the lock engaged.
+        } finally {
+          // Only release the lock once this switch's own mutation has had
+          // a full extra frame to flush, so a tap landing right on its
+          // heels still can't overlap it.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _isSwitchingTab = false;
+          });
+        }
+      });
+    });
+  }
 
   @override
   void initState() {
@@ -502,35 +588,7 @@ class _MainShellState extends State<_MainShell> {
       body: widget.navigationShell,
       bottomNavigationBar: AppBottomNavBar(
         currentIndex: widget.navigationShell.currentIndex,
-        currentLocation: widget.currentLocation,
-        onTabSelected: (index) {
-          final reselectingCurrentTab =
-              index == widget.navigationShell.currentIndex;
-          // Belt-and-braces: goBranch's initialLocation flag is supposed to
-          // reset a branch to its root on its own, but re-tapping Map while
-          // a destination detail screen was pushed on top of it wasn't
-          // reliably clearing that screen — so pop the branch's own
-          // Navigator directly first, then let goBranch do its normal work.
-          if (reselectingCurrentTab) {
-            _branchNavigatorKeys[index].currentState?.popUntil(
-              (route) => route.isFirst,
-            );
-          } else if (widget.navigationShell.currentIndex == 5) {
-            // Leaving the Journal tab for a different one resets any
-            // screen pushed from the More menu (Badges/Quizzes/History/
-            // Friends, and Friends' own nested search/profile-preview
-            // screens) — they're meant to be reached only via the More
-            // menu, not to linger as "what Journal shows now" the next
-            // time that tab becomes active again.
-            _branchNavigatorKeys[5].currentState?.popUntil(
-              (route) => route.isFirst,
-            );
-          }
-          widget.navigationShell.goBranch(
-            index,
-            initialLocation: reselectingCurrentTab,
-          );
-        },
+        onTabSelected: _handleTabSelected,
       ),
     );
   }

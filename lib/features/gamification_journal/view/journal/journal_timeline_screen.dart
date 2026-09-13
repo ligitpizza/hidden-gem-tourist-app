@@ -97,7 +97,7 @@ class JournalTimelineBody extends StatelessWidget {
         if (showHeading) ...[
           Text(
             'Journal Timeline',
-            style: AppTypography.headlineLg.copyWith(fontSize: 28, color: AppColors.of(context).primaryContainer),
+            style: AppTypography.headlineLg.copyWith(fontSize: 28, color: AppColors.of(context).primary),
           ),
           const SizedBox(height: 6),
           Text(
@@ -155,7 +155,7 @@ class _TimelineRow extends StatelessWidget {
                     shape: BoxShape.circle,
                     border: Border.all(color: AppColors.of(context).outlineVariant),
                   ),
-                  child: Icon(Icons.calendar_today, size: 14, color: AppColors.of(context).primaryContainer),
+                  child: Icon(Icons.calendar_today, size: 14, color: AppColors.of(context).primary),
                 ),
                 if (showConnector)
                   Expanded(
@@ -214,7 +214,7 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.menu_book_outlined, size: 48, color: AppColors.of(context).primaryContainer),
+            Icon(Icons.menu_book_outlined, size: 48, color: AppColors.of(context).primary),
             const SizedBox(height: 12),
             Text('Your journal is empty', style: AppTypography.headlineSm),
             const SizedBox(height: 6),

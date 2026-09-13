@@ -62,7 +62,7 @@ class JournalCard extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           destination?.name ?? 'Unknown destination',
-                          style: AppTypography.headlineSm.copyWith(fontSize: 17, color: AppColors.of(context).primaryContainer),
+                          style: AppTypography.headlineSm.copyWith(fontSize: 17, color: AppColors.of(context).primary),
                         ),
                       ],
                     ),
@@ -102,7 +102,7 @@ class JournalCard extends StatelessWidget {
                       icon: Icons.volunteer_activism,
                       label: 'Local Impact: RM ${totalSpending.toStringAsFixed(0)}',
                       background: AppColors.of(context).primaryContainer,
-                      foreground: AppColors.of(context).onPrimary,
+                      foreground: AppColors.of(context).onPrimaryContainer,
                     )
                   else
                     _Pill(

@@ -133,7 +133,7 @@ class _SearchResultTile extends StatelessWidget {
                 child: Text(
                   name[0].toUpperCase(),
                   style: AppTypography.bodySm.copyWith(
-                    color: colors.primaryContainer,
+                    color: colors.primary,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

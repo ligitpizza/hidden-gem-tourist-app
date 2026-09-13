@@ -423,7 +423,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       'RM ${stats.economicImpactTotalRM.toStringAsFixed(0)}',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    color: colors.primaryContainer,
+                                    color: colors.primary,
                                   ),
                                 ),
                                 const TextSpan(
@@ -751,7 +751,7 @@ class _AchievementCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.of(context);
-    final iconWidget = Icon(icon, color: colors.primaryContainer);
+    final iconWidget = Icon(icon, color: colors.primary);
 
     return InkWell(
       onTap: onTap,
@@ -774,7 +774,7 @@ class _AchievementCard extends StatelessWidget {
             Text(
               label,
               style: AppTypography.labelMd.copyWith(
-                color: colors.primaryContainer,
+                color: colors.primary,
                 letterSpacing: 0,
               ),
             ),

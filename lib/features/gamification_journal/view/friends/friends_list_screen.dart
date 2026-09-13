@@ -277,7 +277,7 @@ class _NoLeaderboardYet extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.leaderboard_outlined, size: 48, color: AppColors.of(context).primaryContainer),
+            Icon(Icons.leaderboard_outlined, size: 48, color: AppColors.of(context).primary),
             const SizedBox(height: 12),
             Text('Nothing to rank yet', style: AppTypography.headlineSm),
             const SizedBox(height: 6),
@@ -344,7 +344,7 @@ class _PodiumSlot extends StatelessWidget {
     final (avatarSize, barHeight, bg, fg) = switch (place) {
       1 => (56.0, 46.0, colors.secondaryContainer, colors.onSecondaryContainer),
       2 => (46.0, 32.0, colors.surfaceContainerHighest, colors.onSurfaceVariant),
-      _ => (42.0, 20.0, colors.primaryContainerTint, colors.primaryContainer),
+      _ => (42.0, 20.0, colors.primaryContainerTint, colors.primary),
     };
 
     return Column(
@@ -685,7 +685,7 @@ class _Avatar extends StatelessWidget {
       backgroundColor: colors.primaryContainerTint,
       child: Text(
         initial,
-        style: AppTypography.headlineSm.copyWith(color: colors.primaryContainer),
+        style: AppTypography.headlineSm.copyWith(color: colors.primary),
       ),
     );
   }
@@ -702,7 +702,7 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.people_outline, size: 48, color: AppColors.of(context).primaryContainer),
+            Icon(Icons.people_outline, size: 48, color: AppColors.of(context).primary),
             const SizedBox(height: 12),
             Text('No friends yet', style: AppTypography.headlineSm),
             const SizedBox(height: 6),
@@ -783,7 +783,7 @@ class _NoActivityYet extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.dynamic_feed_outlined, size: 48, color: AppColors.of(context).primaryContainer),
+            Icon(Icons.dynamic_feed_outlined, size: 48, color: AppColors.of(context).primary),
             const SizedBox(height: 12),
             Text('No activity yet', style: AppTypography.headlineSm),
             const SizedBox(height: 6),

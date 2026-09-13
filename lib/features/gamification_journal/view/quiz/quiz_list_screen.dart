@@ -112,7 +112,7 @@ class _QuizListTile extends StatelessWidget {
               color: AppColors.of(context).primaryContainerTint,
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
-            child: Icon(Icons.quiz_outlined, color: AppColors.of(context).primaryContainer),
+            child: Icon(Icons.quiz_outlined, color: AppColors.of(context).primary),
           ),
           title: Text(destination.name, style: AppTypography.bodyMd.copyWith(fontWeight: FontWeight.w600)),
           subtitle: Text(
@@ -122,7 +122,7 @@ class _QuizListTile extends StatelessWidget {
                 ? 'Passed · ${attempt!.scorePercentage.toStringAsFixed(0)}%'
                 : 'Try again · ${attempt!.scorePercentage.toStringAsFixed(0)}%',
             style: AppTypography.bodySm.copyWith(
-              color: attempt?.passed == true ? AppColors.of(context).primaryContainer : AppColors.of(context).onSurfaceVariant,
+              color: attempt?.passed == true ? AppColors.of(context).primary : AppColors.of(context).onSurfaceVariant,
               fontWeight: attempt?.passed == true ? FontWeight.w600 : FontWeight.w400,
             ),
           ),
@@ -144,7 +144,7 @@ class _NoCheckInsYet extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.quiz_outlined, size: 48, color: AppColors.of(context).primaryContainer),
+            Icon(Icons.quiz_outlined, size: 48, color: AppColors.of(context).primary),
             const SizedBox(height: 12),
             Text('No quizzes yet', style: AppTypography.headlineSm),
             const SizedBox(height: 6),

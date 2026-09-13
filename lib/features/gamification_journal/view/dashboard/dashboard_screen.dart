@@ -186,7 +186,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 const TextSpan(text: "You've contributed "),
                                 TextSpan(
                                   text: 'RM ${stats.economicImpactTotalRM.toStringAsFixed(0)}',
-                                  style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.of(context).primaryContainer),
+                                  style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.of(context).primary),
                                 ),
                                 const TextSpan(text: ' directly to micro-businesses and rural communities.'),
                               ],
@@ -256,11 +256,11 @@ class _QuickLinkCard extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Icon(icon, color: AppColors.of(context).primaryContainer),
+            Icon(icon, color: AppColors.of(context).primary),
             const SizedBox(height: 6),
             Text(
               label,
-              style: AppTypography.labelMd.copyWith(color: AppColors.of(context).primaryContainer, letterSpacing: 0),
+              style: AppTypography.labelMd.copyWith(color: AppColors.of(context).primary, letterSpacing: 0),
             ),
           ],
         ),

@@ -56,15 +56,20 @@ class DestinationPopupSheet extends StatelessWidget {
 
   Widget _buildImage(BuildContext context) {
     if (destination.imageUrls.isEmpty) {
+      final colorScheme = Theme.of(context).colorScheme;
       return Container(
         height: 120,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: Colors.grey.shade300,
+          color: colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Center(
-          child: Icon(Icons.image_not_supported_outlined, size: 32, color: Colors.grey),
+        child: Center(
+          child: Icon(
+            Icons.image_not_supported_outlined,
+            size: 32,
+            color: colorScheme.onSurfaceVariant,
+          ),
         ),
       );
     }

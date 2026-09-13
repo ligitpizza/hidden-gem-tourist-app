@@ -265,7 +265,7 @@ class _ThumbnailImage extends StatelessWidget {
       },
       errorBuilder: (context, error, stackTrace) => Container(
         color: AppColors.of(context).primaryContainerTint,
-        child: Icon(Icons.image_outlined, color: AppColors.of(context).primaryContainer),
+        child: Icon(Icons.image_outlined, color: AppColors.of(context).primary),
       ),
     );
   }
@@ -286,7 +286,7 @@ class _CategoryChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: AppTypography.labelSm.copyWith(color: AppColors.of(context).primaryContainer),
+        style: AppTypography.labelSm.copyWith(color: AppColors.of(context).primary),
       ),
     );
   }

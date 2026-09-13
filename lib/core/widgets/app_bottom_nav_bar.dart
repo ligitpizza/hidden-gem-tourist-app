@@ -6,6 +6,7 @@ import '../../features/gamification_journal/controller/badge_controller.dart';
 import '../../features/gamification_journal/controller/checkin_controller.dart';
 import '../../features/gamification_journal/controller/friend_controller.dart';
 import '../../features/gamification_journal/controller/quiz_controller.dart';
+import '../router/journal_more_screen_tracker.dart';
 import '../router/shell_routes.dart';
 
 class _NavDestination {
@@ -87,11 +88,16 @@ class _MorePushEntry {
   final IconData icon;
   final String label;
   final String path;
+  // Matches the `name:` given to this screen's GoRoute, so the collapsed
+  // "More" slot can tell which entry is active via
+  // [journalMoreScreenNotifier] — see that file's doc comment for why.
+  final String routeName;
   final String? indicatorKey;
   const _MorePushEntry({
     required this.icon,
     required this.label,
     required this.path,
+    required this.routeName,
     this.indicatorKey,
   });
 }
@@ -101,23 +107,27 @@ const _morePushEntries = [
     icon: Icons.emoji_events_outlined,
     label: 'Badges',
     path: ShellRoutes.journalBadges,
+    routeName: 'badges',
     indicatorKey: 'badges',
   ),
   _MorePushEntry(
     icon: Icons.quiz_outlined,
     label: 'Quizzes',
     path: ShellRoutes.journalQuizzes,
+    routeName: 'quizzes',
     indicatorKey: 'quizzes',
   ),
   _MorePushEntry(
     icon: Icons.history_outlined,
     label: 'Check-ins',
     path: ShellRoutes.journalHistory,
+    routeName: 'history',
   ),
   _MorePushEntry(
     icon: Icons.people_outline,
     label: 'Friends',
     path: ShellRoutes.journalFriends,
+    routeName: 'friends',
     indicatorKey: 'friends',
   ),
 ];
@@ -143,18 +153,10 @@ class AppBottomNavBar extends StatefulWidget {
   final int currentIndex;
   final ValueChanged<int> onTabSelected;
 
-  /// The full current route (e.g. `/journal/badges`) — a More-menu push
-  /// route doesn't change [currentIndex] at all (it's still the Journal
-  /// branch, just a different screen pushed on top of it), so this is
-  /// how the bar tells "on Journal's own timeline" apart from "on Badges/
-  /// Quizzes/Check-ins/Friends, reached via More".
-  final String currentLocation;
-
   const AppBottomNavBar({
     super.key,
     required this.currentIndex,
     required this.onTabSelected,
-    required this.currentLocation,
   });
 
   @override
@@ -170,14 +172,31 @@ class _AppBottomNavBarState extends State<AppBottomNavBar>
       _secondaryBranches.contains(widget.currentIndex);
   bool get _isMoreOpen => _moreEntry != null;
 
-  /// Which More-menu push entry (Badges/Quizzes/Check-ins/Friends), if
-  /// any, the current location is showing — null while on any real shell
-  /// branch, including Journal's own root.
+  // journalMoreScreenNotifier is driven by the screen's own mount/dispose
+  // lifecycle (see JournalMoreScreenAnnouncer), so it's already accurate
+  // on its own — no need to cross-check it against currentIndex here.
+  // That cross-check used to gate this on `currentIndex == 5`, but a
+  // cross-branch push (opening the More menu from any tab other than
+  // Journal, which is the normal case) never actually updates
+  // navigationShell.currentIndex to 5, so that guard silently defeated
+  // the very case it needed to handle.
   _MorePushEntry? get _activeMorePushEntry {
+    final name = journalMoreScreenNotifier.value;
+    if (name == null) return null;
     for (final entry in _morePushEntries) {
-      if (widget.currentLocation == entry.path) return entry;
+      if (entry.routeName == name) return entry;
     }
     return null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    journalMoreScreenNotifier.addListener(_onMoreScreenChanged);
+  }
+
+  void _onMoreScreenChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -244,6 +263,7 @@ class _AppBottomNavBarState extends State<AppBottomNavBar>
 
   @override
   void dispose() {
+    journalMoreScreenNotifier.removeListener(_onMoreScreenChanged);
     _moreEntry?.remove();
     _moreController?.dispose();
     super.dispose();
@@ -252,11 +272,9 @@ class _AppBottomNavBarState extends State<AppBottomNavBar>
   @override
   Widget build(BuildContext context) {
     final activeMorePushEntry = _activeMorePushEntry;
-    // A More-push route (Badges/Quizzes/Check-ins/Friends) doesn't change
-    // currentIndex — it's still the Journal branch — so without this,
-    // Journal's own primary tab would stay highlighted underneath the
-    // More slot showing the pushed screen instead, doubling up the
-    // selected state across two tabs at once.
+    // The Journal primary tab shouldn't ALSO highlight while the collapsed
+    // slot is showing one of its pushed screens instead — that'd double
+    // up the "you are here" signal across two nav items at once.
     final morePushActive = activeMorePushEntry != null;
 
     return Material(
@@ -292,7 +310,7 @@ class _AppBottomNavBarState extends State<AppBottomNavBar>
                           label: 'More',
                         ),
                   selected: _onSecondaryBranch || _isMoreOpen || morePushActive,
-                  showIndicator: !_onSecondaryBranch && !morePushActive,
+                  showIndicator: !_onSecondaryBranch,
                   onTap: () => _openMoreMenu(context),
                 ),
               ),

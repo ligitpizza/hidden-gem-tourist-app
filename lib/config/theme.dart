@@ -484,12 +484,22 @@ class AppColorTokens extends ThemeExtension<AppColorTokens> {
 class AppTypography {
   AppTypography._();
 
+  // None of these styles set a color anymore. They used to hardcode
+  // AppColors.onSurface/.onSurfaceVariant — the always-light static
+  // tokens, not the theme-aware AppColors.of(context) ones — so any Text
+  // that didn't separately override color (the majority of call sites)
+  // stayed dark-on-dark in dark mode. Leaving color unset here means
+  // Flutter falls back to the ambient DefaultTextStyle, which correctly
+  // tracks light/dark via the seeded ColorScheme in
+  // core/theme/app_theme.dart. Anywhere that already does
+  // `.copyWith(color: AppColors.of(context)....)` is unaffected either
+  // way, since an explicit override always wins.
+
   static TextStyle get headlineXl => GoogleFonts.montserrat(
     fontSize: 40,
     fontWeight: FontWeight.w700,
     height: 48 / 40,
     letterSpacing: -0.02 * 40,
-    color: AppColors.onSurface,
   );
 
   static TextStyle get headlineLg => GoogleFonts.montserrat(
@@ -497,49 +507,42 @@ class AppTypography {
     fontWeight: FontWeight.w700,
     height: 40 / 32,
     letterSpacing: -0.01 * 32,
-    color: AppColors.onSurface,
   );
 
   static TextStyle get headlineLgMobile => GoogleFonts.montserrat(
     fontSize: 28,
     fontWeight: FontWeight.w700,
     height: 34 / 28,
-    color: AppColors.onSurface,
   );
 
   static TextStyle get headlineMd => GoogleFonts.montserrat(
     fontSize: 24,
     fontWeight: FontWeight.w600,
     height: 32 / 24,
-    color: AppColors.onSurface,
   );
 
   static TextStyle get headlineSm => GoogleFonts.montserrat(
     fontSize: 20,
     fontWeight: FontWeight.w600,
     height: 28 / 20,
-    color: AppColors.onSurface,
   );
 
   static TextStyle get bodyLg => GoogleFonts.inter(
     fontSize: 18,
     fontWeight: FontWeight.w400,
     height: 28 / 18,
-    color: AppColors.onSurface,
   );
 
   static TextStyle get bodyMd => GoogleFonts.inter(
     fontSize: 16,
     fontWeight: FontWeight.w400,
     height: 24 / 16,
-    color: AppColors.onSurface,
   );
 
   static TextStyle get bodySm => GoogleFonts.inter(
     fontSize: 14,
     fontWeight: FontWeight.w400,
     height: 20 / 14,
-    color: AppColors.onSurfaceVariant,
   );
 
   static TextStyle get labelMd => GoogleFonts.inter(
@@ -547,7 +550,6 @@ class AppTypography {
     fontWeight: FontWeight.w600,
     height: 16 / 14,
     letterSpacing: 0.05 * 14,
-    color: AppColors.onSurface,
   );
 
   static TextStyle get labelSm => GoogleFonts.inter(
@@ -555,7 +557,6 @@ class AppTypography {
     fontWeight: FontWeight.w500,
     height: 14 / 12,
     letterSpacing: 0.05 * 12,
-    color: AppColors.onSurfaceVariant,
   );
 }
 

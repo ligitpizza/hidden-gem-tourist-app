@@ -320,7 +320,7 @@ class _CategorySpendRow extends StatelessWidget {
               color: AppColors.of(context).primaryContainerTint,
               borderRadius: BorderRadius.circular(AppRadius.base),
             ),
-            child: Icon(field.icon, size: 15, color: AppColors.of(context).primaryContainer),
+            child: Icon(field.icon, size: 15, color: AppColors.of(context).primary),
           ),
           const SizedBox(width: 10),
           Expanded(

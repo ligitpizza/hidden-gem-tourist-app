@@ -57,7 +57,7 @@ class CheckInHistoryTile extends StatelessWidget {
                 color: AppColors.of(context).primaryContainerTint,
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),
-              child: Icon(Icons.location_on, color: AppColors.of(context).primaryContainer),
+              child: Icon(Icons.location_on, color: AppColors.of(context).primary),
             ),
             title: Text(
               destination?.name ?? 'Unknown destination',

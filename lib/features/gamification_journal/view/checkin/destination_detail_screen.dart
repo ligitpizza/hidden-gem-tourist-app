@@ -620,7 +620,7 @@ class _LoadingCard extends StatelessWidget {
         child: SizedBox(
           height: 22,
           width: 22,
-          child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.of(context).primaryContainer),
+          child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.of(context).primary),
         ),
       ),
     );
@@ -952,17 +952,17 @@ class _AnswerReviewState extends State<_AnswerReview> {
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
               children: [
-                Icon(Icons.fact_check_outlined, size: 17, color: colors.primaryContainer),
+                Icon(Icons.fact_check_outlined, size: 17, color: colors.primary),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Review your answers',
-                    style: AppTypography.labelMd.copyWith(color: colors.primaryContainer),
+                    style: AppTypography.labelMd.copyWith(color: colors.primary),
                   ),
                 ),
                 Icon(
                   _expanded ? Icons.expand_less : Icons.expand_more,
-                  color: colors.primaryContainer,
+                  color: colors.primary,
                 ),
               ],
             ),
@@ -1009,7 +1009,7 @@ class _AnswerReviewCard extends StatelessWidget {
               Icon(
                 answer.isCorrect ? Icons.check_circle : Icons.cancel,
                 size: 16,
-                color: answer.isCorrect ? colors.primaryContainer : colors.error,
+                color: answer.isCorrect ? colors.primary : colors.error,
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -1051,7 +1051,7 @@ class _AnswerOptionRow extends StatelessWidget {
     // different) is called out in red so both "what you picked" and "what
     // was right" are visible at a glance.
     final Color? tint = isCorrectOption
-        ? colors.primaryContainer
+        ? colors.primary
         : (isUserChoice ? colors.error : null);
 
     return Padding(
@@ -1175,9 +1175,9 @@ class _ImagePlaceholder extends StatelessWidget {
             ? SizedBox(
                 width: 22,
                 height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.of(context).primaryContainer),
+                child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.of(context).primary),
               )
-            : Icon(Icons.image_outlined, size: 48, color: AppColors.of(context).primaryContainer),
+            : Icon(Icons.image_outlined, size: 48, color: AppColors.of(context).primary),
       ),
     );
   }
@@ -1196,7 +1196,7 @@ class _CategoryChip extends StatelessWidget {
         color: AppColors.of(context).primaryContainerTint,
         borderRadius: BorderRadius.circular(AppRadius.full),
       ),
-      child: Text(label, style: AppTypography.labelSm.copyWith(color: AppColors.of(context).primaryContainer)),
+      child: Text(label, style: AppTypography.labelSm.copyWith(color: AppColors.of(context).primary)),
     );
   }
 }
@@ -1263,7 +1263,7 @@ class _LocationRow extends StatelessWidget {
               color: AppColors.of(context).surfaceContainerHigh,
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
-            child: Icon(Icons.map_outlined, color: AppColors.of(context).primaryContainer),
+            child: Icon(Icons.map_outlined, color: AppColors.of(context).primary),
           ),
           const SizedBox(width: 12),
           Expanded(

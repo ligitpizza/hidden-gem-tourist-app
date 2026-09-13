@@ -52,7 +52,7 @@ class CategoryBreakdownList extends StatelessWidget {
                   value: ratio,
                   minHeight: 7,
                   backgroundColor: AppColors.of(context).surfaceContainerHigh,
-                  color: AppColors.of(context).primaryContainer,
+                  color: AppColors.of(context).primary,
                 ),
               ),
             ],
