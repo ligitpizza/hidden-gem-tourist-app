@@ -10,6 +10,47 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('readiness progress transitions smoothly from yellow to green', (
+    tester,
+  ) async {
+    final controller = PackingChecklistController(
+      locationSource: const _LocationSource(),
+      weatherService: _WeatherService(),
+      persistence: _ChecklistRepository(),
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: ReadyToWanderScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    CircularProgressIndicator indicator() =>
+        tester.widget(find.byKey(const ValueKey('readiness_progress')));
+
+    expect(indicator().value, 0);
+    expect(indicator().color, const Color(0xFFF2C94C));
+
+    final itemIds = controller.sections
+        .expand((section) => section.items)
+        .map((item) => item.id)
+        .toList();
+    for (final id in itemIds) {
+      await controller.toggleItem(id, true);
+    }
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(indicator().value, greaterThan(0));
+    expect(indicator().value, lessThan(1));
+    expect(indicator().color, isNot(const Color(0xFFF2C94C)));
+    expect(indicator().color, isNot(const Color(0xFF2DBD60)));
+
+    await tester.pumpAndSettle();
+    expect(indicator().value, 1);
+    expect(indicator().color, const Color(0xFF2DBD60));
+  });
+
   testWidgets(
     'custom checklist header fits a narrow screen and add dialog cancels cleanly',
     (tester) async {

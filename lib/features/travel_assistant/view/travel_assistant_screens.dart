@@ -573,6 +573,9 @@ class ReadyToWanderScreen extends StatefulWidget {
 }
 
 class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
+  static const _preparationColor = Color(0xFFF2C94C);
+  static const _readyColor = Color(0xFF2DBD60);
+
   late final PackingChecklistController _controller;
   late final bool _ownsController;
 
@@ -740,11 +743,23 @@ class _ReadyToWanderScreenState extends State<ReadyToWanderScreen> {
                             alignment: Alignment.center,
                             children: [
                               SizedBox.expand(
-                                child: CircularProgressIndicator(
-                                  value: score / 100,
-                                  strokeWidth: 4,
-                                  backgroundColor: Colors.black12,
-                                  color: const Color(0xFF2DBD60),
+                                child: TweenAnimationBuilder<double>(
+                                  tween: Tween(end: score / 100),
+                                  duration: const Duration(milliseconds: 450),
+                                  curve: Curves.easeOutCubic,
+                                  builder: (context, progress, child) {
+                                    return CircularProgressIndicator(
+                                      key: const ValueKey('readiness_progress'),
+                                      value: progress,
+                                      strokeWidth: 4,
+                                      backgroundColor: Colors.black12,
+                                      color: Color.lerp(
+                                        _preparationColor,
+                                        _readyColor,
+                                        progress,
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
                               Column(
