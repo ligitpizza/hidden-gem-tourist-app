@@ -7,6 +7,10 @@ import '../controller/traditional_food_controller.dart';
 import '../model/traditional_food.dart';
 import 'culture_community_routes.dart';
 
+// ===========================================================
+// DIETARY FILTER
+// ===========================================================
+
 enum _DietaryFilter {
   all,
   vegetarian,
@@ -18,8 +22,10 @@ extension _DietaryFilterX on _DietaryFilter {
     switch (this) {
       case _DietaryFilter.all:
         return 'All';
+
       case _DietaryFilter.vegetarian:
         return 'Vegetarian';
+
       case _DietaryFilter.allergySensitive:
         return 'Allergy-Sensitive';
     }
@@ -29,13 +35,19 @@ extension _DietaryFilterX on _DietaryFilter {
     switch (this) {
       case _DietaryFilter.all:
         return Icons.restaurant_outlined;
+
       case _DietaryFilter.vegetarian:
         return Icons.eco_outlined;
+
       case _DietaryFilter.allergySensitive:
         return Icons.warning_amber_rounded;
     }
   }
 }
+
+// ===========================================================
+// TRADITIONAL FOOD HOME SCREEN
+// ===========================================================
 
 class TraditionalFoodHomeScreen extends ConsumerStatefulWidget {
   const TraditionalFoodHomeScreen({
@@ -88,6 +100,111 @@ class _TraditionalFoodHomeScreenState
   }
 
   // =========================================================
+  // NORMALIZE CULTURAL CATEGORY
+  // =========================================================
+  //
+  // The database keeps more specific cultural categories such
+  // as:
+  //
+  // Chinese Malaysian
+  // Sabah Chinese
+  // Sarawak Chinese
+  //
+  // But for the filter, they are grouped under:
+  //
+  // Chinese Malaysian
+  //
+  // This allows Tuaran Mee, Kolo Mee and other Chinese foods
+  // to appear together when the user selects Chinese Malaysian.
+  // =========================================================
+
+  String _normalizedCulturalCategory(
+      TraditionalFood food,
+      ) {
+    final category =
+    food.culturalCategory.trim().toLowerCase();
+
+    switch (category) {
+    // -------------------------------------------------------
+    // CHINESE MALAYSIAN
+    // -------------------------------------------------------
+
+      case 'chinese malaysian':
+      case 'sabah chinese':
+      case 'sarawak chinese':
+        return 'Chinese Malaysian';
+
+    // -------------------------------------------------------
+    // INDIAN MUSLIM
+    // -------------------------------------------------------
+
+      case 'indian muslim':
+      case 'indian muslim / malaysian':
+        return 'Indian Muslim';
+
+    // -------------------------------------------------------
+    // KADAZAN-DUSUN
+    // -------------------------------------------------------
+
+      case 'kadazan-dusun':
+      case 'kadazandusun':
+        return 'Kadazan-Dusun';
+
+    // -------------------------------------------------------
+    // MALAY
+    // -------------------------------------------------------
+
+      case 'malay':
+        return 'Malay';
+
+      case 'kelantanese malay':
+        return 'Kelantanese Malay';
+
+    // -------------------------------------------------------
+    // IBAN
+    // -------------------------------------------------------
+
+      case 'iban':
+        return 'Iban';
+
+    // -------------------------------------------------------
+    // MELANAU
+    // -------------------------------------------------------
+
+      case 'melanau':
+        return 'Melanau';
+
+    // -------------------------------------------------------
+    // PERANAKAN / NYONYA
+    // -------------------------------------------------------
+
+      case 'peranakan / nyonya':
+        return 'Peranakan / Nyonya';
+
+    // -------------------------------------------------------
+    // PENANG CUISINE
+    // -------------------------------------------------------
+
+      case 'penang cuisine':
+        return 'Penang Cuisine';
+
+    // -------------------------------------------------------
+    // SARAWAKIAN
+    // -------------------------------------------------------
+
+      case 'sarawakian':
+        return 'Sarawakian';
+
+    // -------------------------------------------------------
+    // FALLBACK
+    // -------------------------------------------------------
+
+      default:
+        return food.culturalCategory.trim();
+    }
+  }
+
+  // =========================================================
   // CULTURAL CATEGORIES
   // =========================================================
 
@@ -96,7 +213,7 @@ class _TraditionalFoodHomeScreenState
       ) {
     final categories = foods
         .map(
-          (food) => food.culturalCategory.trim(),
+          (food) => _normalizedCulturalCategory(food),
     )
         .where(
           (category) => category.isNotEmpty,
@@ -156,7 +273,13 @@ class _TraditionalFoodHomeScreenState
             food.culturalHistory,
             food.state,
             food.region ?? '',
+
+            // Original database category.
             food.culturalCategory,
+
+            // Normalized filter category.
+            _normalizedCulturalCategory(food),
+
             ...food.ingredients,
             ...food.dietaryTags,
             ...food.allergens,
@@ -182,7 +305,7 @@ class _TraditionalFoodHomeScreenState
         // -----------------------------------------------------
 
         if (_selectedCulturalCategory != null &&
-            food.culturalCategory !=
+            _normalizedCulturalCategory(food) !=
                 _selectedCulturalCategory) {
           return false;
         }
@@ -406,7 +529,8 @@ class _TraditionalFoodHomeScreenState
                             setBottomSheetState(
                                   () {
                                 temporaryState =
-                                value == '__all_states__'
+                                value ==
+                                    '__all_states__'
                                     ? null
                                     : value;
                               },
@@ -456,7 +580,8 @@ class _TraditionalFoodHomeScreenState
                                 'All Cultural Categories',
                               ),
                             ),
-                            for (final category in categories)
+                            for (final category
+                            in categories)
                               DropdownMenuItem(
                                 value: category,
                                 child: Text(
@@ -511,7 +636,8 @@ class _TraditionalFoodHomeScreenState
                             onSelected: (_) {
                               setBottomSheetState(
                                     () {
-                                  temporaryDietary = filter;
+                                  temporaryDietary =
+                                      filter;
                                 },
                               );
                             },
@@ -732,8 +858,6 @@ class _TraditionalFoodHomeScreenState
           columnCount = 3;
           cardHeight = 380;
         } else {
-          // Mobile:
-          // 2 columns but taller cards to prevent overflow.
           columnCount = 2;
           cardHeight = 350;
         }
@@ -865,7 +989,8 @@ class _TraditionalFoodHomeScreenState
                           child: Container(
                             width: 21,
                             height: 21,
-                            alignment: Alignment.center,
+                            alignment:
+                            Alignment.center,
                             decoration: BoxDecoration(
                               color: Theme.of(context)
                                   .colorScheme
@@ -1060,11 +1185,6 @@ class _TraditionalFoodHomeScreenState
                 physics:
                 const NeverScrollableScrollPhysics(),
                 itemCount: foods.length,
-
-                // IMPORTANT:
-                // mainAxisExtent gives each card enough
-                // vertical space and prevents the bottom
-                // overflow problem.
                 gridDelegate:
                 SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: columnCount,
@@ -1072,7 +1192,6 @@ class _TraditionalFoodHomeScreenState
                   mainAxisSpacing: 14,
                   mainAxisExtent: cardHeight,
                 ),
-
                 itemBuilder: (
                     context,
                     index,
@@ -1391,14 +1510,12 @@ class _FoodCardTags extends StatelessWidget {
 
     final tags = <String>[];
 
-    // Add first dietary tag.
     if (food.dietaryTags.isNotEmpty) {
       tags.add(
         food.dietaryTags.first,
       );
     }
 
-    // Show allergen information if available.
     if (food.allergens.isNotEmpty ||
         (food.allergyNotes != null &&
             food.allergyNotes!.trim().isNotEmpty)) {
@@ -1421,7 +1538,8 @@ class _FoodCardTags extends StatelessWidget {
               bottom: 4,
             ),
             child: Container(
-              constraints: const BoxConstraints(
+              constraints:
+              const BoxConstraints(
                 maxWidth: double.infinity,
               ),
               padding:
@@ -1430,7 +1548,8 @@ class _FoodCardTags extends StatelessWidget {
                 vertical: 3,
               ),
               decoration: BoxDecoration(
-                color: colors.surfaceContainer,
+                color:
+                colors.surfaceContainer,
                 borderRadius:
                 BorderRadius.circular(
                   999,
