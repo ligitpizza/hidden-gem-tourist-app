@@ -20,6 +20,8 @@ class JournalTimelineScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isEmpty = context.watch<JournalController>().entries.isEmpty;
+
     return Scaffold(
       appBar: isTabRoot
           ? const AppHeader.tabRoot(title: 'Journal')
@@ -27,11 +29,28 @@ class JournalTimelineScreen extends StatelessWidget {
       body: RefreshIndicator(
         onRefresh: () => context.read<JournalController>().loadEntries(),
         color: AppColors.of(context).primary,
-        child: const SingleChildScrollView(
-          physics: AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 96),
-          child: JournalTimelineBody(),
-        ),
+        // The empty state needs the full remaining viewport height to
+        // actually center in (a plain SingleChildScrollView only sizes its
+        // child to its own content, so a Center inside one just sits at
+        // the top) — CustomScrollView + SliverFillRemaining gives it that
+        // while keeping pull-to-refresh working. The populated list still
+        // uses a plain scroll view since it needs to grow past one
+        // screen's height, which SliverFillRemaining doesn't allow.
+        child: isEmpty
+            ? const CustomScrollView(
+                physics: AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _EmptyState(),
+                  ),
+                ],
+              )
+            : const SingleChildScrollView(
+                physics: AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 24),
+                child: JournalTimelineBody(),
+              ),
       ),
     );
   }

@@ -203,9 +203,18 @@ class _LeaderboardTabState extends State<_LeaderboardTab> {
       return RefreshIndicator(
         onRefresh: () => _refresh(context),
         color: colors.primary,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: const [_NoLeaderboardYet()],
+        // SliverFillRemaining (rather than a plain ListView) gives the
+        // empty state the full remaining viewport height to center in —
+        // a ListView only sizes its child to its own content, so a Center
+        // inside one just sits at the top.
+        child: const CustomScrollView(
+          physics: AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: _NoLeaderboardYet(),
+            ),
+          ],
         ),
       );
     }
@@ -747,10 +756,19 @@ class _ActivityFeedTab extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: () => context.read<FriendController>().loadActivityFeed(),
       color: colors.primary,
+      // SliverFillRemaining (rather than a plain ListView) gives the empty
+      // state the full remaining viewport height to center in — a
+      // ListView only sizes its child to its own content, so a Center
+      // inside one just sits at the top.
       child: feed.isEmpty
-          ? ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: const [_NoActivityYet()],
+          ? const CustomScrollView(
+              physics: AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _NoActivityYet(),
+                ),
+              ],
             )
           : ListView.builder(
               padding: const EdgeInsets.all(16),
