@@ -108,7 +108,7 @@ class _HeaderBackButton extends StatelessWidget {
       color: colors.onSurface,
       style: IconButton.styleFrom(
         minimumSize: const Size(48, 48),
-        backgroundColor: colors.surfaceContainerHigh,
+        backgroundColor: Colors.transparent,
         overlayColor: colors.onSurface,
         shape: const CircleBorder(),
       ),
