@@ -72,13 +72,11 @@ const _primaryLeft = [0, 2]; // Map, Home
 const _primaryRight = [5, 6]; // Journal, Profile
 
 /// Tucked behind "More" — real shell branches selected the same way as the
-/// primary tabs.
-const _secondaryBranches = [
-  1,
-  3,
-  4,
-  7,
-]; // Explore, Saved, Travel Assistant, culture
+/// primary tabs. Explore (branch 1) is confirmed dead and deliberately left
+/// out here — its branch/route/screen still exist, just unreachable from
+/// the nav bar, since removing the branch itself would mean re-numbering
+/// every other branch index hardcoded across the router and this file.
+const _secondaryBranches = [3, 4, 7]; // Saved, Travel Assistant, culture
 
 /// A "More" menu entry that isn't a shell branch — it pushes a route
 /// instead of switching tabs. [indicatorKey] is looked up against live

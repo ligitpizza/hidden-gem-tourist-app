@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../config/theme.dart';
@@ -10,7 +9,7 @@ import '../../../../shared/widgets/journal_card.dart';
 import 'journal_detail_screen.dart';
 
 /// The Journal tab's root screen — wraps [JournalTimelineBody] in a
-/// Scaffold with its own app bar and a "check in to start an entry" FAB.
+/// Scaffold with its own app bar.
 class JournalTimelineScreen extends StatelessWidget {
   const JournalTimelineScreen({super.key, this.isTabRoot = true});
 
@@ -25,11 +24,6 @@ class JournalTimelineScreen extends StatelessWidget {
       appBar: isTabRoot
           ? const AppHeader.tabRoot(title: 'Journal')
           : const AppHeader.pushed(title: 'Journal'),
-      floatingActionButton: FloatingActionButton(
-        tooltip: 'Check in somewhere to start a new entry',
-        onPressed: () => GoRouter.of(context).go('/explore'),
-        child: const Icon(Icons.add),
-      ),
       body: RefreshIndicator(
         onRefresh: () => context.read<JournalController>().loadEntries(),
         color: AppColors.of(context).primary,
