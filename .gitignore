@@ -31,6 +31,10 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+# /build/ above only matches the top-level Flutter build output — platform
+# subprojects (android/build, ios/build, …) have their own, which slipped
+# through and got a Gradle report committed once already.
+**/build/
 /coverage/
 mapillary.local.json
 /node_modules/
