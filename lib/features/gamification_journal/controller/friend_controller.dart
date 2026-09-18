@@ -147,8 +147,15 @@ class FriendController extends ChangeNotifier {
     _service.subscribeToFriendshipChanges(
       userId: userId,
       onIncomingRequest: (friendshipId, requesterId) async {
+        // Switching accounts disposes this controller (and closes
+        // _incomingRequestController) without waiting for the realtime
+        // subscription to actually finish tearing down — an event that
+        // was already in flight at that moment can still land here
+        // afterward. Checked both before and after the await below,
+        // since the await itself is exactly where a dispose can land.
+        if (_disposed) return;
         final profiles = await _service.fetchProfiles([requesterId]);
-        if (profiles.isEmpty) return;
+        if (_disposed || profiles.isEmpty) return;
         _incomingRequestController.add(
           FriendRequestEntry(profile: profiles.first, friendshipId: friendshipId),
         );
@@ -156,15 +163,33 @@ class FriendController extends ChangeNotifier {
       // Covers every other change too (accepted, declined, unfriended,
       // from either side) so this device's Friends state stays live
       // without needing its own manual refresh.
-      onAnyChange: () => loadFriends(),
+      onAnyChange: () {
+        if (_disposed) return;
+        loadFriends();
+      },
     );
   }
 
+  bool _disposed = false;
+
   @override
   void dispose() {
+    _disposed = true;
     _service.unsubscribeFriendshipChanges();
     _incomingRequestController.close();
     super.dispose();
+  }
+
+  // Switching accounts (see app.dart's StreamBuilder) disposes this
+  // controller mid-flight if a realtime event or _loadActivity's per-friend
+  // loop is still running — without this guard, whichever one resolves
+  // next crashes with "used after being disposed" the moment it calls
+  // notifyListeners(). One central override here covers every call site in
+  // this file rather than needing a check before each of them individually.
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
   }
 
   int get pendingIncomingCount => incomingRequests.length;
@@ -232,8 +257,10 @@ class FriendController extends ChangeNotifier {
   /// as its own query resolves rather than blocking the whole screen.
   Future<void> _loadActivity() async {
     for (final entry in List.of(friends)) {
+      if (_disposed) return;
       try {
         final activity = await _service.fetchRecentActivity(entry.profile.id);
+        if (_disposed) return;
         final index = friends.indexWhere((f) => f.friendshipId == entry.friendshipId);
         if (index == -1) continue;
         friends[index] = friends[index].copyWith(activity: activity);
